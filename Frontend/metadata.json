@@ -1,0 +1,6 @@
+{
+  "name": "SciParser Auth Integration",
+  "description": "Integration of user signin and signup views styled with standard Tailwind CSS, delivering an immersive SciParser conversational interface decorated with beautiful interactive histories.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

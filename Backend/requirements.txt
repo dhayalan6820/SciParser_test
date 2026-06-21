@@ -1,0 +1,16 @@
+fastapi
+langchain
+tavily-python
+langgraph
+tavily
+groq
+langchain-tavily
+langchain-openrouter
+sqlalchemy
+uvicorn
+apscheduler
+aiomysql
+python-dotenv
+langchain-mcp-adapters
+playwright
+bcrypt

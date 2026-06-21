@@ -1,0 +1,1606 @@
+// ChatPage.tsx
+import * as React from "react";
+import { Signup1 } from "./signup-1";
+import { Button } from "./button";
+import { sciparserApi, ChatMessage, UploadedFile, User } from "../../api";
+import { useTheme } from "../../App";
+import { cn } from "../../../lib/utils";
+import { Component as AiLoader } from "./ai-loader";
+import { MessageLoading } from "./message-loading";
+import { AgentStageView } from "./agent-stage-view";
+import { BrowserPreview } from "./browser-preview";
+import { 
+  Sparkles, User2, Database, RefreshCw, CheckCircle2, 
+  BookOpen, MessageSquare, Plus, LogOut,
+  Trash, Pencil, Check, Menu, X, ChevronDown, 
+  Globe, Send, PanelLeftClose, PanelLeftOpen, Search, Code, Sun, Moon,
+  FileText, Paperclip, X as XIcon
+} from "lucide-react";
+import { v4 as uuidv4 } from "uuid";
+import { useAgentStatus } from "../../hooks/useAgentStatus";
+import { ProcessingPanel } from "./processing-panel";
+
+interface UserProfile {
+  user_id: string;
+  username: string;
+  email: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ChatPageProps {
+  onLoginStateChange?: (loggedIn: boolean) => void;
+}
+
+interface Thread {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  uploads: UploadedFile[];
+  createdAt: string;
+}
+
+const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
+  const { theme, toggleTheme } = useTheme();
+  const [userProfile, setUserProfile] = React.useState<UserProfile | null>(null);
+  const [isNavigating, setIsNavigating] = React.useState(false);
+  const [loaderText, setLoaderText] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [success, setSuccess] = React.useState("");
+  const [isLoginMode, setIsLoginMode] = React.useState(true);
+  const [textareaValue, setTextareaValue] = React.useState("");
+  const [messages, setMessages] = React.useState<ChatMessage[]>([]);
+  const [uploads, setUploads] = React.useState<UploadedFile[]>([]);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
+  const [threads, setThreads] = React.useState<Thread[]>([]);
+  const [activeThreadId, setActiveThreadId] = React.useState<string | undefined>(undefined);
+  const [browserActive, setBrowserActive] = React.useState(false);
+  const [browserFrame, setBrowserFrame] = React.useState<string | null>(null);
+  const [preferLiveBrowser, setPreferLiveBrowser] = React.useState(true);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const [voiceEnabled, setVoiceEnabled] = React.useState(false);
+  const [isAiTyping, setIsAiTyping] = React.useState(false);
+  
+  const [activeModel, setActiveModel] = React.useState("SciParser AI Core");
+  const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
+  const [editingThreadId, setEditingThreadId] = React.useState<string | null>(null);
+  const [editingTitleText, setEditingTitleText] = React.useState("");
+  const [searchQuery, setSearchQuery] = React.useState("");
+
+  // Agent view state
+  const [showAgentView, setShowAgentView] = React.useState(false);
+  const [showBrowserPreview, setShowBrowserPreview] = React.useState(false);
+  
+  // Resizable panel states
+  const [browserPanelWidth, setBrowserPanelWidth] = React.useState(50); // percentage
+  const [agentPanelHeight, setAgentPanelHeight] = React.useState(200); // pixels
+  
+  // File upload states
+  const [isDraggingFile, setIsDraggingFile] = React.useState(false);
+  const [uploadingFiles, setUploadingFiles] = React.useState<string[]>([]);
+  
+  // Get agent status using actual chat ID
+  const { history: agentHistory, tools: toolHistory, currentStatus, error: agentError } = useAgentStatus(activeThreadId || "");
+
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const browserPanelRef = React.useRef<HTMLDivElement>(null);
+  const [isResizing, setIsResizing] = React.useState(false);
+
+  // File handling functions
+  const handleFileDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingFile(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    for (const file of files) {
+      setUploadingFiles(prev => [...prev, file.name]);
+      await handleFileUploaded(file.name, file.size, file.type);
+      setUploadingFiles(prev => prev.filter(name => name !== file.name));
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      for (const file of files) {
+        setUploadingFiles(prev => [...prev, file.name]);
+        await handleFileUploaded(file.name, file.size, file.type);
+        setUploadingFiles(prev => prev.filter(name => name !== file.name));
+      }
+    }
+  };
+
+  // Resizable panel handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsResizing(true);
+    e.preventDefault();
+  };
+
+  React.useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing || !browserPanelRef.current) return;
+      
+      const containerRect = browserPanelRef.current.parentElement?.getBoundingClientRect();
+      if (!containerRect) return;
+      
+      const newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
+      if (newWidth > 20 && newWidth < 80) {
+        setBrowserPanelWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+  const browserPanelRef = React.useRef<HTMLDivElement>(null);
+  const [isResizing, setIsResizing] = React.useState(false);
+
+  // File handling functions
+  const handleFileDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingFile(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    for (const file of files) {
+      setUploadingFiles(prev => [...prev, file.name]);
+      await handleFileUploaded(file.name, file.size, file.type);
+      setUploadingFiles(prev => prev.filter(name => name !== file.name));
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      for (const file of files) {
+        setUploadingFiles(prev => [...prev, file.name]);
+        await handleFileUploaded(file.name, file.size, file.type);
+        setUploadingFiles(prev => prev.filter(name => name !== file.name));
+      }
+    }
+  };
+
+  // Resizable panel handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsResizing(true);
+    e.preventDefault();
+  };
+
+  React.useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing || !browserPanelRef.current) return;
+      
+      const containerRect = browserPanelRef.current.parentElement?.getBoundingClientRect();
+      if (!containerRect) return;
+      
+      const newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
+      if (newWidth > 20 && newWidth < 80) {
+        setBrowserPanelWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+  const browserPanelRef = React.useRef<HTMLDivElement>(null);
+  const [isResizing, setIsResizing] = React.useState(false);
+
+  // File handling functions
+  const handleFileDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingFile(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    for (const file of files) {
+      setUploadingFiles(prev => [...prev, file.name]);
+      await handleFileUploaded(file.name, file.size, file.type);
+      setUploadingFiles(prev => prev.filter(name => name !== file.name));
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      for (const file of files) {
+        setUploadingFiles(prev => [...prev, file.name]);
+        await handleFileUploaded(file.name, file.size, file.type);
+        setUploadingFiles(prev => prev.filter(name => name !== file.name));
+      }
+    }
+  };
+
+  // Resizable panel handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsResizing(true);
+    e.preventDefault();
+  };
+
+  React.useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing || !browserPanelRef.current) return;
+      
+      const containerRect = browserPanelRef.current.parentElement?.getBoundingClientRect();
+      if (!containerRect) return;
+      
+      const newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
+      if (newWidth > 20 && newWidth < 80) {
+        setBrowserPanelWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+  const browserPanelRef = React.useRef<HTMLDivElement>(null);
+  const [isResizing, setIsResizing] = React.useState(false);
+
+  // File handling functions
+  const handleFileDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingFile(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    for (const file of files) {
+      setUploadingFiles(prev => [...prev, file.name]);
+      await handleFileUploaded(file.name, file.size, file.type);
+      setUploadingFiles(prev => prev.filter(name => name !== file.name));
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      for (const file of files) {
+        setUploadingFiles(prev => [...prev, file.name]);
+        await handleFileUploaded(file.name, file.size, file.type);
+        setUploadingFiles(prev => prev.filter(name => name !== file.name));
+      }
+    }
+  };
+
+  // Resizable panel handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsResizing(true);
+    e.preventDefault();
+  };
+
+  React.useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing || !browserPanelRef.current) return;
+      
+      const containerRect = browserPanelRef.current.parentElement?.getBoundingClientRect();
+      if (!containerRect) return;
+      
+      const newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
+      if (newWidth > 20 && newWidth < 80) {
+        setBrowserPanelWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+  const browserPanelRef = React.useRef<HTMLDivElement>(null);
+  const [isResizing, setIsResizing] = React.useState(false);
+
+  // File handling functions
+  const handleFileDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingFile(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    for (const file of files) {
+      setUploadingFiles(prev => [...prev, file.name]);
+      await handleFileUploaded(file.name, file.size, file.type);
+      setUploadingFiles(prev => prev.filter(name => name !== file.name));
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      for (const file of files) {
+        setUploadingFiles(prev => [...prev, file.name]);
+        await handleFileUploaded(file.name, file.size, file.type);
+        setUploadingFiles(prev => prev.filter(name => name !== file.name));
+      }
+    }
+  };
+
+  // Resizable panel handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsResizing(true);
+    e.preventDefault();
+  };
+
+  React.useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing || !browserPanelRef.current) return;
+      
+      const containerRect = browserPanelRef.current.parentElement?.getBoundingClientRect();
+      if (!containerRect) return;
+      
+      const newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
+      if (newWidth > 20 && newWidth < 80) {
+        setBrowserPanelWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+
+  React.useEffect(() => {
+    const token = localStorage.getItem("access_token");
+    console.log("Token found on mount:", token ? "YES" : "NO");
+    if (token) {
+      console.log("Token found on mount, fetching profile...");
+      fetchUserProfile(token).catch(err => {
+        console.error("Failed to load user profile:", err);
+        localStorage.removeItem("access_token");
+      });
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, isAiTyping]);
+
+  // Real-Time WebSocket stream connection for CDP frame screencasts
+  React.useEffect(() => {
+    let ws: WebSocket | null = null;
+    if (browserActive && activeThreadId) {
+      const socketUrl = `ws://localhost:8000/sciparser/v1/browser/stream?chat_id=${activeThreadId}`;
+      ws = new WebSocket(socketUrl);
+      
+      ws.onmessage = (event) => {
+        try {
+          const parsed = JSON.parse(event.data);
+          if (parsed.event === "frame") {
+            setBrowserFrame(parsed.data);
+          }
+        } catch (e) {
+          console.error("Frame parsing failed: ", e);
+        }
+      };
+
+      ws.onclose = () => {
+        setBrowserFrame(null);
+      };
+    } else {
+      setBrowserFrame(null);
+    }
+
+    return () => {
+      if (ws) ws.close();
+    };
+  }, [browserActive, activeThreadId]);
+
+  const adjustHeight = () => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
+    }
+  };
+
+  const fetchUserProfile = async (token: string) => {
+    try {
+      // Ensure token is in localStorage for API calls
+      localStorage.setItem("access_token", token);
+      
+      const user = await sciparserApi.getMe();
+      console.log("User profile fetched successfully:", user);
+      
+      setUserProfile({
+        user_id: user.user_id,
+        username: user.username,
+        email: user.email,
+        created_at: user.created_at,
+        updated_at: user.updated_at,
+      });
+      
+      onLoginStateChange?.(true);
+      await loadThreadsAndLatestHistory();
+    } catch (e) {
+      console.error("Failed to fetch user profile:", e);
+      localStorage.removeItem("access_token");
+      onLoginStateChange?.(false);
+    }
+  };
+
+  const loadThreadsAndLatestHistory = async () => {
+    try {
+      const sessions = await sciparserApi.getChatSessions();
+      console.log("Loaded sessions:", sessions);
+
+      if (!sessions || sessions.length === 0) {
+        handleNewChat();
+        return;
+      }
+
+      const loadedThreads: Thread[] = sessions.map((s: any) => ({
+        id: s.id,
+        title: s.title || "Untitled Chat",
+        messages: [],
+        uploads: [],
+        createdAt: s.createdAt || new Date().toISOString()
+      }));
+      
+      setThreads(loadedThreads);
+      
+      // Try to load history for the most recent thread
+      const latestThreadId = loadedThreads[0].id;
+      setActiveThreadId(latestThreadId);
+      
+      try {
+        const historyData = await sciparserApi.getChatHistory(latestThreadId);
+        if (historyData && historyData.messages) {
+          setMessages(historyData.messages);
+          setThreads(prev => prev.map(t => 
+            t.id === latestThreadId ? { ...t, messages: historyData.messages } : t
+          ));
+        }
+      } catch (historyErr: any) {
+        console.warn(`Could not load history for thread ${latestThreadId}:`, historyErr);
+        // If 404, just start with empty messages for this thread
+        setMessages([]);
+      }
+    } catch (e) {
+      console.error("Failed to load user threads:", e);
+      handleNewChat(); // Fallback to a new chat on total failure
+    }
+  };
+
+  const handleAuthSubmit = async (formData: any) => {
+    setIsNavigating(true);
+    setLoaderText(isLoginMode ? "Authenticating" : "Creating Account");
+    setLoading(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      if (isLoginMode) {
+        const res = await sciparserApi.signin(formData.username, formData.password);
+        console.log("Signin response:", res);
+        
+        // 1. Check if access_token exists in response
+        if (!res.access_token) {
+          throw new Error("No access token received from server");
+        }
+        
+        // 2. Store token immediately
+        localStorage.setItem("access_token", res.access_token);
+        console.log("Token stored successfully in localStorage");
+        console.log("Token in localStorage:", localStorage.getItem("access_token")?.substring(0, 20) + "...");
+        
+        setSuccess("Successfully authenticated!");
+        
+        // 3. Fetch profile and update UI
+        await fetchUserProfile(res.access_token);
+        onLoginStateChange?.(true);
+        
+        setIsNavigating(false);
+        setLoading(false);
+      } else {
+        await sciparserApi.signup(formData.username, formData.email, formData.password);
+        setSuccess("Account created successfully! Switching to Login...");
+        setTimeout(() => {
+          setIsLoginMode(true);
+          setSuccess("");
+        }, 1500);
+      }
+    } catch (err: any) {
+      console.error("Auth error:", err);
+      setError(err.message || "An error occurred");
+    } finally {
+      setLoading(false);
+      setTimeout(() => {
+        setIsNavigating(false);
+      }, 700);
+    }
+  };
+
+  const handleLogout = () => {
+    setIsNavigating(true);
+    setLoaderText("Signing Out");
+     
+    setTimeout(() => {
+      localStorage.removeItem("access_token");
+      sciparserApi.logout();
+      setUserProfile(null);
+      onLoginStateChange?.(false);
+      setMessages([]);
+      setUploads([]);
+      setBrowserActive(false);
+      setSuccess("Logged out successfully");
+      setError("");
+      setIsNavigating(false);
+    }, 950);
+  };
+
+  const handleSelectThread = async (threadId: string) => {
+    // Don't fetch if it's a local-only placeholder
+    if (threadId.startsWith("thread-")) {
+      setActiveThreadId(threadId);
+      setMessages([]);
+      return;
+    }
+
+    setActiveThreadId(threadId);
+    setIsMobileSidebarOpen(false);
+    
+    try {
+      const res = await sciparserApi.getThreadMessages(threadId);
+      setMessages(res?.messages || []);
+    } catch (e: any) {
+      console.error("Failed to load thread messages:", e);
+      // If the thread is missing on server, remove it from local state
+      if (e.message?.includes("404") || e.message?.includes("Not Found")) {
+        setThreads(prev => prev.filter(t => t.id !== threadId));
+        handleNewChat();
+      }
+    }
+  };
+
+  const handleDeleteThread = async (threadId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    // Optimistic UI Update
+    const updated = threads.filter(t => t.id !== threadId);
+    setThreads(updated);
+    
+    if (activeThreadId === threadId) {
+      if (updated.length > 0) {
+        handleSelectThread(updated[0].id);
+      } else {
+        handleNewChat();
+      }
+    }
+
+    // Only attempt server delete if it's not a local placeholder
+    if (!threadId.startsWith("thread-")) {
+      try {
+        await sciparserApi.deleteChatSession(threadId);
+      } catch (err) {
+        console.warn("Thread already deleted or missing on server:", err);
+      }
+    }
+  };
+
+  const handleSendMessage = async (text: string) => {
+    if (!text.trim()) return;
+
+    let currentThread = threads.find(t => t.id === activeThreadId);
+    let currentThreadId = currentThread ? currentThread.id : undefined;
+
+    if (!currentThread) {
+      const placeholderId = "thread-" + uuidv4();
+      currentThread = {
+        id: placeholderId,
+        title: "New Chat",
+        messages: [],
+        uploads: [],
+        createdAt: new Date().toISOString()
+      };
+      setThreads(prev => [currentThread!, ...prev]);
+      setActiveThreadId(undefined);
+    }
+
+    const userMsg: ChatMessage = {
+      id: "opt-" + Date.now(),
+      role: "user",
+      content: text,  // No validation
+      timestamp: new Date().toISOString()
+    };
+
+    const currentTitle = currentThread?.title || "New Chat";
+    const currentMessages = currentThread?.messages || [];
+    const isGenericTitle = currentTitle === "New Chat" || currentTitle === "Parser Introduction";
+    const titleUpdated = isGenericTitle && currentMessages.length === 0;
+    const dynamicTitle = titleUpdated 
+      ? (text.length > 30 ? text.substring(0, 30) + "..." : text)
+      : currentTitle;
+
+    const optMessages = [...currentMessages, userMsg];
+    
+    setThreads(prev => {
+      const exists = prev.some(t => t.id === currentThreadId);
+      const baseThreads = exists ? prev : [currentThread!, ...prev];
+      return baseThreads.map(t => {
+        if (t.id === currentThreadId) {
+          return {
+            ...t,
+            title: dynamicTitle,
+            messages: optMessages
+          };
+        }
+        return t;
+      });
+    });
+    
+    setMessages(optMessages);
+    setTextareaValue("");
+    setIsAiTyping(true);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+
+    try {
+      const response = await sciparserApi.sendChatMessage(
+        text,
+        [],
+        preferLiveBrowser,
+        currentThreadId
+      );
+      
+      const verifiedMessages = optMessages
+        .filter(m => m.id !== userMsg.id)
+        .concat([response.userMessage, response.assistantMessage]);
+        
+      setThreads(prev => prev.map(t => {
+        if (t.id === currentThreadId) {
+          return {
+            ...t,
+            messages: verifiedMessages
+          };
+        }
+        return t;
+      }));
+      
+      setMessages(verifiedMessages);
+    } catch (e: any) {
+      console.error("Message sending failed:", e);
+      
+      // Remove the failed user message and add error message
+      const errorMessages = optMessages.filter(m => m.id !== userMsg.id);
+      const errorMessage: ChatMessage = {
+        id: "error-" + Date.now(),
+        role: "assistant",
+        content: `⚠️ **Connection Error:** ${e.message || "The server is taking too long to respond. Please try again."}`,
+        timestamp: new Date().toISOString()
+      };
+      
+      const updatedMessages = [...errorMessages, errorMessage];
+      setThreads(prev => prev.map(t => {
+        if (t.id === currentThreadId) {
+          return {
+            ...t,
+            messages: updatedMessages
+          };
+        }
+        return t;
+      }));
+      setMessages(updatedMessages);
+    } finally {
+      setIsAiTyping(false);
+    }
+  };
+
+  const handleFileUploaded = async (fileName: string, fileSize: number, fileType: string) => {
+    try {
+      await sciparserApi.uploadFileMetadata(fileName, fileSize, fileType);
+      
+      const uploadRes = await sciparserApi.getUploadedFiles();
+      const freshUpload = uploadRes.uploads.find((u: UploadedFile) => u.name === fileName) || {
+        id: "upl-" + Date.now(),
+        name: fileName,
+        size: fileSize,
+        type: fileType,
+        uploadedAt: new Date().toISOString()
+      };
+
+      setThreads(prev => prev.map(t => {
+        if (t.id === activeThreadId) {
+          const uploadsList = t.uploads.some((u: UploadedFile) => u.name === fileName)
+            ? t.uploads
+            : [...t.uploads, freshUpload];
+          return { ...t, uploads: uploadsList };
+        }
+        return t;
+      }));
+      setUploads(prev => prev.some((u: UploadedFile) => u.name === fileName) ? prev : [...prev, freshUpload]);
+
+      const autoQuery = `I have attached the document "${fileName}". Please parse and analyze its structures.`;
+      await handleSendMessage(autoQuery);
+    } catch (e) {
+      console.error("File upload failed:", e);
+    }
+  };
+
+  const sendQuickPrompt = (promptText: string) => {
+    handleSendMessage(promptText);
+  };
+
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const dm = 1;
+    const sizes = ["Bytes", "KB", "MB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
+  };
+
+  const toggleVoiceMock = () => {
+    sendQuickPrompt("Analyze the vocal context frequencies and synthesize SciParser audio.");
+  };
+
+  const parseInlineFormatting = (text: string) => {
+    const boldParts = text.split(/(\*\*.*?\*\*)/g);
+    return boldParts.map((bPart, bIdx) => {
+      if (bPart.startsWith("**") && bPart.endsWith("**")) {
+        return (
+          <strong key={bIdx} className="font-extrabold text-slate-900 dark:text-white">
+            {bPart.slice(2, -2)}
+          </strong>
+        );
+      }
+      const inlineParts = bPart.split(/(\`.*?\`)/g);
+      return inlineParts.map((iPart, iIdx) => {
+        if (iPart.startsWith("`") && iPart.endsWith("`")) {
+          return (
+            <code key={iIdx} className="px-1.5 py-0.5 mx-0.5 rounded bg-slate-100 dark:bg-[#2a2a2d] text-indigo-700 dark:text-indigo-400 font-mono text-[13px] font-bold">
+              {iPart.slice(1, -1)}
+            </code>
+          );
+        }
+        return iPart;
+      });
+    });
+  };
+
+  const renderFormattedContent = (content: string) => {
+    if (!content) return null;
+    const parts = content.split(/(```[\s\S]*?```)/g);
+    
+    return parts.map((part, index) => {
+      if (part.startsWith("```") && part.endsWith("```")) {
+        const lines = part.slice(3, -3).trim().split("\n");
+        const language = lines[0] && !lines[0].includes(" ") ? lines[0] : "";
+        const code = language ? lines.slice(1).join("\n") : lines.join("\n");
+        
+        return (
+          <div key={index} className="my-3.5 rounded-xl border border-slate-200 dark:border-[#2f2f2f] bg-slate-50 dark:bg-[#1e1e1e] overflow-hidden font-mono text-[13px] shadow-md">
+            <div className="flex justify-between items-center px-4 py-1.5 bg-slate-100 dark:bg-[#171717] text-xs text-slate-500 dark:text-slate-400 font-sans border-b border-slate-200 dark:border-white/5 select-none font-bold">
+              <span className="uppercase text-[10px] tracking-widest">{language || "text"}</span>
+              <span className="text-[10px] lowercase font-medium">ready</span>
+            </div>
+            <pre className="p-4 overflow-x-auto text-slate-850 dark:text-slate-200 leading-relaxed whitespace-pre font-medium">
+              {code}
+            </pre>
+          </div>
+        );
+      }
+      
+      const lines = part.split("\n");
+      return (
+        <div key={index} className="space-y-2.5">
+          {lines.map((line, lineIdx) => {
+            const trimmedLine = line.trim();
+            if (!trimmedLine) return <div key={lineIdx} className="h-1" />;
+            
+            if (trimmedLine.startsWith("- ") || trimmedLine.startsWith("* ") || trimmedLine.startsWith("• ")) {
+              const listContent = trimmedLine.replace(/^[-*•]\s+/, "");
+              return (
+                <li key={lineIdx} className="ml-5 list-disc leading-relaxed text-slate-800 dark:text-[#ececec] pr-2">
+                  {parseInlineFormatting(listContent)}
+                </li>
+              );
+            }
+            
+            const numMatch = trimmedLine.match(/^(\d+)\.\s+(.*)/);
+            if (numMatch) {
+              const num = numMatch[1];
+              const listContent = numMatch[2];
+              return (
+                <li key={lineIdx} className="ml-5 list-decimal leading-relaxed text-slate-800 dark:text-[#ececec] pr-2" style={{ listStyleType: "decimal" }}>
+                  {parseInlineFormatting(listContent)}
+                </li>
+              );
+            }
+            
+            return (
+              <p key={lineIdx} className="relative leading-relaxed text-slate-800 dark:text-[#ececec] text-[15px] font-medium font-sans">
+                {parseInlineFormatting(line)}
+              </p>
+            );
+          })}
+        </div>
+      );
+    });
+  };
+
+  const filteredThreads = threads.filter(t => 
+    t.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleToggleLiveBrowser = (isActive: boolean) => {
+    setBrowserActive(isActive);
+  };
+
+  const handleNewChat = () => {
+      const newId = "thread-" + uuidv4();
+      const newThread: Thread = {
+        id: newId,
+        title: "New Chat",
+        messages: [],
+        uploads: [],
+        createdAt: new Date().toISOString()
+      };
+      setThreads(prev => [newThread, ...prev]);
+      setActiveThreadId(newId);
+      setMessages([]);
+      setUploads([]);
+      setIsMobileSidebarOpen(false);
+    };
+
+    const startRenameThread = (id: string, currentTitle: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      setEditingThreadId(id);
+      setEditingTitleText(currentTitle);
+    };
+
+    const saveRenameThread = async (id: string, e?: React.KeyboardEvent | React.FocusEvent) => {
+      if (e) e.stopPropagation();
+      if (!editingTitleText.trim()) {
+        setEditingThreadId(null);
+        return;
+      }
+
+      setThreads(prev => prev.map(t => t.id === id ? { ...t, title: editingTitleText } : t));
+      setEditingThreadId(null);
+
+      if (!id.startsWith("thread-")) {
+        try {
+          await sciparserApi.renameChatSession(id, editingTitleText);
+        } catch (err) {
+          console.error("Failed to rename thread on server:", err);
+        }
+      }
+    };
+
+  if (!userProfile) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
+        <Signup1 
+          isLoginMode={isLoginMode}
+          onToggleMode={() => setIsLoginMode(!isLoginMode)}
+          onSubmit={handleAuthSubmit}
+        />
+        {isNavigating && <AiLoader text={loaderText} />}
+      </div>
+    );
+  }
+
+    return (
+      <div className="relative w-full h-full flex flex-col md:flex-row overflow-hidden bg-white dark:bg-[#171717] text-slate-800 dark:text-white font-sans selection:bg-indigo-100 dark:selection:bg-[#5f5f5f] selection:text-slate-900 dark:selection:text-white transition-colors duration-300">
+        {isNavigating && <AiLoader text={loaderText} />}
+        
+        {/* Mobile Header Bar */}
+        <div className="md:hidden w-full h-14 shrink-0 flex items-center justify-between px-4 bg-slate-50 dark:bg-[#141414] border-b border-slate-200 dark:border-[#2f2f2f] z-20">
+          <button
+            onClick={() => setIsMobileSidebarOpen(true)}
+            className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-[#202020] transition-colors cursor-pointer text-slate-500 dark:text-slate-300 border-0 bg-transparent"
+          >
+            <Menu className="size-5" />
+          </button>
+          <div className="text-[13px] font-bold tracking-wider uppercase flex items-center gap-1.5 text-slate-800 dark:text-white">
+            <Sparkles className="size-4 text-indigo-500 dark:text-indigo-400" /> {threads.find(t => t.id === activeThreadId)?.title || "SciParser"}
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={toggleTheme}
+              className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-[#202020] transition-colors cursor-pointer text-slate-505 dark:text-slate-300 border-0 bg-transparent"
+              title="Toggle theme"
+            >
+              {theme === "dark" ? <Sun className="size-4 text-amber-400" /> : <Moon className="size-4 text-indigo-500" />}
+            </button>
+            <button
+              onClick={handleNewChat}
+              className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-[#202020] transition-colors cursor-pointer text-slate-500 dark:text-slate-300 border-0 bg-transparent"
+            >
+              <Plus className="size-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Backdrop for mobile menu */}
+        {isMobileSidebarOpen && (
+          <div 
+            onClick={() => setIsMobileSidebarOpen(false)}
+            className="md:hidden fixed inset-0 bg-black/55 backdrop-blur-xs z-30 transition-opacity"
+          />
+        )}
+
+        {/* SCIPARSER SIDEBAR (Left Column) */}
+        {browserActive ? (
+          <aside className="w-[68px] shrink-0 hidden md:flex flex-col items-center bg-slate-50 dark:bg-[#141414] border-r border-slate-200 dark:border-[#2f2f2f] text-slate-600 dark:text-[#ececec] py-4 h-full space-y-6 select-none z-40">
+            <div className="h-10 w-10 shrink-0 rounded-full bg-[#f15a24] text-white flex items-center justify-center font-extrabold text-sm select-none uppercase shadow-md leading-none" title="Dhayalan P">
+              DP
+            </div>
+
+            <div className="flex-1 flex flex-col items-center gap-4 w-full pt-4">
+              <button
+                onClick={handleNewChat}
+                className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-[#212121] text-indigo-600 dark:text-indigo-400 hover:text-indigo-750 dark:hover:text-white transition-all cursor-pointer border border-slate-200 dark:border-[#2f2f2f]/60 bg-transparent"
+                title="New Chat"
+              >
+                <Plus className="size-5" />
+              </button>
+
+              <button
+                onClick={() => {
+                  setIsSidebarCollapsed(false);
+                  setBrowserActive(false);
+                }}
+                className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-[#212121] text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-all cursor-pointer border border-slate-200 dark:border-[#2f2f2f]/60 bg-transparent"
+                title="Show Full Navigation"
+              >
+                <PanelLeftOpen className="size-5" />
+              </button>
+            </div>
+
+            <div className="flex flex-col items-center gap-4">
+              <div className="h-2.5 w-2.5 bg-emerald-500 rounded-full animate-pulse" title="SciParser Network Live" />
+              <button
+                onClick={handleLogout}
+                className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-[#212121] text-red-500 hover:text-red-650 transition-all cursor-pointer border-0 bg-transparent"
+                title="Sign Out"
+              >
+                <LogOut className="size-5" />
+              </button>
+            </div>
+          </aside>
+        ) : (
+          <aside className={cn(
+            "w-[260px] shrink-0 flex flex-col bg-slate-50 dark:bg-[#141414] border-r border-slate-200 dark:border-[#2f2f2f] text-slate-800 dark:text-[#ececec] transition-transform duration-300 z-40 h-full",
+            "fixed inset-y-0 left-0 md:relative md:translate-x-0",
+            isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full",
+            isSidebarCollapsed ? "hidden md:flex md:w-0 md:border-r-0 overflow-hidden" : "md:flex "
+          )}>
+            {/* Header Panel */}
+            <div className="h-16 flex items-center justify-between px-3.5 pt-1">
+              <button
+                onClick={() => setIsSidebarCollapsed(true)}
+                className="hidden md:flex p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/85 dark:hover:bg-[#212121] transition-all cursor-pointer border-0 bg-transparent"
+                title="Close sidebar"
+              >
+                <PanelLeftClose className="size-[19px]" />
+              </button>
+              
+              <button
+                onClick={handleNewChat}
+                className="flex items-center gap-2 py-2 px-3.5 border-0 hover:bg-slate-200/60 dark:hover:bg-[#212121] text-slate-800 dark:text-white text-sm font-semibold rounded-xl transition-all cursor-pointer bg-transparent ml-auto"
+                title="New Chat"
+              >
+                <Pencil className="size-4 text-slate-500 dark:text-slate-300" />
+              </button>
+
+              <button
+                onClick={() => setIsMobileSidebarOpen(false)}
+                className="md:hidden p-2 rounded-xl hover:bg-slate-200 dark:hover:bg-[#212121] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer border-0 bg-transparent"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            {/* New Chat Button */}
+            <div className="px-3.5 mb-1.5">
+              <button
+                onClick={handleNewChat}
+                className="w-full flex items-center justify-between gap-2.5 py-2.5 px-4 bg-transparent hover:bg-slate-200/90 dark:hover:bg-[#212121] text-slate-800 dark:text-white text-sm font-bold rounded-xl transition-all border border-slate-200 dark:border-[#2f2f2f] shadow-xs group cursor-pointer"
+              >
+                <span className="flex items-center gap-2.5">
+                  <MessageSquare className="size-4 text-indigo-500 dark:text-indigo-400" />
+                  <span>New Chat</span>
+                </span>
+                <Plus className="size-3.5 text-slate-400 dark:text-slate-500 group-hover:text-slate-900 dark:group-hover:text-white transition-colors" />
+              </button>
+            </div>
+
+            {/* Search Box */}
+            <div className="px-3.5 mb-3.5">
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-505" />
+                <input
+                  type="text"
+                  placeholder="Search chats"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-slate-200/60 dark:bg-[#202020] border-0 text-slate-800 dark:text-[#ececec] placeholder:text-slate-500 rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500/50 transition-all font-semibold"
+                />
+                {searchQuery && (
+                  <button 
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2.5 top-2.5 text-xs text-slate-500 hover:text-slate-900 dark:hover:text-white cursor-pointer border-0 bg-transparent"
+                  >
+                    <X className="size-3" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Recents List */}
+            <div className="flex-1 overflow-y-auto px-2 space-y-1.5 scrollbar-thin select-none">
+              <div className="px-3 pb-1.5 text-[10.5px] font-bold text-slate-500 uppercase tracking-widest leading-none">
+                Recents
+              </div>
+              
+              {filteredThreads.length === 0 ? (
+                <div className="text-center py-6 text-xs text-slate-500 font-bold font-sans">
+                  {searchQuery ? "No matches found" : "No recent chats"}
+                </div>
+              ) : (
+                filteredThreads.map((t) => {
+                  const isActive = t.id === activeThreadId;
+                  const isEditing = t.id === editingThreadId;
+                  
+                  return (
+                    <div
+                      key={t.id}
+                      onClick={() => !isEditing && handleSelectThread(t.id)}
+                      className={cn(
+                        "w-full group flex items-center justify-between p-2.5 rounded-xl text-[13px] font-bold transition-all duration-150 relative cursor-pointer",
+                        isActive 
+                          ? "bg-slate-200/80 dark:bg-[#212121] text-slate-900 dark:text-white" 
+                          : "text-slate-600 dark:text-[#b4b4b4] hover:bg-slate-200/40 dark:hover:bg-[#212121]/60 hover:text-slate-900 dark:hover:text-white"
+                      )}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <MessageSquare className={cn(
+                          "size-3.5 shrink-0",
+                          isActive ? "text-indigo-500 dark:text-indigo-400" : "text-slate-400"
+                        )} />
+                        
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={editingTitleText}
+                            onChange={(e) => setEditingTitleText(e.target.value)}
+                            onBlur={() => saveRenameThread(t.id)}
+                            onKeyDown={(e) => e.key === "Enter" && saveRenameThread(t.id)}
+                            className="bg-white dark:bg-[#171717] border border-indigo-400 text-slate-800 dark:text-white rounded px-1.5 py-0.5 text-xs w-full focus:outline-none"
+                            autoFocus
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        ) : (
+                          <span className="truncate pr-1">
+                            {t.title}
+                          </span>
+                        )}
+                      </div>
+
+                      {!isEditing && (
+                        <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 ml-1 select-none">
+                          <button
+                            onClick={(e) => startRenameThread(t.id, t.title, e)}
+                            className="p-1 rounded hover:bg-slate-200 dark:hover:bg-[#343438] text-slate-400 hover:text-slate-900 dark:hover:text-[#ececec] transition-colors border-0 bg-transparent cursor-pointer"
+                            title="Rename Chat"
+                          >
+                            <Pencil className="size-3" />
+                          </button>
+                          <button
+                            onClick={(e) => handleDeleteThread(t.id, e)}
+                            className="p-1 rounded hover:bg-slate-200 dark:hover:bg-[#343438] text-slate-405 hover:text-rose-600 dark:hover:text-rose-400 transition-colors border-0 bg-transparent cursor-pointer"
+                            title="Delete Chat"
+                          >
+                            <Trash className="size-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Bottom Profile Row */}
+            <div className="p-3 border-t border-slate-200/50 dark:border-white/5">
+              <div className="flex items-center justify-between gap-2.5 p-2 rounded-xl hover:bg-slate-200 dark:hover:bg-[#212121] transition-colors group cursor-pointer">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="h-8 w-8 shrink-0 rounded-full bg-[#f15a24] text-white flex items-center justify-center font-extrabold text-[12.5px] select-none uppercase">
+                    DP
+                  </div>
+                  <div className="min-w-0 text-left">
+                    <span className="font-extrabold text-sm block text-slate-800 dark:text-white truncate leading-tight">
+                      Dhayalan P
+                    </span>
+                    <span className="text-[11px] font-semibold text-slate-500 block leading-tight">
+                      Go
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleTheme(); }}
+                    className="p-2 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-neutral-800 transition-colors cursor-pointer border-0 bg-transparent"
+                    title="Toggle Theme Mode"
+                  >
+                    {theme === "dark" ? <Sun className="size-[17px] text-amber-500" /> : <Moon className="size-[17px] text-indigo-500" />}
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleLogout(); }}
+                    className="p-2 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-neutral-800 transition-colors cursor-pointer border-0 bg-transparent"
+                    title="Store Settings & Sign Out"
+                  >
+                    <LogOut className="size-[17px]" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </aside>
+        )}
+
+        {/* MAIN PANEL CONTENT */}
+        <main className="flex-1 flex flex-col min-w-0 h-full bg-slate-100 dark:bg-[#212121]">
+          
+          {/* Main Top Header Navigation */}
+          <div className="hidden md:flex flex-row shrink-0 items-center justify-between h-16 px-6 bg-slate-100 dark:bg-[#212121] select-none z-10">
+            <div className="flex items-center gap-3">
+              {isSidebarCollapsed && (
+                <button
+                  onClick={() => setIsSidebarCollapsed(false)}
+                  className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-[#2f2f2f] transition-all cursor-pointer border-0 bg-transparent"
+                  title="Open sidebar"
+                >
+                  <PanelLeftOpen className="size-[19px]" />
+                </button>
+              )}
+
+              {/* Model Dropdown Selector */}
+              <div className="relative">
+                <button 
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="flex items-center gap-1 px-3 py-2 text-lg font-bold text-black dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-[#2f2f2f] rounded-xl transition-colors cursor-pointer border-0 bg-transparent text-left"
+                >
+                  <span>{activeModel}</span>
+                  <ChevronDown className="size-4 text-slate-600 dark:text-slate-400" />
+                </button>
+                
+                {isDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setIsDropdownOpen(false)} />
+                    <div className="absolute left-0 mt-2 w-64 bg-white dark:bg-[#171717] border border-slate-200 dark:border-[#2f2f2f] rounded-2xl shadow-xl z-50 p-2 text-sm text-slate-800 dark:text-slate-200">
+                      <button 
+                        onClick={() => { setActiveModel("SciParser Lite"); setIsDropdownOpen(false); }}
+                        className={cn(
+                          "w-full text-left px-3.5 py-2.5 rounded-xl flex items-center justify-between hover:bg-slate-100 dark:hover:bg-[#212121] transition-colors cursor-pointer border-0 bg-transparent text-slate-800 dark:text-white",
+                          activeModel === "SciParser Lite" && "bg-slate-100 dark:bg-[#212121]"
+                        )}
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-bold">SciParser Lite</span>
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">Great for quick calculations and simple queries</span>
+                        </div>
+                        {activeModel === "SciParser Lite" && <Check className="size-4 text-indigo-500 dark:text-indigo-400" />}
+                      </button>
+                      
+                      <button 
+                        onClick={() => { setActiveModel("SciParser AI Core"); setIsDropdownOpen(false); }}
+                        className={cn(
+                          "w-full text-left px-3.5 py-2.5 rounded-xl flex items-center justify-between hover:bg-slate-100 dark:hover:bg-[#212121] transition-colors cursor-pointer border-0 bg-transparent text-slate-800 dark:text-white",
+                          activeModel === "SciParser AI Core" && "bg-slate-100 dark:bg-[#212121]"
+                        )}
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-bold">SciParser AI Core</span>
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">Perfect for PDF digest & citation matching</span>
+                        </div>
+                        {activeModel === "SciParser AI Core" && <Check className="size-4 text-indigo-500 dark:text-indigo-400" />}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <button
+                onClick={async () => {
+                  try {
+                    const nextActive = !browserActive;
+                    const res = await sciparserApi.toggleBrowserState(activeThreadId || "default", nextActive);
+                    if (res) {
+                      setBrowserActive(nextActive);
+                      handleToggleLiveBrowser(nextActive);
+                    }
+                  } catch (e) {
+                    console.error(e);
+                  }
+                }}
+                className={cn(
+                  "flex items-center gap-2 py-2 px-3.5 rounded-xl border font-bold text-xs transition-all duration-300 shadow-sm cursor-pointer select-none",
+                  browserActive 
+                    ? "bg-emerald-500/10 dark:bg-emerald-500/15 text-white border-emerald-500/35 hover:bg-emerald-500/20" 
+                    : "bg-slate-100 dark:bg-[#2a2a2a] hover:bg-slate-200 dark:hover:bg-[#323232] text-slate-700 dark:text-white border-slate-200 dark:border-[#3e3e3fb0]"
+                )}
+                title={browserActive ? "Side-by-side browser is live!" : "Click to activate Playwright browser view."}
+              >
+                <Globe className={cn("size-3.5 transition-colors", browserActive ? "text-emerald-500 dark:text-emerald-400" : "text-slate-500")} />
+                <span>{browserActive ? "Browser is Live" : "Playwright Browser"}</span>
+                <span className="flex h-1.5 w-1.5 relative">
+                  {browserActive ? (
+                    <>
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                    </>
+                  ) : (
+                    <span className="h-1.5 w-1.5 rounded-full bg-slate-400 dark:bg-slate-600 inline-block"></span>
+                  )}
+                </span>
+              </button>
+
+              {/* Agent View Toggle Button - REMOVED */}
+              {/* Browser Preview Toggle Button - REMOVED */}
+            </div>
+          </div>
+
+          {/* Horizontal Split Area */}
+          <div className="flex-1 flex flex-row min-w-0 h-full overflow-hidden">
+            {/* LEFT SIDE: Chat Area */}
+            <div className={cn(
+              "flex flex-col h-full min-w-0 flex-1 relative overflow-hidden bg-white dark:bg-[#212121]",
+              browserActive ? "w-full lg:w-1/2 border-r border-[#2f2f2f]" : "w-full"
+            )}>
+              {/* Messages Area */}
+              <div 
+                ref={scrollRef}
+                className="flex-1 overflow-y-auto p-4 space-y-6"
+              >
+                {messages.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center px-4">
+                    <div className="w-20 h-20 mb-6 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
+                      <Sparkles className="size-10 text-white" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">
+                      Welcome to SciParser
+                    </h3>
+                    <p className="text-base text-slate-600 dark:text-slate-400 max-w-md leading-relaxed">
+                      Ask anything and SciParser will help you analyze, research, and execute tasks with AI-powered assistance.
+                    </p>
+                    <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl">
+                      <button
+                        onClick={() => sendQuickPrompt("Explain quantum computing in simple terms")}
+                        className="p-4 rounded-xl border border-slate-200 dark:border-[#2f2f2f] bg-white dark:bg-[#1e1e1e] hover:bg-slate-50 dark:hover:bg-[#252525] transition-all text-left group cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <BookOpen className="size-4 text-indigo-500" />
+                          <span className="text-sm font-semibold text-slate-900 dark:text-white">Explain Concepts</span>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Get clear, simple explanations</p>
+                      </button>
+                      <button
+                        onClick={() => sendQuickPrompt("Help me write a research paper introduction")}
+                        className="p-4 rounded-xl border border-slate-200 dark:border-[#2f2f2f] bg-white dark:bg-[#1e1e1e] hover:bg-slate-50 dark:hover:bg-[#252525] transition-all text-left group cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <FileText className="size-4 text-emerald-500" />
+                          <span className="text-sm font-semibold text-slate-900 dark:text-white">Write Content</span>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Generate professional documents</p>
+                      </button>
+                      <button
+                        onClick={() => sendQuickPrompt("Analyze this dataset and find patterns")}
+                        className="p-4 rounded-xl border border-slate-200 dark:border-[#2f2f2f] bg-white dark:bg-[#1e1e1e] hover:bg-slate-50 dark:hover:bg-[#252525] transition-all text-left group cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <Database className="size-4 text-amber-500" />
+                          <span className="text-sm font-semibold text-slate-900 dark:text-white">Analyze Data</span>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Discover insights from data</p>
+                      </button>
+                      <button
+                        onClick={() => sendQuickPrompt("Write a Python script to automate web scraping")}
+                        className="p-4 rounded-xl border border-slate-200 dark:border-[#2f2f2f] bg-white dark:bg-[#1e1e1e] hover:bg-slate-50 dark:hover:bg-[#252525] transition-all text-left group cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <Code className="size-4 text-purple-500" />
+                          <span className="text-sm font-semibold text-slate-900 dark:text-white">Write Code</span>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Generate and debug code</p>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`flex items-start gap-3 ${msg.role === 'user' ? 'justify-end flex-row-reverse' : 'justify-start'}`}
+                    >
+                      {/* Avatar */}
+                      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-sm ${
+                        msg.role === 'user' 
+                          ? 'bg-gradient-to-br from-indigo-500 to-purple-600' 
+                          : 'bg-gradient-to-br from-emerald-500 to-teal-600'
+                      }`}>
+                        {msg.role === 'user' ? (
+                          <User2 className="size-4 text-white" />
+                        ) : (
+                          <Sparkles className="size-4 text-white" />
+                        )}
+                      </div>
+
+                      {/* Message Bubble */}
+                      <div className={`max-w-[75%] flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                        {/* Role Label */}
+                        <div className="flex items-center gap-2 mb-1.5 px-1">
+                          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                            {msg.role === 'user' ? 'You' : 'SciParser AI'}
+                          </span>
+                          <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+
+                        {/* Message Content */}
+                        <div
+                          className={`rounded-2xl px-4 py-3 shadow-sm ${
+                            msg.role === 'user' 
+                              ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 text-white rounded-tr-sm' 
+                              : 'bg-white dark:bg-[#1e1e1e] text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-[#2f2f2f] rounded-tl-sm'
+                          }`}
+                        >
+                          {renderFormattedContent(msg.content)}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+
+                {/* Loading Indicator */}
+                {isAiTyping && (
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-sm">
+                      <Sparkles className="size-4 text-white" />
+                    </div>
+                    <div className="max-w-[75%]">
+                      <div className="flex items-center gap-2 mb-1.5 px-1">
+                        <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">SciParser AI</span>
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500">typing...</span>
+                      </div>
+                      <div className="bg-white dark:bg-[#1e1e1e] border border-slate-200 dark:border-[#2f2f2f] rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Input Area */}
+              <div className="border-t border-[#2f2f2f] bg-white dark:bg-[#212121]">
+                {/* Processing Panel - Shows when agent is processing */}
+                {isAiTyping && (
+                  <ProcessingPanel
+                    agentHistory={agentHistory}
+                    toolHistory={toolHistory}
+                    isBrowserActive={browserActive}
+                    browserFrame={browserFrame}
+                  />
+                )}
+
+                {/* Input Box */}
+                <div className="p-4">
+                  <div className="flex items-end gap-2">
+                    <textarea
+                      ref={textareaRef}
+                      value={textareaValue}
+                      onChange={(e) => {
+                        setTextareaValue(e.target.value);
+                        adjustHeight();
+                      }}
+                      onKeyUp={adjustHeight}
+                      placeholder="Ask anything..."
+                      className="flex-1 resize-none bg-slate-100 dark:bg-[#2f2f2f] text-slate-900 dark:text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-600 transition-all"
+                      rows={1}
+                    />
+                    <button
+                      onClick={() => {
+                        if (textareaValue.trim()) {
+                          handleSendMessage(textareaValue);
+                        }
+                      }}
+                      disabled={!textareaValue.trim() || isAiTyping}
+                      className="p-3 bg-slate-900 dark:bg-[#2f2f2f] text-white rounded-xl hover:bg-slate-800 dark:hover:bg-[#3f3f3f] disabled:opacity-50 disabled:cursor-not-allowed transition-colors border-0 bg-transparent cursor-pointer"
+                    >
+                      <Send className="size-5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Browser Side - Split Screen View */}
+            {browserActive && (
+              <div className="w-full lg:w-1/2 flex flex-col h-full bg-white dark:bg-[#171717] border-l border-[#2f2f2f] overflow-hidden relative">
+                {/* Browser Header */}
+                <div className="h-12 bg-slate-100 dark:bg-[#212121] border-b border-[#2f2f2f] flex items-center px-4 gap-3">
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex gap-1.5">
+                      <div className="w-3 h-3 rounded-full bg-red-500 hover:bg-red-650 cursor-pointer" title="Close" />
+                      <div className="w-3 h-3 rounded-full bg-amber-500 hover:bg-amber-600 cursor-pointer" title="Minimize" />
+                      <div className="w-3 h-3 rounded-full bg-emerald-500 hover:bg-emerald-600 cursor-pointer" title="Maximize" />
+                    </div>
+                  </div>
+                  <div className="flex-1 max-w-xl">
+                    <div className="bg-white dark:bg-[#171717] border border-[#3e3e3f] rounded-lg px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                      <div className="text-emerald-500">
+                        <CheckCircle2 className="size-3.5" />
+                      </div>
+                      <span className="truncate">https://arxiv.org/abs/2403.11985</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={async () => {
+                        try {
+                          await fetch("/api/browser-state/reload", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({})
+                          });
+                          setIsRefreshing(true);
+                          setTimeout(() => setIsRefreshing(false), 1000);
+                        } catch (e) {
+                          console.error(e);
+                        }
+                      }}
+                      className="p-1.5 hover:bg-slate-200 dark:hover:bg-[#2a2a2a] rounded transition-colors text-slate-600 dark:text-slate-400 border-0 bg-transparent cursor-pointer"
+                      title="Reload"
+                    >
+                      <RefreshCw className={cn("size-4", isRefreshing && "animate-spin")} />
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await sciparserApi.toggleBrowserState(activeThreadId || "default", false);
+                          setBrowserActive(false);
+                        } catch (e) {
+                          console.error(e);
+                        }
+                      }}
+                      className="p-1.5 hover:bg-slate-200 dark:hover:bg-[#2a2a2a] rounded transition-colors text-slate-600 dark:text-slate-400 border-0 bg-transparent cursor-pointer"
+                      title="Close browser"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Browser Content Screencasting Area */}
+                <div className="flex-1 bg-white dark:bg-[#171717] flex items-center justify-center overflow-hidden relative">
+                  {browserFrame ? (
+                    <img 
+                      src={`data:image/jpeg;base64,${browserFrame}`} 
+                      alt="Live Browser Screencast" 
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <div className="text-center p-8 animate-pulse">
+                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center animate-spin">
+                        <Globe className="size-8 text-emerald-600 dark:text-emerald-400" />
+                      </div>
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
+                        Live Browser Screencast Connecting...
+                      </h3>
+                      <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto">
+                        Awaiting secure frame broadcast from the headless Playwright automated session thread.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Playwright Browser Tool View Below */}
+                <div className="h-48 bg-slate-100 dark:bg-[#212121] border-t border-[#2f2f2f] overflow-y-auto">
+                  <div className="p-3">
+                    <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">
+                      Playwright Tool Execution
+                    </h4>
+                    {toolHistory && toolHistory.length === 0 ? (
+                      <div className="text-center py-4 text-xs text-slate-500 dark:text-slate-400">
+                        No tool executions yet
+                      </div>
+                    ) : toolHistory && toolHistory.length > 0 ? (
+                      <div className="space-y-2">
+                        {toolHistory.slice(-5).map((tool: any, idx: number) => (
+                          <div key={idx} className="p-2 bg-white dark:bg-[#171717] rounded border border-slate-200 dark:border-[#2f2f2f]">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{tool.tool_name}</span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                tool.status === "COMPLETED" 
+                                  ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" 
+                                  : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                              }`}>
+                                {tool.status}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                              Input: {JSON.stringify(tool.tool_input).slice(0, 100)}...
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4 text-xs text-slate-500 dark:text-slate-400">
+                        No tool executions yet
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </main>
+
+        {/* Agent Stage View Panel (Right Side) - REMOVED */}
+        {/* AgentStageView removed - using ProcessingPanel instead */}
+
+        {/* Browser Preview Panel - REMOVED */}
+      </div>
+    );
+};
+
+export default ChatPage;
