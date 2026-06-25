@@ -192,6 +192,19 @@ export const sciparserApi = {
     return res.json();
   },
 
+  stopChatProcess: async (chatId: string) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+
+    const res = await fetch(`${BASE_URL}/sciparser/v1/chat/stop?chat_id=${chatId}`, {
+      method: "POST",
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
   getUploadedFiles: async () => {
     const token = localStorage.getItem("access_token");
     if (!token) {
@@ -226,6 +239,104 @@ export const sciparserApi = {
     return res.json();
   },
 
+  closeBrowser: async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+
+    const res = await fetch(`${BASE_URL}/sciparser/v1/browser/close`, {
+      method: "POST",
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  checkBrowserSession: async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+
+    const res = await fetch(`${BASE_URL}/sciparser/v1/browser/check`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  // Scheduler
+  createSchedule: async (data: any) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+
+    const res = await fetch(`${BASE_URL}/sciparser/v1/scheduler/create`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: formattedToken,
+      },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  getSchedules: async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+
+    const res = await fetch(`${BASE_URL}/sciparser/v1/scheduler/list`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  deleteSchedule: async (scheduleId: string) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+
+    const res = await fetch(`${BASE_URL}/sciparser/v1/scheduler/${scheduleId}`, {
+      method: "DELETE",
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  updateSchedule: async (scheduleId: string, data: any) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+
+    const res = await fetch(`${BASE_URL}/sciparser/v1/scheduler/${scheduleId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: formattedToken,
+      },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  runSchedule: async (scheduleId: string) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+
+    const res = await fetch(`${BASE_URL}/sciparser/v1/scheduler/${scheduleId}/run`, {
+      method: "POST",
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
   // Chat Session Management
   deleteChatSession: async (chatId: string) => {
     const token = localStorage.getItem("access_token");
@@ -251,7 +362,7 @@ export const sciparserApi = {
     }
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
     
-    const res = await fetch(`${BASE_URL}/sciparser/v1/agent/history/${chatId}`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/chat/sessions/${chatId}/logs`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
@@ -265,7 +376,7 @@ export const sciparserApi = {
     }
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
     
-    const res = await fetch(`${BASE_URL}/sciparser/v1/agent/tools/${chatId}`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/chat/sessions/${chatId}/tools`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
@@ -279,7 +390,7 @@ export const sciparserApi = {
     }
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
     
-    const res = await fetch(`${BASE_URL}/sciparser/v1/agent/status/${chatId}`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/browser/check`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
@@ -319,6 +430,7 @@ export const sciparserApi = {
 };
 
 export interface ChatMessage {
+  form: any;
   id: string;
   role: "user" | "assistant" | "human" | "ai";
   content: string;

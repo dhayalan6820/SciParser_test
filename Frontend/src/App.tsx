@@ -44,7 +44,7 @@ const containerVariants = {
 export default function App() {
   const [theme, setTheme] = React.useState<"light" | "dark">(() => {
     if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("sciparser-theme");
+      const stored = localStorage.getItem("theme");
       if (stored === "light" || stored === "dark") return stored;
       return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     }
@@ -108,14 +108,14 @@ export default function App() {
       root.classList.remove("dark");
       root.setAttribute("data-theme", "light");
     }
-    localStorage.setItem("sciparser-theme", theme);
+    localStorage.setItem("theme", theme);
   }, [theme]);
 
   // Handle systemic preferences change instantly
   React.useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = (e: MediaQueryListEvent) => {
-      const stored = localStorage.getItem("sciparser-theme");
+      const stored = localStorage.getItem("theme");
       if (!stored) {
         setTheme(e.matches ? "dark" : "light");
       }

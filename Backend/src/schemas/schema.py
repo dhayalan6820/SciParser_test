@@ -11,10 +11,23 @@ class SignIn(BaseModel):
     username: str
     password: str
 
-class SingUp(BaseModel): # Typo: Should be SignUp, but keeping for compatibility if used elsewhere
+class SignUp(BaseModel):
     username: str
     email: EmailStr
     password: str
+
+class FileUploadMetadata(BaseModel):
+    fileName: str
+    fileSize: int
+    fileType: str
+
+class FileResponse(BaseModel):
+    id: str
+    name: str
+    size: int
+    type: str
+    url: str
+    uploaded_at: str
 
 class Token(BaseModel):
     access_token: str
@@ -37,6 +50,7 @@ class BackendChatMessage(BaseModel):
     content: str
     timestamp: str
     plan: Optional[List[Dict[str, Any]]] = None # Added to support saving the agent process
+    form: Optional[Dict[str, Any]] = None # Added to support dynamic forms for NEEDS_INPUT status
 
 class ChatMessage(BaseModel):
     role: str
@@ -59,6 +73,19 @@ class RenameChatRequest(BaseModel):
     title: str
     log_id: Optional[str] = None
     success: bool = True
+
+class ScheduleRequest(BaseModel):
+    chat_id: str
+    title: str
+    selected_message_ids: List[str]
+    selected_tool_ids: List[str]
+    schedule_type: str # daily, weekly, monthly
+    email_recipient: str
+
+class ScheduleResponse(BaseModel):
+    schedule_id: str
+    status: str
+    created_at: datetime
 
 class MessageHistory(BaseModel):
     role: str

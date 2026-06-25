@@ -1,11 +1,11 @@
-from typing import List, Optional
+from typing import List
 import os
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import (
-    TIMESTAMP, BigInteger, Column, ForeignKey, Integer, String, Text, DateTime, Enum, Boolean, Float
+    TIMESTAMP, BigInteger, Column, ForeignKey, Integer, String, Text, DateTime
 )
-from sqlalchemy.dialects.postgresql import UUID
+
 from sqlalchemy.orm import Mapped, declarative_base, relationship, sessionmaker
 from enum import Enum as PyEnum
 
@@ -110,6 +110,7 @@ class Message(Base):
     content = Column(Text, nullable=False) # Changed to Text for long messages
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     plan_data = Column(Text) # Added to store the final agent plan
+    form_data = Column(Text) # Added to store dynamic forms for NEEDS_INPUT status
     
     user: Mapped["User"] = relationship("User", back_populates="messages")
 
@@ -136,9 +137,11 @@ class Schedule(Base):
     
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     schedule_id = Column(String(36), unique=True, nullable=False, default=lambda: str(uuid.uuid4()), index=True)
-    # FIX: Changed ForeignKey from 'chat_sessions.session_id' to 'chat_sessions.id'
+    user_id = Column(String(36), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
     conversation_id = Column(String(100), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=True)
     
+    title = Column(String(255), nullable=True)
+    selected_data = Column(Text) # JSON storing list of message_ids and tool_log_ids
     user_prompt = Column(Text, nullable=True)
     assistant_response = Column(Text, nullable=True)
     playwright_steps = Column(Text, nullable=True)
@@ -152,8 +155,26 @@ class Schedule(Base):
     email_recipient = Column(String(255), nullable=True)
     
     created_at = Column(TIMESTAMP, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(TIMESTAMP, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
-class AgentExecutionStatus(PyEnum):
+class ScheduleRun(Base):
+    """Tracks each execution of a schedule."""
+    __tablename__ = "schedule_runs"
+    __table_args__ = {
+        "mysql_charset": "utf8mb4",
+        "mysql_collate": "utf8mb4_unicode_ci",
+    }
+    
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    run_id = Column(String(36), unique=True, nullable=False, default=lambda: str(uuid.uuid4()), index=True)
+    schedule_id = Column(String(36), ForeignKey("schedules.schedule_id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    status = Column(String(20), default="running") # running, completed, failed
+    output = Column(Text(4294967295)) # The extracted data or error message
+    error_log = Column(Text)
+    duration_seconds = Column(Integer)
+    
+    created_at = Column(TIMESTAMP, default=lambda: datetime.now(timezone.utc))
     PENDING = "PENDING"
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
@@ -198,7 +219,7 @@ class ToolExecutionLog(Base):
     agent_id = Column(String(20), nullable=False)
     tool_name = Column(String(50), nullable=False)
     tool_input = Column(Text)
-    tool_output = Column(Text)
+    tool_output = Column(Text(4294967295)) # Use LONGTEXT for large tool outputs
     status = Column(String(20), default="PENDING")
     error_message = Column(Text)
     screenshot_url = Column(String(500))

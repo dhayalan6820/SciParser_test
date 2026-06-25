@@ -1,16 +1,16 @@
-# ATAG.py
 import json
 import re
 from typing import Any, Dict, List, Optional, Annotated, Sequence, TypedDict
 from langchain_core.messages import (
-    HumanMessage, 
-    AIMessage, 
+    HumanMessage,
     SystemMessage, 
     BaseMessage,
     messages_to_dict,
     messages_from_dict
 )
-from src.utils.logger import logger
+# Assuming logger is available or will be provided
+import logging
+logger = logging.getLogger(__name__)
 
 # ============================================================
 # SERIALIZATION HELPERS
@@ -41,79 +41,135 @@ def deserialize_state(state_str: str) -> dict:
 # ============================================================
 
 PROMPT_1_INPUT_UNDERSTANDING = """
-You are an Input Understanding Agent.
+You are an Input Understanding Agent. Your ONLY job is to analyze user requests and output a JSON object.
 
-Analyze the user's natural language task request and decide:
-- Is there enough information to execute the task immediately?
-- Or are there missing/ambiguous inputs that must be collected first?
+Analyze the user\"s natural language task request and determine:
+- The primary goal of the user.
+- If there\"s enough information to execute the task directly.
+- If there are missing or ambiguous inputs that require clarification or discovery.
 
 ---
 
 ## DECISION LOGIC
 
-Evaluate against THREE conditions:
-1. GOAL IS CLEAR        — The desired outcome is unambiguous.
-2. TARGET IS CLEAR      — The site, platform, URL, or app is known.
-3. INPUTS ARE COMPLETE  — Every field the execution agent needs is already stated.
+Evaluate against FOUR conditions:
+1.  **GOAL IS CLEAR**        — The desired outcome is unambiguous (e.g., \"book a flight\", \"check address availability\").
+2.  **TARGET IS CLEAR**      — The specific site, platform, URL, or app is known (e.g., \"frontier.com\", \"LinkedIn\"). If not, can it be *discovered* via search?
+3.  **INPUTS ARE COMPLETE**  — Every critical piece of information needed for execution is provided (e.g., address, dates, names, quantities). If not, can it be *discovered* or *must* it be asked?
+4.  **TASK TYPE**            — Categorize the task (e.g., \"Booking\", \"Data Extraction\", \"Search\", \"Automation\", \"Information Gathering\", \"Upload/Download\").
 
 ---
 
-## OUTPUT RULES — STRICT
+## OUTPUT RULES — STRICT JSON ONLY
 
-You must return ONLY ONE of two possible outputs. No explanation. No prose.
-No extra text outside the output format.
+You must return ONLY ONE of two possible JSON outputs. No explanation. No prose. No extra text outside the output object.
 
 **CRITICAL JSON FORMATTING REQUIREMENTS:**
-- Return a VALID JSON object that starts with { and ends with }
-- NO leading whitespace, quotes, or text before the opening brace
-- NO markdown code blocks
-- NO trailing text after the closing brace
-- ALL keys must be quoted with double quotes
-- ALL string values must be quoted with double quotes
+- Return a VALID JSON object that starts with `{` and ends with `}`.
+- NO leading whitespace, quotes, or text before the opening brace.
+- NO markdown code blocks (e.g., ```json).
+- NO trailing text after the closing brace.
+- ALL keys must be quoted with double quotes.
+- ALL string values must be quoted with double quotes.
 
 **WARNING: DO NOT INCLUDE PROMPT INSTRUCTIONS IN YOUR OUTPUT**
-- Do NOT include phrases like "and ending with", "starting with", or any other prompt text
-- Do NOT include backticks or markdown formatting
-- Do NOT include any explanatory text before or after the JSON
-- Your output must be PURE JSON only
+- Do NOT include phrases like \"and ending with\", \"starting with\", or any other prompt text.
+- Do NOT include backticks or markdown formatting.
+- Do NOT include any explanatory text before or after the JSON.
+- Your output must be PURE JSON only.
 
 ---
 
-### OUTPUT A — When ALL three conditions are met (no questions needed)
+### OUTPUT A — When ALL conditions are met OR can be autonomously discovered (no questions needed from user)
 
 Return this EXACT JSON format:
 {
-  "status": "READY",
-  "task_summary": "<one clear sentence restating the confirmed task>"
+  \"status\": \"READY\",
+  \"task_type\": \"<inferred task type, e.g., \\\\'Address Check\\\\'>\",
+  \"task_summary\": \"<one clear sentence restating the confirmed task>\",
+  \"confirmed_inputs\": {
+    \"<input_key_1>\": \"<value_1>\",
+    \"<input_key_2>\": \"<value_2>\"
+  },
+  \"discovery_strategy\": \"<\\\\'direct_execution\\\\' if all info is present, \\\\'tavily_search_for_url\\\\' if target is missing, \\\\'tavily_search_for_details\\\\' if inputs are missing but discoverable>\"
+}
+
+Example for \"check address availability for 2005 Kentucky Ave, Poplar Bluff, MO 63901 on frontier.com\":
+{
+  \"status\": \"READY\",
+  \"task_type\": \"Address Check\",
+  \"task_summary\": \"Check internet service availability for 2005 Kentucky Ave, Poplar Bluff, MO 63901 on frontier.com.\",
+  \"confirmed_inputs\": {
+    \"address\": \"2005 Kentucky Ave, Poplar Bluff, MO 63901\",
+    \"website\": \"frontier.com\"
+  },
+  \"discovery_strategy\": \"direct_execution\"
+}
+
+Example for \"book a ticket for karuppu movie\":
+{
+  \"status\": \"READY\",
+  \"task_type\": \"Movie Booking\",
+  \"task_summary\": \"Find showtimes and book a ticket for the movie Karuppu.\",
+  \"confirmed_inputs\": {
+    \"movie_title\": \"Karuppu\"
+  },
+  \"discovery_strategy\": \"tavily_search_for_details\" 
 }
 
 ---
 
-### OUTPUT B — When ANY condition is not met (questions needed)
+### OUTPUT B — When CRITICAL information is missing and CANNOT be autonomously discovered (questions needed from user)
 
 Return this EXACT JSON format:
 {
-  "status": "NEEDS_INPUT",
-  "form": {
-    "title": "<short form title, e.g. 'Book Movie Ticket'>",
-    "description": "<one sentence explaining why this form is needed>",
-    "sections": [
+  \"status\": \"NEEDS_INPUT\",
+  \"task_type\": \"<inferred task type, e.g., \\\\'Movie Booking\\\\'>\",
+  \"task_summary\": \"<one clear sentence restating the partial task>\",
+  \"form\": {
+    \"title\": \"<short form title, e.g. \\\\'Book Movie Ticket\\\\'>\",
+    \"description\": \"<one sentence explaining why this form is needed>\",
+    \"sections\": [
       {
-        "section_title": "<themed section label, e.g. '🎬 Platform & Show'>",
-        "fields": [
+        \"section_title\": \"<themed section label, e.g. \\\\'🎬 Platform & Show\\\\'>\",
+        \"fields\": [
           {
-            "id": "<snake_case_field_id>",
-            "label": "<human readable label>",
-            "type": "<field type — see allowed types below>",
-            "placeholder": "<helpful hint text>",
-            "required": true,
-            "options": null,
-            "note": null
+            \"id\": \"<snake_case_field_id>\",
+            \"label\": \"<human readable label>\",
+            \"type\": \"<field type — see allowed types below>\",
+            \"placeholder\": \"<helpful hint text>\",
+            \"required\": true,
+            \"options\": null,
+            \"note\": null
           }
         ]
       }
     ],
-    "security_note": "<only include if task involves login/payment/credentials, else null>"
+    \"security_note\": \"<only include if task involves login/payment/credentials, else null>\"
+  }
+}
+
+Example for \"book a flight\":
+{
+  \"status\": \"NEEDS_INPUT\",
+  \"task_type\": \"Flight Booking\",
+  \"task_summary\": \"Book a flight.\",
+  \"form\": {
+    \"title\": \"Flight Booking Details\",
+    \"description\": \"Please provide the necessary details to book your flight.\",
+    \"sections\": [
+      {
+        \"section_title\": \"Travel Information\",
+        \"fields\": [
+          {\"id\": \"origin\", \"label\": \"Origin City/Airport\", \"type\": \"text\", \"placeholder\": \"e.g., New York\", \"required\": true, \"options\": null, \"note\": null},
+          {\"id\": \"destination\", \"label\": \"Destination City/Airport\", \"type\": \"text\", \"placeholder\": \"e.g., London\", \"required\": true, \"options\": null, \"note\": null},
+          {\"id\": \"departure_date\", \"label\": \"Departure Date\", \"type\": \"date\", \"placeholder\": \"\", \"required\": true, \"options\": null, \"note\": null},
+          {\"id\": \"return_date\", \"label\": \"Return Date (optional)\", \"type\": \"date\", \"placeholder\": \"\", \"required\": false, \"options\": null, \"note\": null},
+          {\"id\": \"passengers\", \"label\": \"Number of Passengers\", \"type\": \"number\", \"placeholder\": \"1\", \"required\": true, \"options\": null, \"note\": null}
+        ]
+      }
+    ],
+    \"security_note\": null
   }
 }
 
@@ -144,49 +200,74 @@ Analyze this user request and return the correct JSON output:
 """
 
 PROMPT_2_EXECUTION_GENERATOR = """
-You are an expert Execution Prompt Generator for an autonomous web agent.
+You are an expert Browser Mission Architect. Your goal is to translate a user's request into a high-level, robust "Mission Objective" for an autonomous browser agent.
 
-Your goal is to take a user's request and confirmed inputs, and turn them into a high-precision, multi-step execution plan that the agent MUST follow to completion.
-
-## STRATEGIC GUIDELINES
-- **TOOL SELECTION:** 
-    - Use `tavily_search` ONLY for general web searching, finding URLs, or gathering information from multiple sources.
-    - Use `browser_` tools (Playwright) for ALL web interactions, including form filling, button clicking, ticket booking, address availability checks, and data aggregation from a specific site.
-- **NO PREMATURE STOPPING:** The agent must not stop after just navigating. It must interact, fill forms, click buttons, and extract final results.
-- **INTERACTION FOCUS:** If the task involves a form (booking, checking availability, signing up), explicitly instruct the agent to find the fields, type the data, and click the submit button using browser tools.
-- **EXPLORATION:** If an expected element is not immediately visible, the agent MUST use `browser_get_elements` or `browser_click` on parent containers to find the correct interaction points.
-- **STRICT ADHERENCE:** Tell the agent: "Do not ask the user for help. Use your tools to solve the problem."
+## MISSION DESIGN PRINCIPLES
+1. **Goal-Oriented**: Focus on the final outcome (e.g., "Extract the price and shipping date") rather than individual clicks.
+2. **Expert Playbooks**: Incorporate these strategies into the mission description:
+    - **Address Autocomplete**: "Type the address slowly and MUST click the matching suggestion from the dropdown to activate the form."
+    - **Anti-Bot**: "Interact with the page like a human. If a captcha appears, wait or try to solve it."
+    - **Data Extraction**: "Extract all relevant fields into a structured format. If there are multiple pages, navigate through all of them."
+3. **Constraint-Aware**: Mention specific inputs that MUST be used.
 
 ## OUTPUT FORMAT
-Generate the execution prompt using EXACTLY this structure. Return as plain text.
+TASK: {task_summary}
 
-TASK: [One-line summary of the final goal]
+REASONING:
+[Provide a brief explanation of the strategy chosen for this task.]
 
-1. Agent Role & Tools
-You are a high-precision web automation agent. You have access to browser tools. Your job is to EXECUTE, not to chat. Do not report status; perform actions.
+PLAN:
+[Provide a JSON array of tasks for the UI. Each task should have: id, title, description, status ('pending'), priority, level, dependencies (ids), and subtasks (array of {id, title, description, status: 'pending', priority}).]
 
-2. Target
-Full confirmed URL(s) or exact search topic.
+MISSION OBJECTIVE:
+[Provide a detailed, numbered set of instructions that the autonomous agent will follow. Include the target URL and all confirmed inputs.]
 
-3. Confirmed Inputs
-All collected values as labeled key-value pairs.
+CRITICAL CONSTRAINTS:
+- {confirmed_inputs_list}
 
-4. Execution Steps
-Numbered steps. Each step must be actionable:
-- Step 1 - Navigate: Go to the target URL.
-- Step 2 - Interaction: [Specific instructions on what to find, what to type, and what to click. If the element is not found, search for it using text or generic selectors.]
-- Step 3 - Verification: [How to know if the action was successful. Look for confirmation text or new page elements.]
-- Step 4 - Completion: [Extract the final data or confirmation message and return it as your final answer.]
-
-COMMAND: Start now by navigating to the target and proceeding through all steps without further input.
+COMMAND: Execute the mission objective autonomously. If you encounter a persistent blocker, report the exact error.
 """
 
-# ============================================================
-# LANGGRAPH STATE DEFINITIONS
-# ============================================================
+PROMPT_5_MCP_FALLBACK = """
+You are an MCP Recovery Specialist. The autonomous native agent has FAILED to complete the task. 
+
+Your job is to take the high-level mission and break it down into EXPLICIT tool calls for the MCP system (click, type, scroll, etc.) to bypass whatever blocked the native agent.
+
+## MISSION TO RECOVER
+{mission_objective}
+
+## FAILURE REASON
+{failure_reason}
+
+## RECOVERY PLAN
+[Provide a step-by-step manual override plan using MCP tools]
+"""
+
+PROMPT_3_CRITIC = """
+You are an Execution Critic & Problem Solver.
+
+Analyze the failure below and provide a REVISED instruction for the specific failed step.
+
+## FAILURE ANALYSIS
+1. **Root Cause:** Why did the last tool call fail? (e.g., "The address input was covered by a privacy banner").
+2. **Visual Clues:** Based on the page state, where is the element actually located?
+3. **Recovery Strategy:** What is the exact sequence to fix this? (e.g., "1. Click the 'Close' button on the banner. 2. Re-type the address. 3. Wait for the dropdown.")
+
+## OUTPUT FORMAT
+Return your response in two parts:
+
+THINKING: [Your analysis of the failure and the fix]
+
+REVISED PROMPT:
+[The complete, updated execution prompt for the agent, focusing on the recovery strategy.]
+"""
+
+from langgraph.graph.message import add_messages
+
+# ... existing code ...
 
 class AgentState(TypedDict):
-    messages: List[BaseMessage]
+    messages: Annotated[Sequence[BaseMessage], add_messages]
     atag_phase: str               # "AWAITING_DETAILS", "READY_FOR_PROMPT", "COMPLETED"
     atag_form: Optional[dict]
     atag_prompt: Optional[str]
@@ -195,33 +276,39 @@ class AgentState(TypedDict):
     chat_id: str
     retry_count: int              # Track retries for execution
     last_error: Optional[str]     # Store last error for critic analysis
+    browser_session_id: Optional[str] # New field to store browser session ID
+    execution_history: List[Dict[str, Any]] # Memory of tool successes/failures
 
 
-PROMPT_3_CRITIC = """
-You are an Execution Critic.
+PROMPT_4_PAGE_ANALYZER = """
+You are a Web Interaction Diagnostic Expert.
 
-Analyze why the execution failed and produce a CONCISE, REVISED execution prompt.
+Your goal is to analyze the "Gap" between the current page state and the user's goal.
 
-## RULES
-- Keep the revised prompt under 1000 tokens.
-- Focus ONLY on the step that failed.
-- If an element was missing, suggest using text-based selectors or generic tags.
-- DO NOT repeat the entire original prompt if not necessary.
+## DYNAMIC DIAGNOSTIC CHECKLIST
+1. **Interactivity Check:** Is the primary action button (e.g., "Submit", "Check", "Continue") disabled or hidden?
+2. **Root Cause Analysis:** If a button is disabled, WHY? 
+    - Is there a required field that looks empty?
+    - Did the agent type text but fail to select a "suggestion" from a dropdown?
+    - Is there a validation error message (usually in red text) visible?
+    - Is there a transparent overlay or popup blocking the click?
+3. **Visual Search:** If the agent says "I can't find X", look for synonyms or parent containers that might hold the element.
 
 ## OUTPUT FORMAT
-Return ONLY the revised execution prompt as plain text.
+REASONING:
+[Perform a diagnostic. Example: "The 'Check Availability' button is disabled. I see the address is typed, but the site requires a selection from the 'pac-container' dropdown to validate the form. I need to re-click the input and select the first suggestion."]
 
-User request: {user_request}
-Failed prompt: {failed_prompt}
-Error: {error_msg}
+REFINED PROMPT:
+[A precise instruction to fix the specific diagnostic issue. Focus on UNBLOCKING the UI first.]
 """
 
 class ATAGProcessor:
-    """Processes user requests using a decoupled two-step pipeline.
+    """Processes user requests using a decoupled multi-step pipeline.
 
-    Step 1: Input Understanding (Identify if information is missing).
-    Step 2: Execution Prompt Generation (Assemble final instructions).
-    Step 3: Critic (Analyze failures and revise prompts).
+    Step 1: Input Understanding.
+    Step 2: Initial Strategy.
+    Step 3: Page Analysis (Thinking).
+    Step 4: Critic (Self-healing).
     """
     def __init__(self, llm):
         self.llm = llm
@@ -230,8 +317,8 @@ class ATAGProcessor:
         """Robust JSON extraction from LLM responses with fallback strategies."""
         try:
             cleaned = re.sub(r"```json\s*|\s*```", "", text).strip()
-            start = cleaned.find('{')
-            end = cleaned.rfind('}')
+            start = cleaned.find("{")
+            end = cleaned.rfind("}")
             if start != -1 and end != -1 and end > start:
                 return json.loads(cleaned[start:end+1])
             return json.loads(cleaned)
@@ -239,30 +326,64 @@ class ATAGProcessor:
             logger.error(f"Failed to parse JSON response: {e}")
             return {"status": "ERROR", "message": "Invalid JSON format"}
 
-    async def run_input_understanding(self, original_request: str) -> Dict[str, Any]:
+    async def run_input_understanding(self, original_request: str, history_context: str = "") -> Dict[str, Any]:
         """Runs Agent 1 to check completeness and generate form schema if needed."""
         system_prefix = (
             "You are a JSON output engine. Your ONLY job is to return valid JSON. "
             "Your ENTIRE response must be a valid JSON object. No markdown. No explanations.\n\n"
         )
-        formatted_prompt = system_prefix + PROMPT_1_INPUT_UNDERSTANDING.replace("{user_request}", original_request)
+        
+        context_prompt = ""
+        if history_context:
+            context_prompt = f"\n\nRECENT CHAT HISTORY:\n{history_context}\n\nUse this history to understand the user's current request."
+
+        formatted_prompt = system_prefix + PROMPT_1_INPUT_UNDERSTANDING.replace("{user_request}", original_request) + context_prompt
         response = await self.llm.ainvoke([SystemMessage(content=formatted_prompt)])
         return self._parse_json_safely(response.content)
 
-    async def run_execution_generation(self, original_request: str, confirmed_inputs: str) -> str:
-        """Runs Agent 2 to build the downstream markdown execution prompt."""
+    async def run_execution_generation(self, user_request: str, task_summary: str, confirmed_inputs: Dict[str, Any], discovery_strategy: str) -> str:
+        """Runs Agent 2 to build the high-level mission objective for the native agent."""
+        # Format confirmed_inputs for display in the prompt
+        confirmed_inputs_list = "\n".join(
+            [f"- {k.replace('_', ' ').title()}: {v}" for k, v in confirmed_inputs.items()]
+        ) if confirmed_inputs else "None"
+
         formatted_prompt = PROMPT_2_EXECUTION_GENERATOR.replace(
-            "{user_request}", original_request
+            "{task_summary}", task_summary
         ).replace(
-            "{confirmed_inputs}", confirmed_inputs
+            "{confirmed_inputs_list}", confirmed_inputs_list
+        ).replace(
+            "{target_info}", f"https://{confirmed_inputs.get('website', 'google.com')}"
         )
         response = await self.llm.ainvoke([SystemMessage(content=formatted_prompt)])
         return response.content
 
-    async def run_critic(self, original_request: str, failed_prompt: str, error_msg: str) -> str:
+    async def run_mcp_fallback_generation(self, mission_objective: str, failure_reason: str) -> str:
+        """Generates a detailed MCP-based recovery plan when the native agent fails."""
+        formatted_prompt = PROMPT_5_MCP_FALLBACK.replace(
+            "{mission_objective}", mission_objective
+        ).replace(
+            "{failure_reason}", failure_reason
+        )
+        response = await self.llm.ainvoke([SystemMessage(content=formatted_prompt)])
+        return response.content
+
+    async def run_page_analysis(self, goal: str, page_content: str, last_error: Optional[str] = None) -> str:
+        """Runs Agent 3 (Analyzer) to think about the page state and refine the prompt."""
+        formatted_prompt = PROMPT_4_PAGE_ANALYZER.replace(
+            "{user_goal}", goal
+        ).replace(
+            "{page_content}", page_content[:15000] # Truncate to avoid context limits
+        ).replace(
+            "{last_error}", last_error or "None"
+        )
+        response = await self.llm.ainvoke([SystemMessage(content=formatted_prompt)])
+        return response.content
+
+    async def run_critic(self, user_request: str, failed_prompt: str, error_msg: str) -> str:
         """Runs Agent 4 (Critic) to analyze failure and revise the prompt."""
         formatted_prompt = PROMPT_3_CRITIC.replace(
-            "{user_request}", original_request
+            "{user_request}", user_request
         ).replace(
             "{failed_prompt}", failed_prompt
         ).replace(
@@ -270,15 +391,95 @@ class ATAGProcessor:
         )
         response = await self.llm.ainvoke([SystemMessage(content=formatted_prompt)])
         return response.content
-        response = await self.llm.ainvoke([SystemMessage(content=formatted_prompt)])
-        return self._parse_json_safely(response.content)
 
-    async def run_execution_generation(self, original_request: str, confirmed_inputs: str) -> str:
-        """Runs Agent 2 to build the downstream markdown execution prompt."""
-        formatted_prompt = PROMPT_2_EXECUTION_GENERATOR.replace(
-            "{user_request}", original_request
-        ).replace(
-            "{confirmed_inputs}", confirmed_inputs
-        )
-        response = await self.llm.ainvoke([SystemMessage(content=formatted_prompt)])
-        return response.content
+    def _self_check_code(self, code: str) -> tuple[bool, str]:
+        """Validates Python syntax of the generated code."""
+        try:
+            compile(code, "<string>", "exec")
+            return True, ""
+        except Exception as e:
+            return False, str(e)
+
+    async def run_script_generation(self, task_summary: str, execution_history: List[Dict[str, Any]]) -> str:
+        """Generates a production-ready Playwright script based on the execution history."""
+        
+        SYSTEM_PROMPT = """
+        You are a Senior Python Automation Engineer specializing in Playwright.
+
+        TASK:
+        Convert browser execution traces into a COMPLETE, EXECUTABLE, PRODUCTION-READY Python Playwright script.
+
+        OUTPUT RULES (ABSOLUTE)
+        * Return ONLY raw Python code.
+        * Do NOT use markdown.
+        * Do NOT use ```python blocks.
+        * Do NOT provide explanations or notes.
+        * Script must be directly runnable.
+
+        SCRIPT REQUIREMENTS:
+        * All imports (asyncio, json, playwright, pathlib).
+        * Helper functions (e.g., get_downloads_dir).
+        * main() function returning the final result.
+        * asyncio.run(main()) at the end.
+        * Robust error handling (try/except/finally).
+        * Data extraction logic returning structured JSON.
+        * If result is large, save to 'extracted_data.json' in Downloads.
+
+        PLAYWRIGHT CONFIGURATION:
+        * browser = await p.chromium.launch(headless=False, args=["--start-maximized"], timeout=60000)
+        * context = await browser.new_context(no_viewport=True)
+        * page = await context.new_page()
+        * page.set_default_timeout(60000)
+
+        WAIT & SELECTOR STRATEGY:
+        * Use page.wait_for_load_state("domcontentloaded") after navigation.
+        * Use page.wait_for_selector(selector, timeout=60000) before interactions.
+        * Prefer role, label, and placeholder selectors over deep CSS/XPath.
+        """
+
+        history_str = json.dumps(execution_history, indent=2)
+        USER_PROMPT = f"""
+        USER INTENT: {task_summary}
+        EXECUTION TRACE (Tool Calls):
+        {history_str}
+
+        Generate the script. Ensure every quote is paired, indentation is 4 spaces, and the browser lifecycle is correctly managed.
+        """
+
+        # Initial generation
+        response = await self.llm.ainvoke([
+            SystemMessage(content=SYSTEM_PROMPT),
+            HumanMessage(content=USER_PROMPT)
+        ])
+
+        content = response.content.strip()
+        # Remove markdown code blocks if the LLM ignored the rule
+        content = re.sub(r"```(?:python)?\n?(.*?)\n?```", r"\1", content, flags=re.DOTALL)
+
+        # Self-validation loop
+        max_retries = 2
+        for i in range(max_retries):
+            is_valid, error_msg = self._self_check_code(content)
+            if is_valid:
+                break
+            
+            fix_prompt = f"The previous code had a syntax error: {error_msg}\n\nPrevious code:\n{content}\n\nPlease fix and return the complete corrected code."
+            response = await self.llm.ainvoke([
+                SystemMessage(content=SYSTEM_PROMPT),
+                HumanMessage(content=fix_prompt)
+            ])
+            content = response.content.strip()
+            content = re.sub(r"```(?:python)?\n?(.*?)\n?```", r"\1", content, flags=re.DOTALL)
+
+        # Ensure critical imports are present
+        required_imports = [
+            "import asyncio",
+            "import json",
+            "from pathlib import Path",
+            "from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError"
+        ]
+        missing_imports = [imp for imp in required_imports if imp not in content]
+        if missing_imports:
+            content = "\n".join(missing_imports) + "\n\n" + content
+
+        return content.strip()

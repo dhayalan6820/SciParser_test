@@ -1,21 +1,22 @@
 import uuid
-import os
+import json
 import asyncio
-from typing import Optional, List, Dict, Any
+from typing import List, Dict, Any
 from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select
+
+from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from contextlib import asynccontextmanager
 
 # Local Imports
-from src.database.chat_db import User, Message, ChatSession, get_db
+from src.database.chat_db import AsyncSessionLocal, User, Message, get_db
 from src.database.init_db import init_database
 from src.schemas.schema import (
-    SingUp, SignIn, Token, UserResponse, ChatRequest, 
-    ChatResponse, ChatHistoryResponse, RenameChatRequest
+    SignUp, SignIn, Token, UserResponse, ChatRequest, 
+    ChatResponse, RenameChatRequest, ScheduleRequest, ScheduleResponse
 )
 from src.utils.logger import logger
 from src.services.brain import brain
@@ -55,20 +56,29 @@ class PlanStreamManager:
                 except Exception:
                     pass
 
-    async def broadcast_frame(self, frame_data: str, chat_id: str, is_tool: bool = False):
-        """Broadcasts a base64 CDP frame or tool log to all connected browser stream clients for a chat."""
-        if chat_id in self.browser_connections:
+    async def broadcast_thought(self, chat_id: str, thought: str):
+        """Broadcasts a live reasoning/thought to the UI."""
+        if chat_id in self.active_connections:
+            for connection in self.active_connections[chat_id]:
+                try:
+                    await connection.send_json({"type": "thought_update", "data": thought})
+                except Exception:
+                    pass
+
+    async def broadcast_frame(self, frame_data: str, user_id: str, is_tool: bool = False):
+        """Broadcasts a base64 CDP frame or tool log to all connected browser stream clients for a user."""
+        if user_id in self.browser_connections:
             event_type = "tool_log" if is_tool else "frame"
-            for connection in self.browser_connections[chat_id]:
+            for connection in self.browser_connections[user_id]:
                 try:
                     await connection.send_json({"event": event_type, "data": frame_data})
                 except Exception:
                     pass
 
 plan_stream_manager = PlanStreamManager()
-# Inject manager into brain and its browser_manager so they can broadcast
+# Inject manager into brain and its session_manager so they can broadcast
 brain.stream_manager = plan_stream_manager
-brain.browser_manager.stream_manager = plan_stream_manager
+brain.session_manager.stream_manager = plan_stream_manager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -94,7 +104,7 @@ app.add_middleware(
 # --- Auth Endpoints ---
 
 @app.post("/sciparser/v1/signup", response_model=UserResponse)
-async def signup(req: SingUp, db: AsyncSession = Depends(get_db)):
+async def signup(req: SignUp, db: AsyncSession = Depends(get_db)):
     return await ChatService.create_user(db, req.username, req.email, req.password)
 
 @app.post("/sciparser/v1/signin", response_model=Token)
@@ -104,6 +114,23 @@ async def signin(req: SignIn, db: AsyncSession = Depends(get_db)):
 @app.get("/sciparser/v1/me", response_model=UserResponse)
 async def get_me(current_user: User = Depends(ChatService.get_current_user)):
     return current_user
+
+# --- Upload Endpoints ---
+
+@app.post("/sciparser/v1/upload/metadata")
+async def upload_metadata(req: Any, current_user: User = Depends(ChatService.get_current_user)):
+    # Mock implementation for now as requested for local run
+    file_id = str(uuid.uuid4())
+    return {
+        "id": file_id,
+        "status": "success",
+        "upload_url": f"/sciparser/v1/upload/stream/{file_id}"
+    }
+
+@app.get("/sciparser/v1/upload/files")
+async def get_uploaded_files(current_user: User = Depends(ChatService.get_current_user)):
+    # Mock implementation
+    return []
 
 # --- Chat Endpoints ---
 
@@ -115,11 +142,81 @@ async def health_check():
 async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_user)):
     chat_id = str(req.chat_id) if req.chat_id else f"thread-{uuid.uuid4()}"
     
-    # Process via Brain
-    result = await brain.process_message(current_user.user_id, req.message, chat_id)
+    # --- OPTIMIZATION: Cancel existing task for this chat to prevent "multi-time" execution ---
+    if chat_id in brain.active_tasks:
+        logger.info(f"Cancelling existing task for chat {chat_id} before starting new one.")
+        brain.active_tasks[chat_id].cancel()
+        try:
+            await brain.active_tasks[chat_id]
+        except asyncio.CancelledError:
+            pass
     
-    if not result.get("success"):
-        raise HTTPException(status_code=500, detail=result.get("error"))
+    # Create a task for the message processing to allow cancellation
+    task = asyncio.create_task(brain.process_message(current_user.user_id, req.message, chat_id))
+    brain.active_tasks[chat_id] = task
+    
+    try:
+        result = await task
+        
+        # Handle NEEDS_INPUT status (not a failure, but requires user action)
+        if result.get("status") == "NEEDS_INPUT":
+            form_data = result.get("form", {})
+            description = form_data.get("description", "I need more information to proceed.")
+            return {
+                "message": {
+                    "id": str(uuid.uuid4()),
+                    "role": "ai",
+                    "content": description,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "plan": [],
+                    "log_id": str(uuid.uuid4()),
+                    "status": "NEEDS_INPUT",
+                    "form": form_data
+                },
+                "chat_id": chat_id,
+                "plan": []
+            }
+
+        if not result.get("success"):
+            error_msg = result.get("message") or result.get("error") or "Unknown error"
+            raise HTTPException(status_code=500, detail=error_msg)
+    except asyncio.CancelledError:
+        # Save the cancellation message to DB so it persists on reload
+        ai_msg_id = str(uuid.uuid4())
+        async with AsyncSessionLocal() as db:
+            # CRITICAL: Ensure the session exists before adding a message to it
+            # (In case the process was stopped before the session was created in brain.py)
+            await brain.db_manager.get_or_create_chat_session(current_user.user_id, chat_id)
+            
+            ai_msg = Message(
+                message_id=ai_msg_id,
+                chat_id=chat_id,
+                user_id=current_user.user_id,
+                role="ai",
+                content="Process stopped by user.",
+                plan_data=json.dumps([]),
+                created_at=datetime.now(timezone.utc)
+            )
+            db.add(ai_msg)
+            await db.commit()
+
+        return {
+            "message": {
+                "id": ai_msg_id,
+                "role": "ai",
+                "content": "Process stopped by user.",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "plan": [],
+                "log_id": str(uuid.uuid4())
+            },
+            "chat_id": chat_id,
+            "plan": []
+        }
+    except Exception as e:
+        logger.error(f"Chat endpoint error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        brain.active_tasks.pop(chat_id, None)
 
     ai_msg_data = result.get("message", {})
     
@@ -135,6 +232,11 @@ async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db), current_use
         "chat_id": chat_id,
         "plan": result.get("plan", [])
     }
+
+@app.post("/sciparser/v1/chat/stop")
+async def stop_chat_process(chat_id: str = Query(...), current_user: User = Depends(ChatService.get_current_user)):
+    stopped = await brain.stop_process(chat_id, user_id=current_user.user_id)
+    return {"status": "success" if stopped else "not_found"}
 
 @app.get("/sciparser/v1/chat/sessions")
 async def get_sessions(db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_user)):
@@ -174,6 +276,140 @@ async def get_tool_logs(chat_id: str, db: AsyncSession = Depends(get_db), curren
     stmt = select(ToolExecutionLog).where(ToolExecutionLog.chat_id == chat_id).order_by(ToolExecutionLog.created_at.asc())
     result = await db.execute(stmt)
     return result.scalars().all()
+
+# --- Scheduler Endpoints ---
+
+@app.post("/sciparser/v1/scheduler/create", response_model=ScheduleResponse)
+async def create_schedule(req: ScheduleRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_user)):
+    # 1. Fetch the selected tool logs to build the script
+    from src.database.chat_db import ToolExecutionLog
+    stmt = select(ToolExecutionLog).where(ToolExecutionLog.id.in_(req.selected_tool_ids))
+    res = await db.execute(stmt)
+    tool_logs = res.scalars().all()
+    
+    execution_history = [
+        {
+            "tool": log.tool_name,
+            "input": json.loads(log.tool_input) if log.tool_input else {},
+            "output": log.tool_output[:1000] if log.tool_output else "",
+            "status": log.status,
+            "error": log.error_message
+        }
+        for log in tool_logs
+    ]
+    
+    # 2. Generate the Python script using the specialized code model
+    generated_script = await brain.code_processor.run_script_generation(req.title, execution_history)
+    
+    # 3. Create the schedule with the generated script
+    schedule = await ChatService.create_schedule(db, current_user.user_id, req)
+    
+    # Update the schedule with the generated script
+    from src.database.chat_db import Schedule as ScheduleModel
+    stmt = select(ScheduleModel).where(ScheduleModel.schedule_id == schedule.schedule_id)
+    res = await db.execute(stmt)
+    schedule_db = res.scalar_one()
+    schedule_db.generated_script = generated_script
+    await db.commit()
+    
+    return {
+        "schedule_id": schedule.schedule_id,
+        "status": schedule.status,
+        "created_at": schedule.created_at
+    }
+
+@app.get("/sciparser/v1/scheduler/list")
+async def get_schedules(db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_user)):
+    return await ChatService.get_user_schedules(db, current_user.user_id)
+
+@app.delete("/sciparser/v1/scheduler/{schedule_id}")
+async def delete_schedule(schedule_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_user)):
+    """Delete a schedule."""
+    from src.database.chat_db import Schedule as ScheduleModel
+    stmt = delete(ScheduleModel).where(ScheduleModel.schedule_id == schedule_id, ScheduleModel.user_id == current_user.user_id)
+    await db.execute(stmt)
+    await db.commit()
+    return {"status": "success"}
+
+@app.patch("/sciparser/v1/scheduler/{schedule_id}")
+async def update_schedule(schedule_id: str, req: Dict[str, Any], db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_user)):
+    """Update schedule details (title, type, recipient)."""
+    from src.database.chat_db import Schedule as ScheduleModel
+    stmt = select(ScheduleModel).where(ScheduleModel.schedule_id == schedule_id, ScheduleModel.user_id == current_user.user_id)
+    res = await db.execute(stmt)
+    schedule = res.scalar_one_or_none()
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    
+    if "title" in req: schedule.title = req["title"]
+    if "schedule_type" in req: schedule.schedule_type = req["schedule_type"]
+    if "email_recipient" in req: schedule.email_recipient = req["email_recipient"]
+    if "status" in req: schedule.status = req["status"]
+    
+    await db.commit()
+    return {"status": "success"}
+
+@app.post("/sciparser/v1/scheduler/{schedule_id}/run")
+async def run_schedule(schedule_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_user)):
+    """Manually trigger a schedule execution."""
+    # 1. Fetch the schedule
+    from src.database.chat_db import Schedule as ScheduleModel, ScheduleRun
+    stmt = select(ScheduleModel).where(ScheduleModel.schedule_id == schedule_id, ScheduleModel.user_id == current_user.user_id)
+    res = await db.execute(stmt)
+    schedule = res.scalar_one_or_none()
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    
+    # 2. Create a run record
+    run = ScheduleRun(
+        run_id=str(uuid.uuid4()),
+        schedule_id=schedule_id,
+        status="running",
+        created_at=datetime.now(timezone.utc)
+    )
+    db.add(run)
+    await db.commit()
+    
+    # 3. Execute the script in a background task
+    # For now, we'll simulate the execution and update the record
+    # In a real scenario, we'd use a worker or subprocess
+    async def execute_task():
+        start_time = datetime.now(timezone.utc)
+        try:
+            # Simulate browser-use execution
+            await asyncio.sleep(5) 
+            
+            async with AsyncSessionLocal() as task_db:
+                stmt = select(ScheduleRun).where(ScheduleRun.run_id == run.run_id)
+                res = await task_db.execute(stmt)
+                run_db = res.scalar_one()
+                run_db.status = "completed"
+                run_db.output = "Successfully extracted data from " + schedule.title
+                run_db.duration_seconds = int((datetime.now(timezone.utc) - start_time).total_seconds())
+                await task_db.commit()
+                
+                # Update the main schedule record with the latest result
+                stmt = select(ScheduleModel).where(ScheduleModel.schedule_id == schedule_id)
+                res = await task_db.execute(stmt)
+                sch_db = res.scalar_one()
+                sch_db.extracted_content = run_db.output
+                await task_db.commit()
+                
+                # TODO: Send email to schedule.email_recipient
+                logger.info(f"Schedule {schedule_id} run completed successfully.")
+        except Exception as e:
+            async with AsyncSessionLocal() as task_db:
+                stmt = select(ScheduleRun).where(ScheduleRun.run_id == run.run_id)
+                res = await task_db.execute(stmt)
+                run_db = res.scalar_one()
+                run_db.status = "failed"
+                run_db.error_log = str(e)
+                await task_db.commit()
+                logger.error(f"Schedule {schedule_id} run failed: {e}")
+
+    asyncio.create_task(execute_task())
+    
+    return {"status": "success", "run_id": run.run_id}
 
 # --- WebSocket Endpoints ---
 
@@ -227,25 +463,33 @@ async def browser_stream(
         await websocket.close(code=1008)
         return
 
-    # Verify ownership
-    session = await ChatService.get_session_by_id(db, chat_id, user.user_id)
-    if not session:
-        # We don't close if session is missing here because it might be a brand new chat
-        pass
-
-    await plan_stream_manager.connect(chat_id, websocket, is_browser=True)
+    # Use user.user_id for browser session mapping instead of chat_id
+    await plan_stream_manager.connect(user.user_id, websocket, is_browser=True)
     try:
         while True:
             # Keep connection alive, frames are pushed via broadcast_frame
             await websocket.receive_text()
     except WebSocketDisconnect:
-        plan_stream_manager.disconnect(chat_id, websocket, is_browser=True)
+        plan_stream_manager.disconnect(user.user_id, websocket, is_browser=True)
     except Exception as e:
         logger.error(f"Browser stream error: {e}")
 
 @app.post("/sciparser/v1/browser/state")
 async def toggle_browser_state(req: Dict[str, Any], current_user: User = Depends(ChatService.get_current_user)):
     return {"status": "success", "is_active": req.get("is_active")}
+
+@app.post("/sciparser/v1/browser/close")
+async def close_browser_session(current_user: User = Depends(ChatService.get_current_user)):
+    """Manually close the browser session for the current user."""
+    await brain.session_manager.shutdown_session(current_user.user_id)
+    return {"status": "success", "message": "Browser session closed."}
+
+@app.get("/sciparser/v1/browser/check")
+async def check_browser_session(current_user: User = Depends(ChatService.get_current_user)):
+    """Check if a browser session is active for the current user."""
+    session = brain.session_manager.get_session(current_user.user_id)
+    is_active = session.get("mcp_manager") is not None
+    return {"status": "success", "is_active": is_active}
 
 if __name__ == "__main__":
     import uvicorn

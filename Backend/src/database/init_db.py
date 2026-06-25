@@ -54,6 +54,88 @@ async def migrate_tables(conn):
             logger.info("Adding missing 'plan_data' column to messages table...")
             await conn.execute(text("ALTER TABLE messages ADD COLUMN plan_data TEXT"))
             logger.info("Successfully added 'plan_data' column.")
+
+        # Check if form_data column exists in messages
+        result = await conn.execute(text("""
+            SELECT COUNT(*) 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'messages' 
+            AND COLUMN_NAME = 'form_data'
+        """))
+        form_data_exists = result.scalar() > 0
+        
+        if not form_data_exists:
+            logger.info("Adding missing 'form_data' column to messages table...")
+            await conn.execute(text("ALTER TABLE messages ADD COLUMN form_data TEXT"))
+            logger.info("Successfully added 'form_data' column.")
+
+        # --- Schedule Table Migrations ---
+        
+        # Check if user_id column exists in schedules
+        result = await conn.execute(text("""
+            SELECT COUNT(*) 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'schedules' 
+            AND COLUMN_NAME = 'user_id'
+        """))
+        user_id_exists = result.scalar() > 0
+        
+        if not user_id_exists:
+            logger.info("Adding missing 'user_id' column to schedules table...")
+            await conn.execute(text("ALTER TABLE schedules ADD COLUMN user_id VARCHAR(36) NOT NULL"))
+            logger.info("Successfully added 'user_id' column.")
+
+        # Check if title column exists in schedules
+        result = await conn.execute(text("""
+            SELECT COUNT(*) 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'schedules' 
+            AND COLUMN_NAME = 'title'
+        """))
+        title_exists = result.scalar() > 0
+        
+        if not title_exists:
+            logger.info("Adding missing 'title' column to schedules table...")
+            await conn.execute(text("ALTER TABLE schedules ADD COLUMN title VARCHAR(255)"))
+            logger.info("Successfully added 'title' column.")
+
+        # Check if selected_data column exists in schedules
+        result = await conn.execute(text("""
+            SELECT COUNT(*) 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'schedules' 
+            AND COLUMN_NAME = 'selected_data'
+        """))
+        selected_data_exists = result.scalar() > 0
+        
+        if not selected_data_exists:
+            logger.info("Adding missing 'selected_data' column to schedules table...")
+            await conn.execute(text("ALTER TABLE schedules ADD COLUMN selected_data TEXT"))
+            logger.info("Successfully added 'selected_data' column.")
+
+        # Check if updated_at column exists in schedules
+        result = await conn.execute(text("""
+            SELECT COUNT(*) 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'schedules' 
+            AND COLUMN_NAME = 'updated_at'
+        """))
+        updated_at_exists = result.scalar() > 0
+        
+        if not updated_at_exists:
+            logger.info("Adding missing 'updated_at' column to schedules table...")
+            await conn.execute(text("ALTER TABLE schedules ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"))
+            logger.info("Successfully added 'updated_at' column.")
+        
+        # Update tool_output to LONGTEXT to handle large outputs
+        logger.info("Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...")
+        await conn.execute(text("ALTER TABLE tool_execution_logs MODIFY COLUMN tool_output LONGTEXT"))
+        logger.info("Successfully updated 'tool_output' column.")
             
     except Exception as e:
         logger.warning(f"Migration check encountered an issue (may be expected): {e}")

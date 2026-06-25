@@ -1,6 +1,6 @@
+import os
 import asyncio
 import logging
-import sys
 from typing import List, Dict, Any, Optional
 from contextlib import AsyncExitStack
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -11,61 +11,93 @@ logger = logging.getLogger(__name__)
 
 class MCPToolManager:
     """
-    Manages the MCP Server connection. Supports dynamic page-level CDP endpoints for multi-user isolation.
+    Manages the MCP Server connection using langchain_mcp_adapters. 
+    Supports dynamic page-level CDP endpoints for multi-user isolation.
     """
-    def __init__(self, config: Dict[str, Any] = None, cdp_url: Optional[str] = None):
+    @property
+    def stream_manager(self):
+        return getattr(self.client, 'stream_manager', None)
+
+    def __init__(self, config: Dict[str, Any] = None, cdp_url: Optional[str] = None, port: Optional[int] = None):
+        if hasattr(self, '_initialized_base') and self._initialized_base:
+            return
+            
         # Accept direct WebSocket or HTTP CDP URL
-        self.cdp_url = cdp_url or "http://localhost:9222"
+        self.cdp_url = cdp_url or (f"http://localhost:{port}" if port else "http://localhost:9222")
         
-        # Use npx.cmd on Windows for reliable subprocess execution
-        npx_cmd = "npx.cmd" if sys.platform == "win32" else "npx"
+        # Configure the browser-use MCP server via the local bridge script
+        # This ensures the browser is launched with the correct CDP port and config
+        bridge_path = os.path.join(os.path.dirname(__file__), "browser_use_bridge.py")
         
         self.config = config or {
-            "playwright": {
-                "command": npx_cmd,
-                "args": [
-                    "-y", 
-                    "@playwright/mcp@latest", 
-                    f"--cdp-endpoint={self.cdp_url}"
-                ],
+            "browser-use": {
+                "command": "python",
+                "args": [bridge_path],
+                "env": {
+                    **os.environ,
+                    "OPENAI_API_KEY": os.getenv("OPENROUTER_API_KEY", ""),
+                    "OPENAI_BASE_URL": "https://openrouter.ai/api/v1",
+                    "OPENAI_API_BASE": "https://openrouter.ai/api/v1",
+                    "BROWSER_USE_MODEL": "google/gemini-3-flash-preview",
+                    "MCP_BROWSER_CDP_URL": self.cdp_url,
+                    "BROWSER_USE_CDP_PORT": str(port) if port else "9222",
+                    "MCP_BROWSER_USE_OWN_BROWSER": "true",
+                    "BROWSER_USE_HEADLESS": os.getenv("BROWSER_USE_HEADLESS", "false"),
+                    "BROWSER_USE_DISABLE_SECURITY": "true"
+                },
                 "transport": "stdio",
             }
         }
+        
         self.client = MultiServerMCPClient(self.config)
         self.stack = AsyncExitStack()
         self._tools = None
         self._initialized = False
+        self._initialized_base = True
+        self._browser_endpoint = self.cdp_url
+
+    async def set_browser_endpoint(self, endpoint: str):
+        self._browser_endpoint = endpoint
+
+    async def get_browser_endpoint(self) -> Optional[str]:
+        return self._browser_endpoint
 
     async def initialize(self):
-        """Starts the MCP session by iterating through servers and loading tools."""
+        """Starts the MCP session ONCE and keeps it open in the background."""
         if self._initialized:
             return
         
-        logger.info(f"Initializing MCP for {self.cdp_url}")
+        logger.info(f">>> Starting MCP Server connecting to {self.cdp_url}...")
+        all_tools = []
         try:
-            # MultiServerMCPClient 0.1.0+ uses get_tools() to trigger internal initialization
-            self._tools = await self.client.get_tools()
+            for server_name in self.config:
+                # Initialize session for each configured server
+                session = await self.stack.enter_async_context(
+                    self.client.session(server_name, auto_initialize=True)
+                )
+                # Load tools from the session using the adapter helper
+                server_tools = await load_mcp_tools(session)
+                all_tools.extend(server_tools)
+            
+            self._tools = all_tools
             self._initialized = True
-            logger.info(f"MCP initialized successfully with {len(self._tools)} tools.")
+            logger.info(f">>> MCP Session Ready. {len(self._tools)} tools active.")
         except Exception as e:
-            logger.error(f"Failed to initialize MCP: {e}")
+            logger.error(f">>> MCP Initialization Failed: {e}")
+            await self.stack.aclose()
             self._initialized = False
             raise
 
     async def get_tools(self) -> List[BaseTool]:
         if not self._initialized:
-            try:
-                await self.initialize()
-            except Exception as e:
-                logger.error(f"Lazy initialization of MCP failed: {e}")
-                return [] # Return empty list instead of crashing
+            await self.initialize()
         return self._tools or []
 
     async def close(self):
-        """Only call this when the session is explicitly destroyed."""
+        """Only call this when the entire session is being destroyed."""
         if self._initialized:
-            try:
-                # No longer using stack for the client itself
-                pass
-            finally:
-                self._initialized = False
+            logger.info(f">>> Closing MCP Session for {self.cdp_url}...")
+            await self.stack.aclose()
+            self._initialized = False
+            self._tools = None
+

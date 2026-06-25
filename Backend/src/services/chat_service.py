@@ -10,7 +10,7 @@ from fastapi import Depends, HTTPException, status, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 # Local Imports
-from src.database.chat_db import User, Message, ChatSession, get_db
+from src.database.chat_db import User, Message, ChatSession, Schedule, get_db
 from src.utils import validator
 from src.utils.logger import logger
 
@@ -116,6 +116,7 @@ class ChatService:
                     "role": msg.role,
                     "content": msg.content,
                     "plan": json.loads(msg.plan_data) if msg.plan_data else [],
+                    "form": json.loads(msg.form_data) if msg.form_data else None,
                     "timestamp": msg.created_at.isoformat() if msg.created_at else datetime.now(timezone.utc).isoformat()
                 }
                 for msg in messages
@@ -141,12 +142,18 @@ class ChatService:
     @staticmethod
     async def delete_session(db: AsyncSession, chat_id: str, user_id: str) -> dict:
         """Delete a chat session and its associated messages."""
-        # Delete messages first (if not handled by cascade)
+        # 1. Delete messages first
         await db.execute(delete(Message).where(Message.chat_id == chat_id))
-        # Delete session
-        # FIX: Changed ChatSession.chat_id to ChatSession.id
+        
+        # 2. Delete logs
+        from src.database.chat_db import AgentExecutionLog, ToolExecutionLog
+        await db.execute(delete(AgentExecutionLog).where(AgentExecutionLog.chat_id == chat_id))
+        await db.execute(delete(ToolExecutionLog).where(ToolExecutionLog.chat_id == chat_id))
+        
+        # 3. Delete session
         stmt = delete(ChatSession).where(ChatSession.id == chat_id, ChatSession.user_id == user_id)
         await db.execute(stmt)
+        
         await db.commit()
         return {"status": "success"}
 
@@ -176,3 +183,32 @@ class ChatService:
         await db.commit()
         await db.refresh(new_session)
         return new_session
+
+    @staticmethod
+    async def create_schedule(db: AsyncSession, user_id: str, req: any) -> Schedule:
+        """Create a new automation schedule for a user."""
+        new_schedule = Schedule(
+            schedule_id=str(uuid.uuid4()),
+            user_id=user_id,
+            conversation_id=req.chat_id,
+            title=req.title,
+            selected_data=json.dumps({
+                "messages": req.selected_message_ids,
+                "tools": req.selected_tool_ids
+            }),
+            schedule_type=req.schedule_type,
+            email_recipient=req.email_recipient,
+            status="active",
+            created_at=datetime.now(timezone.utc)
+        )
+        db.add(new_schedule)
+        await db.commit()
+        await db.refresh(new_schedule)
+        return new_schedule
+
+    @staticmethod
+    async def get_user_schedules(db: AsyncSession, user_id: str) -> List[Schedule]:
+        """Get all schedules for a specific user."""
+        stmt = select(Schedule).where(Schedule.user_id == user_id).order_by(Schedule.created_at.desc())
+        result = await db.execute(stmt)
+        return result.scalars().all()
