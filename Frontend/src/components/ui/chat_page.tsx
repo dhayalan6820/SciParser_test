@@ -3,7 +3,7 @@ import * as React from "react";
 import { Signup1 } from "./signup-1";
 import { Button } from "./button";
 import { sciparserApi, ChatMessage, UploadedFile, User } from "../../api";
-import { useTheme } from "../../App";
+import { useTheme } from "../../contexts/ThemeContext";
 import { cn } from "../../../lib/utils";
 import { Component as AiLoader } from "./ai-loader";
 import { MessageLoading } from "./message-loading";
@@ -12,12 +12,13 @@ import { SchedulesPage } from "./schedules-page";
 import { 
   Sparkles, User2, Database, RefreshCw, CheckCircle2, 
   BookOpen, MessageSquare, Plus, LogOut, Trash, Pencil, Check, Menu, X, 
-  ChevronDown, Globe, Send, PanelLeftClose, PanelLeftOpen, Search, Code, 
+  ChevronDown, Globe, Send, PanelLeftClose, PanelLeftOpen, Search, Code, Terminal,
   Sun, Moon, FileText, Paperclip, X as XIcon,
   Loader2, Download, Table as TableIcon, Calendar
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import Plan, { Task } from "./agent-plan";
+
 import { AnimatePresence, motion } from "framer-motion";
 
 interface ChatPageProps {
@@ -73,6 +74,22 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const [aiThinking, setAiThinking] = React.useState<string | null>(null);
   const [showExecutionPlan, setShowExecutionPlan] = React.useState(true);
   const [userInterruptedHide, setUserInterruptedHide] = React.useState(false);
+  const [visiblePlans, setVisiblePlans] = React.useState<Record<string, boolean>>({});
+  const [visibleTools, setVisibleTools] = React.useState<Record<string, boolean>>({});
+
+  const togglePlanVisibility = (msgId: string) => {
+    setVisiblePlans(prev => ({
+      ...prev,
+      [msgId]: !prev[msgId]
+    }));
+  };
+
+  const toggleToolVisibility = (msgId: string) => {
+    setVisibleTools(prev => ({
+      ...prev,
+      [msgId]: !prev[msgId]
+    }));
+  };
 
   const [activeModel, setActiveModel] = React.useState("SciParser AI Core");
   const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
@@ -226,23 +243,47 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
-        if (msg.event === 'frame') {
-          setBrowserFrame(msg.data);
-          
-          // --- NEW: Auto-open on first frame with green blink ---
-          if (isFirstFrame.current && !userInterruptedBrowser) {
-            isFirstFrame.current = false;
-            setBrowserBlink("green");
-            
-            // Blink 5 times (approx 2.5s) then open
-            setTimeout(() => {
-              if (!userInterruptedBrowser) {
-                setBrowserActive(true);
-                setBrowserBlink(null);
-              }
-            }, 2500);
+        const eventType = msg.event || (msg.frame ? 'frame' : null);
+        const rawData = msg.data || msg.frame;
+
+        if (eventType === 'frame') {
+          // Parse the inner JSON which contains chat_id and frame
+          let frameData;
+          try {
+            frameData = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
+          } catch (e) {
+            frameData = { frame: rawData };
           }
-        } else if (msg.event === 'tool_log') {
+
+          // --- NEW: Route frames by chat_id ---
+          if (frameData.chat_id && frameData.chat_id !== activeThreadId) {
+            return; // Ignore frames for other chats
+          }
+
+          // Extract the actual frame data (handle nested objects or raw strings)
+          let actualFrame = frameData.frame;
+          if (typeof actualFrame === 'object' && actualFrame !== null) {
+            actualFrame = actualFrame.data || actualFrame.text || JSON.stringify(actualFrame);
+          }
+
+          if (actualFrame) {
+            setBrowserFrame(actualFrame);
+            
+            // --- NEW: Auto-open on first frame with green blink ---
+            if (isFirstFrame.current && !userInterruptedBrowser) {
+              isFirstFrame.current = false;
+              setBrowserBlink("green");
+              
+              // Blink 5 times (approx 2.5s) then open
+              setTimeout(() => {
+                if (!userInterruptedBrowser) {
+                  setBrowserActive(true);
+                  setBrowserBlink(null);
+                }
+              }, 2500);
+            }
+          }
+        } else if (eventType === 'tool_log') {
           try {
             const toolMsg = JSON.parse(msg.data);
             if (toolMsg.type === 'tool_start') {
@@ -670,6 +711,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
   const renderMessage = (msg: ChatMessage) => {
     const isSelected = selectedMessages.includes(msg.id || "");
+    const isPlanVisible = visiblePlans[msg.id || ""] ?? (msg.role === 'ai' && msg.plan && msg.plan.length > 0);
     
     return (
       <div 
@@ -685,30 +727,107 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           "flex flex-col gap-2 transition-all duration-200", 
           msg.role === 'user' ? "items-end" : "items-start",
           isSelectionMode && "cursor-pointer hover:opacity-80",
-          isSelectionMode && isSelected && "ring-2 ring-indigo-500 ring-offset-2 rounded-2xl"
+          isSelectionMode && isSelected && "ring-2 ring-emerald-500 ring-offset-2 rounded-2xl"
         )}
       >
         <div className={cn(
-          "rounded-2xl px-4 py-3 shadow-sm max-w-[85%] break-words overflow-hidden relative",
-          msg.role === 'user' ? "bg-indigo-600 text-white" : "bg-white dark:bg-[#1e1e1e] border border-slate-200 dark:border-[#2f2f2f]",
-          isSelectionMode && isSelected && "bg-indigo-50 dark:bg-indigo-900/20"
+          "rounded-2xl px-4 py-3 shadow-sm max-w-[85%] break-words overflow-hidden relative group",
+          msg.role === 'user' ? "bg-emerald-600 text-white" : "bg-card border border-border text-foreground",
+          isSelectionMode && isSelected && "bg-emerald-50 dark:bg-emerald-900/20"
         )}>
           {isSelectionMode && (
             <div className={cn(
               "absolute top-2 right-2 w-4 h-4 rounded-full border-2 flex items-center justify-center",
-              isSelected ? "bg-indigo-500 border-indigo-500" : "border-slate-300 dark:border-slate-600"
+              isSelected ? "bg-emerald-500 border-indigo-500" : "border-slate-300 dark:border-slate-600"
             )}>
               {isSelected && <Check className="w-2.5 h-2.5 text-white" />}
             </div>
           )}
           
           {msg.role === 'ai' && msg.plan && msg.plan.length > 0 && (
-            <div className="mb-4 pb-4 border-b border-slate-100 dark:border-white/5">
-              <Plan tasks={msg.plan} />
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-500 uppercase tracking-widest">
+                  <Database className="w-3 h-3" />
+                  <span>Agent Workflow</span>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    togglePlanVisibility(msg.id || "");
+                  }}
+                  className="h-6 px-2 text-[9px] font-bold text-muted-foreground hover:text-emerald-500 gap-1"
+                >
+                  {/* {isPlanVisible ? <XIcon className="w-3 h-3" /> : <Plus className="w-3 h-3" />} */}
+                  {isPlanVisible ? "HIDE WORKFLOW" : "SHOW WORKFLOW"}
+                </Button>
+              </div>
+              
+              <AnimatePresence>
+                {isPlanVisible && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0, filter: "blur(10px)" }}
+                    animate={{ 
+                      opacity: 1, 
+                      height: "auto", 
+                      filter: "blur(0px)",
+                      transition: { 
+                        height: { type: "spring", stiffness: 300, damping: 30 },
+                        opacity: { duration: 0.2 },
+                        filter: { duration: 0.3 }
+                      }
+                    }}
+                    exit={{ 
+                      opacity: 0, 
+                      height: 0, 
+                      filter: "blur(10px)",
+                      transition: { 
+                        height: { duration: 0.3 },
+                        opacity: { duration: 0.2 },
+                        filter: { duration: 0.2 }
+                      }
+                    }}
+                    className="overflow-hidden"
+                  >
+                    <Plan 
+                      tasks={msg.plan} 
+                      onHide={() => togglePlanVisibility(msg.id || "")}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              <div className="mt-4 border-b border-border" />
             </div>
           )}
 
-          {renderFormattedContent(msg.content)}
+          {/* NEW: Tool Execution Timeline */}
+          {msg.role === 'ai' && msg.plan && msg.plan.length > 0 && (
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 text-[10px] font-bold text-blue-500 uppercase tracking-widest">
+                  <Terminal className="w-3 h-3" />
+                  <span>Tool Activity</span>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleToolVisibility(msg.id || "");
+                  }}
+                  className="h-6 px-2 text-[9px] font-bold text-muted-foreground hover:text-blue-500 gap-1"
+                >
+                  
+                </Button>
+              </div>
+            
+              <div className="mt-4 border-b border-border" />
+            </div>
+          )}
+
+          {renderFormattedContent(msg.content, msg.role === 'user')}
 
           {/* Show "Edit Details" button if form exists in history */}
           {msg.role === 'ai' && msg.form && !isSelectionMode && (
@@ -781,12 +900,12 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     sendQuickPrompt("Analyze the vocal context frequencies and synthesize SciParser audio.");
   };
 
-  const parseInlineFormatting = (text: string) => {
+  const parseInlineFormatting = (text: string, isUser: boolean = false) => {
     const boldParts = text.split(/(\*\*.*?\*\*)/g);
     return boldParts.map((bPart, bIdx) => {
       if (bPart.startsWith("**") && bPart.endsWith("**")) {
         return (
-          <strong key={bIdx} className="font-extrabold text-slate-900 dark:text-white">
+          <strong key={bIdx} className={cn("font-extrabold", isUser ? "text-white" : "text-slate-900 dark:text-white")}>
             {bPart.slice(2, -2)}
           </strong>
         );
@@ -795,7 +914,10 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       return inlineParts.map((iPart, iIdx) => {
         if (iPart.startsWith("`") && iPart.endsWith("`")) {
           return (
-            <code key={iIdx} className="px-1.5 py-0.5 mx-0.5 rounded bg-slate-100 dark:bg-[#2a2a2d] text-indigo-700 dark:text-indigo-400 font-mono text-[13px] font-bold">
+            <code key={iIdx} className={cn(
+              "px-1.5 py-0.5 mx-0.5 rounded font-mono text-[13px] font-bold",
+              isUser ? "bg-white/20 text-white" : "bg-slate-100 dark:bg-[#2a2a2d] text-indigo-700 dark:text-indigo-400"
+            )}>
               {iPart.slice(1, -1)}
             </code>
           );
@@ -818,7 +940,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     document.body.removeChild(link);
   };
 
-  const renderFormattedContent = (content: string) => {
+  const renderFormattedContent = (content: string, isUser: boolean = false) => {
     if (!content) return null;
     
     // Detect Markdown Tables
@@ -835,12 +957,12 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         const code = language ? lines.slice(1).join("\n") : lines.join("\n");
         
         return (
-          <div key={index} className="my-3.5 rounded-xl border border-slate-200 dark:border-[#2f2f2f] bg-slate-50 dark:bg-[#1e1e1e] overflow-hidden font-mono text-[13px] shadow-md">
-            <div className="flex justify-between items-center px-4 py-1.5 bg-slate-100 dark:bg-[#171717] text-xs text-slate-500 dark:text-slate-400 font-sans border-b border-slate-200 dark:border-white/5 select-none font-bold">
+          <div key={index} className="my-3.5 rounded-xl border border-border bg-muted/50 overflow-hidden font-mono text-[13px] shadow-md">
+            <div className="flex justify-between items-center px-4 py-1.5 bg-muted text-xs text-muted-foreground font-sans border-b border-border select-none font-bold">
               <span className="uppercase text-[10px] tracking-widest">{language || "text"}</span>
               <span className="text-[10px] lowercase font-medium">ready</span>
             </div>
-            <pre className="p-4 overflow-x-auto text-slate-850 dark:text-slate-200 leading-relaxed whitespace-pre font-medium">
+            <pre className="p-4 overflow-x-auto text-foreground/90 leading-relaxed whitespace-pre font-medium">
               {code}
             </pre>
           </div>
@@ -910,8 +1032,11 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             if (trimmedLine.startsWith("- ") || trimmedLine.startsWith("* ") || trimmedLine.startsWith("• ")) {
               const listContent = trimmedLine.replace(/^[-*•]\s+/, "");
               return (
-                <li key={lineIdx} className="ml-5 list-disc leading-relaxed text-slate-800 dark:text-[#ececec] pr-2">
-                  {parseInlineFormatting(listContent)}
+                <li key={lineIdx} className={cn(
+                  "ml-5 list-disc leading-relaxed pr-2",
+                  isUser ? "text-white" : "text-foreground/90"
+                )}>
+                  {parseInlineFormatting(listContent, isUser)}
                 </li>
               );
             }
@@ -920,8 +1045,11 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             if (numMatch) {
               const listContent = numMatch[2];
               return (
-                <li key={lineIdx} className="ml-5 list-decimal leading-relaxed text-slate-800 dark:text-[#ececec] pr-2" style={{ listStyleType: "decimal" }}>
-                  {parseInlineFormatting(listContent)}
+                <li key={lineIdx} className={cn(
+                  "ml-5 list-decimal leading-relaxed pr-2",
+                  isUser ? "text-white" : "text-foreground/90"
+                )} style={{ listStyleType: "decimal" }}>
+                  {parseInlineFormatting(listContent, isUser)}
                 </li>
               );
             }
@@ -929,9 +1057,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             return (
               <p key={lineIdx} className={cn(
                 "relative leading-relaxed text-[15px] font-medium font-sans",
-                line.includes("--- Execution Summary ---") ? "text-indigo-500 dark:text-indigo-400 mt-4 pt-4 border-t border-slate-100 dark:border-white/5 font-bold" : "text-slate-800 dark:text-[#ececec]"
+                isUser ? "text-white" : (line.includes("--- Execution Summary ---") ? "text-primary mt-4 pt-4 border-t border-border font-bold" : "text-foreground/90")
               )}>
-                {parseInlineFormatting(line)}
+                {parseInlineFormatting(line, isUser)}
               </p>
             );
           })}
@@ -1035,7 +1163,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   // --- Authentication Screen ---
   if (!userProfile) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-[#0a0a0c] p-4">
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
         {isNavigating && <AiLoader text={loaderText} />}
         <Signup1
           isLoginMode={isLoginMode}
@@ -1051,7 +1179,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
   // --- Main Workspace ---
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-slate-50 dark:bg-[#0f0f11] text-slate-900 dark:text-slate-100 font-sans">
+    <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground font-sans">
       {isNavigating && <AiLoader text={loaderText} />}
 
       {/* Form Popup Overlay */}
@@ -1060,15 +1188,15 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           <motion.div 
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="w-full max-w-lg bg-white dark:bg-[#1a1a1e] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#2f2f3d] overflow-hidden flex flex-col max-h-[90vh]"
+            className="w-full max-w-lg bg-card rounded-2xl shadow-2xl border border-border overflow-hidden flex flex-col max-h-[90vh]"
           >
             {/* Popup Header */}
-            <div className="px-6 py-4 border-b border-slate-100 dark:border-white/5 flex items-center justify-between bg-slate-50/50 dark:bg-white/5">
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-muted/30">
               <div>
                 <h3 className="font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider text-xs">
                   {activeForm.title}
                 </h3>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                <p className="text-[11px] text-muted-foreground mt-0.5">
                   Action Required: Please provide the details below.
                 </p>
               </div>
@@ -1083,28 +1211,28 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 <div key={sIdx} className="space-y-4">
                   {section.section_title && (
                     <div className="flex items-center gap-2">
-                      <div className="h-px flex-1 bg-slate-100 dark:bg-white/5" />
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">
+                      <div className="h-px flex-1 bg-border" />
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-2">
                         {section.section_title}
                       </span>
-                      <div className="h-px flex-1 bg-slate-100 dark:bg-white/5" />
+                      <div className="h-px flex-1 bg-border" />
                     </div>
                   )}
                   <div className="grid gap-4">
                     {section.fields.map((field: any) => (
                       <div key={field.id} className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center justify-between">
+                        <label className="text-xs font-bold text-foreground/80 flex items-center justify-between">
                           <span>{field.label} {field.required && <span className="text-red-500">*</span>}</span>
-                          {field.type === 'password' && <span className="text-[9px] text-slate-400 font-normal italic">Encrypted</span>}
+                          {field.type === 'password' && <span className="text-[9px] text-muted-foreground font-normal italic">Encrypted</span>}
                         </label>
                         <input
                           type={field.type || "text"}
                           placeholder={field.placeholder}
                           value={formData[field.id] || ""}
                           onChange={(e) => setFormData(prev => ({ ...prev, [field.id]: e.target.value }))}
-                          className="w-full px-4 py-2.5 text-sm rounded-xl bg-slate-50 dark:bg-[#111114] border border-slate-200 dark:border-[#2f2f3d] focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-slate-400"
+                          className="w-full px-4 py-2.5 text-sm rounded-xl bg-muted/50 border border-border focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-muted-foreground"
                         />
-                        {field.note && <p className="text-[10px] text-slate-400 italic pl-1">{field.note}</p>}
+                        {field.note && <p className="text-[10px] text-muted-foreground italic pl-1">{field.note}</p>}
                       </div>
                     ))}
                   </div>
@@ -1340,21 +1468,21 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       {/* Sidebar */}
       <div 
         className={cn(
-          "h-full bg-white dark:bg-[#16161a] border-r border-slate-200 dark:border-[#232329] flex flex-col transition-all duration-300 z-20 shrink-0",
+          "h-full bg-card border-r border-border flex flex-col transition-all duration-300 z-20 shrink-0",
           isSidebarCollapsed ? "w-0 -translate-x-full overflow-hidden border-r-0" : "w-64"
         )}
       >
         {/* Sidebar Header */}
-        <div className="p-4 border-b border-slate-200 dark:border-[#232329] flex items-center justify-between">
-          <div className="flex items-center gap-2 font-bold text-lg tracking-tight">
-            <Sparkles className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <div className="flex items-center gap-2 font-bold text-lg tracking-tight text-foreground">
+            <Sparkles className="w-5 h-5 text-emerald-500" />
             <span>SciParser AI</span>
           </div>
           <Button 
             variant="ghost" 
             size="icon" 
             onClick={() => handleNewChat(true)}
-            className="hover:bg-slate-100 dark:hover:bg-[#232329]"
+            className="hover:bg-muted"
           >
             <Plus className="w-5 h-5" />
           </Button>
@@ -1363,13 +1491,13 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         {/* Sidebar Search */}
         <div className="p-3">
           <div className="relative">
-            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
               placeholder="Search chats..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm rounded-lg bg-slate-100 dark:bg-[#1e1e24] border-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full pl-9 pr-4 py-2 text-sm rounded-lg bg-muted border-none focus:outline-none focus:ring-2 focus:ring-indigo-500 text-foreground"
             />
           </div>
         </div>
@@ -1383,7 +1511,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               className={cn(
                 "group flex items-center gap-2.5 px-3 py-2.5 rounded-lg cursor-pointer transition-all text-sm font-bold",
                 currentView === "chat"
-                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20"
+                  ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/20"
                   : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#1e1e24]"
               )}
             >
@@ -1396,7 +1524,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               className={cn(
                 "group flex items-center gap-2.5 px-3 py-2.5 rounded-lg cursor-pointer transition-all text-sm font-bold",
                 currentView === "schedules"
-                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20"
+                  ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/20"
                   : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#1e1e24]"
               )}
             >
@@ -1420,8 +1548,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 className={cn(
                   "group flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-colors text-sm font-medium",
                   isActive 
-                    ? "bg-indigo-50 dark:bg-[#232335] text-indigo-600 dark:text-indigo-400" 
-                    : "hover:bg-slate-100 dark:hover:bg-[#1e1e24] text-slate-600 dark:text-slate-400"
+                    ? "bg-primary/20 text-primary" 
+                    : "hover:bg-muted text-muted-foreground hover:text-foreground"
                 )}
               >
                 <div className="flex items-center gap-2.5 min-w-0">
@@ -1479,22 +1607,32 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         )}
 
         {/* Sidebar Footer */}
-        <div className="p-4 border-t border-slate-200 dark:border-[#232329] space-y-3">
+        <div className="p-4 border-t border-border bg-card space-y-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold">
-              {userProfile.username.slice(0, 2).toUpperCase()}
+            <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold shadow-lg shadow-emerald-500/20">
+              {userProfile?.username.slice(0, 2).toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold truncate">{userProfile.username}</p>
-              <p className="text-xs text-slate-400 truncate">{userProfile.email}</p>
+              <p className="text-sm font-bold truncate text-foreground tracking-tight">{userProfile?.username}</p>
+              <p className="text-[11px] text-muted-foreground truncate font-medium">{userProfile?.email}</p>
             </div>
           </div>
-          <div className="flex items-center justify-between pt-2">
-            <Button variant="ghost" size="icon" onClick={toggleTheme}>
-              {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          <div className="flex items-center justify-end gap-1 pt-1">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={toggleTheme}
+              className="w-10 h-10 rounded-2xl hover:bg-muted text-muted-foreground transition-all active:scale-90"
+            >
+              {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </Button>
-            <Button variant="ghost" size="icon" onClick={handleLogout} className="text-red-500 hover:text-red-600">
-              <LogOut className="w-4 h-4" />
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={handleLogout} 
+              className="w-10 h-10 rounded-2xl text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 transition-all active:scale-90"
+            >
+              <LogOut className="w-5 h-5" />
             </Button>
           </div>
         </div>
@@ -1507,20 +1645,20 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         ) : (
           <>
             {/* Chat Column */}
-            <div className="flex-1 flex flex-col h-full min-w-[320px] bg-slate-50 dark:bg-[#0f0f11]">
+            <div className="flex-1 flex flex-col h-full min-w-[320px] bg-background">
               
               {/* Chat Header */}
-              <div className="h-14 border-b border-slate-200 dark:border-[#232329] bg-white dark:bg-[#16161a] px-4 flex items-center justify-between shrink-0">
+              <div className="h-14 border-b border-border bg-card px-4 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3">
                   <Button 
                     variant="ghost" 
                     size="icon" 
                     onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                    className="hover:bg-slate-100 dark:hover:bg-[#232329]"
+                    className="hover:bg-muted"
                   >
                     {isSidebarCollapsed ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
                   </Button>
-                  <div className="font-semibold text-sm">{activeModel}</div>
+                  <div className="font-semibold text-sm text-foreground">{activeModel}</div>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -1667,7 +1805,11 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                         >
                           {currentPlan ? (
                             <div className="space-y-3">
-                              <Plan tasks={currentPlan} thoughts={aiThinking ? [aiThinking] : []} />
+                              <Plan 
+                                tasks={currentPlan} 
+                                thoughts={aiThinking ? [aiThinking] : []} 
+                                onHide={() => setShowExecutionPlan(false)}
+                              />
                             </div>
                           ) : (
                             <div className="bg-white dark:bg-[#1e1e1e] border border-slate-200 dark:border-[#2f2f2f] rounded-2xl p-5 shadow-sm">
@@ -1682,8 +1824,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               </div>
 
               {/* Chat Input Area */}
-              <div className="p-4 bg-white dark:bg-[#16161a] border-t border-slate-200 dark:border-[#232329]">
-                <div className="max-w-3xl mx-auto relative flex items-end gap-2 bg-slate-50 dark:bg-[#1e1e24] border border-slate-200 dark:border-[#2f2f3d] rounded-xl p-2">
+              <div className="p-4 bg-card border-t border-border">
+                <div className="max-w-3xl mx-auto relative flex items-end gap-2 bg-muted border border-border rounded-xl p-2">
                   <input 
                     type="file" 
                     ref={fileInputRef} 
@@ -1695,9 +1837,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     variant="ghost"
                     size="icon"
                     onClick={() => fileInputRef.current?.click()}
-                    className="hover:bg-slate-200 dark:hover:bg-[#2f2f3d] shrink-0"
+                    className="hover:bg-muted shrink-0"
                   >
-                    <Paperclip className="w-5 h-5 text-slate-400" />
+                    <Paperclip className="w-5 h-5 text-muted-foreground" />
                   </Button>
                   <textarea
                     ref={textareaRef}
@@ -1714,12 +1856,12 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                       }
                     }}
                     placeholder="Ask SciParser anything..."
-                    className="flex-1 max-h-48 resize-none bg-transparent border-none focus:outline-none text-sm py-2 px-1"
+                    className="flex-1 max-h-48 resize-none bg-transparent border-none focus:outline-none text-sm py-2 px-1 text-foreground"
                   />
                   <Button
                     onClick={() => handleSendMessage(textareaValue)}
                     disabled={!textareaValue.trim()}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0"
                   >
                     <Send className="w-4 h-4" />
                   </Button>

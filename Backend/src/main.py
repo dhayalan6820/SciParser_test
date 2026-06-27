@@ -1,3 +1,4 @@
+import sys
 import uuid
 import json
 import asyncio
@@ -371,41 +372,110 @@ async def run_schedule(schedule_id: str, db: AsyncSession = Depends(get_db), cur
     await db.commit()
     
     # 3. Execute the script in a background task
-    # For now, we'll simulate the execution and update the record
-    # In a real scenario, we'd use a worker or subprocess
     async def execute_task():
+        import subprocess
+        import tempfile
+        import os
+        
         start_time = datetime.now(timezone.utc)
-        try:
-            # Simulate browser-use execution
-            await asyncio.sleep(5) 
+        max_tries = 3
+        current_try = 0
+        last_error = ""
+        current_script = schedule.generated_script
+        current_framework = "playwright"
+        execution_summary = ""
+
+        while current_try < max_tries:
+            current_try += 1
+            logger.info(f"Schedule {schedule_id} run attempt {current_try} using {current_framework}")
             
-            async with AsyncSessionLocal() as task_db:
-                stmt = select(ScheduleRun).where(ScheduleRun.run_id == run.run_id)
-                res = await task_db.execute(stmt)
-                run_db = res.scalar_one()
-                run_db.status = "completed"
-                run_db.output = "Successfully extracted data from " + schedule.title
-                run_db.duration_seconds = int((datetime.now(timezone.utc) - start_time).total_seconds())
-                await task_db.commit()
+            # Token Management: Check if context is getting too large (80% of 1M limit)
+            # Note: In a real run, we'd check the prompt size. Here we check the script/error size.
+            estimated_tokens = brain.atag_processor._estimate_tokens(current_script + last_error + execution_summary)
+            if estimated_tokens > 800000:
+                logger.info(f"Token count ({estimated_tokens}) reached 80% limit. Summarizing context...")
+                execution_summary = await brain.atag_processor.summarize_context([], last_error)
+                last_error = f"Context summarized: {execution_summary}"
+
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode='w', encoding='utf-8') as f:
+                    f.write(current_script)
+                    temp_path = f.name
+
+                # Run the script
+                process = subprocess.run(
+                    [sys.executable, temp_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=300 # 5 minute timeout
+                )
                 
-                # Update the main schedule record with the latest result
-                stmt = select(ScheduleModel).where(ScheduleModel.schedule_id == schedule_id)
-                res = await task_db.execute(stmt)
-                sch_db = res.scalar_one()
-                sch_db.extracted_content = run_db.output
-                await task_db.commit()
-                
-                # TODO: Send email to schedule.email_recipient
-                logger.info(f"Schedule {schedule_id} run completed successfully.")
-        except Exception as e:
-            async with AsyncSessionLocal() as task_db:
-                stmt = select(ScheduleRun).where(ScheduleRun.run_id == run.run_id)
-                res = await task_db.execute(stmt)
-                run_db = res.scalar_one()
-                run_db.status = "failed"
-                run_db.error_log = str(e)
-                await task_db.commit()
-                logger.error(f"Schedule {schedule_id} run failed: {e}")
+                os.unlink(temp_path)
+
+                if process.returncode == 0:
+                    # Success!
+                    async with AsyncSessionLocal() as task_db:
+                        stmt = select(ScheduleRun).where(ScheduleRun.run_id == run.run_id)
+                        res = await task_db.execute(stmt)
+                        run_db = res.scalar_one()
+                        run_db.status = "completed"
+                        run_db.output = process.stdout or "Script executed successfully with no output."
+                        run_db.duration_seconds = int((datetime.now(timezone.utc) - start_time).total_seconds())
+                        await task_db.commit()
+                        
+                        stmt = select(ScheduleModel).where(ScheduleModel.schedule_id == schedule_id)
+                        res = await task_db.execute(stmt)
+                        sch_db = res.scalar_one()
+                        sch_db.extracted_content = run_db.output
+                        await task_db.commit()
+                        
+                        logger.info(f"Schedule {schedule_id} run completed successfully on attempt {current_try}.")
+                        return
+                else:
+                    last_error = process.stderr
+                    logger.warning(f"Attempt {current_try} failed: {last_error}")
+                    
+                    if current_try < max_tries:
+                        # Rectify and regenerate
+                        # Fetch execution history to regenerate
+                        from src.database.chat_db import ToolExecutionLog
+                        # We need to find the tool logs associated with this schedule
+                        # For now, we'll use the task_summary and error to regenerate
+                        
+                        # If playwright fails twice, switch to browser-use
+                        if current_try == 2:
+                            current_framework = "browser-use"
+                        
+                        logger.info(f"Regenerating script for {current_framework} due to error.")
+                        # We need to pass the history if possible, but for now we'll use the error to fix
+                        # In a real scenario, we'd store the tool_ids in the schedule model
+                        
+                        # Simple rectification prompt
+                        rectify_prompt = f"The previous {current_framework} script failed with error:\n{last_error}\n\nPlease fix the script and return the complete corrected code."
+                        
+                        # Use the code_processor to regenerate
+                        # Note: This is a simplified version. Ideally we'd use the full history.
+                        current_script = await brain.code_processor.run_script_generation(
+                            schedule.title + " (FIXING ERROR: " + last_error[:100] + ")", 
+                            [], # History might be missing here, but the title contains the context
+                            framework=current_framework
+                        )
+            
+            except Exception as e:
+                last_error = str(e)
+                logger.error(f"Error during execution attempt {current_try}: {e}")
+                if current_try >= max_tries:
+                    break
+
+        # If we reach here, all attempts failed
+        async with AsyncSessionLocal() as task_db:
+            stmt = select(ScheduleRun).where(ScheduleRun.run_id == run.run_id)
+            res = await task_db.execute(stmt)
+            run_db = res.scalar_one()
+            run_db.status = "failed"
+            run_db.error_log = last_error
+            await task_db.commit()
+            logger.error(f"Schedule {schedule_id} run failed after {max_tries} attempts.")
 
     asyncio.create_task(execute_task())
     

@@ -86,7 +86,7 @@ const Signup1 = ({
   };
 
   return (
-    <main className="bg-white dark:bg-slate-900 flex flex-col items-center justify-center py-6 px-4">
+    <main className="bg-background flex flex-col items-center justify-center py-6 px-4">
       <div className="w-full max-w-[360px] space-y-6">
         
         {/* Logo and Greeting Section */}
@@ -97,18 +97,18 @@ const Signup1 = ({
                 src={logo.src}
                 alt={logo.alt}
                 title={logo.title}
-                className="h-9 w-9 rounded-lg object-cover hover:scale-105 transition-transform border border-slate-200 dark:border-slate-800 shadow-sm"
+                className="h-9 w-9 rounded-lg object-cover hover:scale-105 transition-transform border border-border shadow-sm"
                 referrerPolicy="no-referrer"
               />
-              <span className="text-xl font-bold tracking-tight text-slate-950 dark:text-white">
+              <span className="text-xl font-bold tracking-tight text-foreground">
                 SciParser
               </span>
             </a>
           </div>
-          <h1 className="text-3xl font-semibold text-slate-900 dark:text-white tracking-tight">
+          <h1 className="text-3xl font-semibold text-foreground tracking-tight">
             {isLoginMode ? "Welcome Back" : signupText}
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm">
+          <p className="text-muted-foreground text-sm">
             {isLoginMode 
               ? "Enter your credentials to access your parser dashboard" 
               : "Enter your details to get started with SciParser"}

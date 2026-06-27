@@ -1,0 +1,1474 @@
+2026-06-26 10:00:07 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 10:00:07 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 10:00:07 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 10:00:07 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 10:00:07 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 10:00:07 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 10:00:07 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 10:00:07 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 10:00:07 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 10:00:07 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 10:00:07 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 10:00:07 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 10:00:07 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 10:00:07 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 10:00:09 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 10:00:09 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 10:10:13 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 10:10:13 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 10:10:13 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 10:10:13 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 10:10:13 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 10:10:13 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 10:10:14 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 10:10:14 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 10:10:14 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 10:10:14 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 10:10:14 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 10:10:14 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 10:10:14 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 10:10:14 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 10:10:20 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 10:10:20 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 10:40:08 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 10:40:08 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 10:40:08 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 10:40:08 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 10:40:08 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 10:40:08 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 10:40:08 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 10:40:08 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 10:40:08 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 10:40:08 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 10:40:09 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 10:40:09 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 10:40:09 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 10:40:09 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 10:40:11 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 10:40:11 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 10:41:34 | INFO     | sciparser | Schedule 2a817f75-2996-476d-bdc2-3589f27a1e10 run attempt 1 using playwright
+2026-06-26 10:41:34 | INFO     | sciparser | Schedule 2a817f75-2996-476d-bdc2-3589f27a1e10 run attempt 1 using playwright
+2026-06-26 10:41:34 | ERROR    | sciparser | Error during execution attempt 1: name 'sys' is not defined
+2026-06-26 10:41:34 | ERROR    | sciparser | Error during execution attempt 1: name 'sys' is not defined
+2026-06-26 10:41:34 | INFO     | sciparser | Schedule 2a817f75-2996-476d-bdc2-3589f27a1e10 run attempt 2 using playwright
+2026-06-26 10:41:34 | INFO     | sciparser | Schedule 2a817f75-2996-476d-bdc2-3589f27a1e10 run attempt 2 using playwright
+2026-06-26 10:41:34 | ERROR    | sciparser | Error during execution attempt 2: name 'sys' is not defined
+2026-06-26 10:41:34 | ERROR    | sciparser | Error during execution attempt 2: name 'sys' is not defined
+2026-06-26 10:41:34 | INFO     | sciparser | Schedule 2a817f75-2996-476d-bdc2-3589f27a1e10 run attempt 3 using playwright
+2026-06-26 10:41:34 | INFO     | sciparser | Schedule 2a817f75-2996-476d-bdc2-3589f27a1e10 run attempt 3 using playwright
+2026-06-26 10:41:34 | ERROR    | sciparser | Error during execution attempt 3: name 'sys' is not defined
+2026-06-26 10:41:34 | ERROR    | sciparser | Error during execution attempt 3: name 'sys' is not defined
+2026-06-26 10:41:34 | ERROR    | sciparser | Schedule 2a817f75-2996-476d-bdc2-3589f27a1e10 run failed after 3 attempts.
+2026-06-26 10:41:34 | ERROR    | sciparser | Schedule 2a817f75-2996-476d-bdc2-3589f27a1e10 run failed after 3 attempts.
+2026-06-26 11:51:37 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 11:51:38 | INFO     | sciparser | Preparing MCP manager for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541...
+2026-06-26 11:51:38 | INFO     | sciparser | Preparing MCP manager for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541...
+2026-06-26 11:51:38 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server connecting to http://localhost:54065...
+2026-06-26 11:52:03 | INFO     | src.agents.mcp_agent | >>> MCP Session Ready. 16 tools active.
+2026-06-26 11:52:03 | INFO     | sciparser | Discovered 17 tools for execution.
+2026-06-26 11:52:03 | INFO     | sciparser | Discovered 17 tools for execution.
+2026-06-26 11:52:03 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-06-26 11:52:03 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-06-26 11:52:05 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 11:52:11 | INFO     | sciparser | Starting live preview stream for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541
+2026-06-26 11:52:11 | INFO     | sciparser | Starting live preview stream for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541
+2026-06-26 11:52:13 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 11:52:30 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 11:52:34 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 11:52:45 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 11:52:56 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 11:53:09 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 11:53:26 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 400 Bad Request"
+2026-06-26 11:53:27 | WARNING  | sciparser | Execution attempt 1 failed: Error code: 400 - {'error': {'message': 'Provider returned error', 'code': 400, 'metadata': {'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n', 'provider_name': 'Google AI Studio', 'is_byok': False, 'previous_errors': [{'code': 400, 'message': 'Provider returned error', 'provider_name': 'Google', 'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n'}]}}, 'user_id': 'user_39tqTGq7cVe8BTNkzY4auN81HXj'}
+2026-06-26 11:53:27 | WARNING  | sciparser | Execution attempt 1 failed: Error code: 400 - {'error': {'message': 'Provider returned error', 'code': 400, 'metadata': {'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n', 'provider_name': 'Google AI Studio', 'is_byok': False, 'previous_errors': [{'code': 400, 'message': 'Provider returned error', 'provider_name': 'Google', 'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n'}]}}, 'user_id': 'user_39tqTGq7cVe8BTNkzY4auN81HXj'}
+2026-06-26 11:53:27 | INFO     | sciparser | Running Critic to revise strategy for attempt 2...
+2026-06-26 11:53:27 | INFO     | sciparser | Running Critic to revise strategy for attempt 2...
+2026-06-26 11:53:29 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 11:53:33 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 2)...
+2026-06-26 11:53:33 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 2)...
+2026-06-26 11:53:34 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 11:53:40 | INFO     | sciparser | Starting live preview stream for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541
+2026-06-26 11:53:40 | INFO     | sciparser | Starting live preview stream for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541
+2026-06-26 11:53:48 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 400 Bad Request"
+2026-06-26 11:53:48 | WARNING  | sciparser | Execution attempt 2 failed: Error code: 400 - {'error': {'message': 'Provider returned error', 'code': 400, 'metadata': {'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n', 'provider_name': 'Google AI Studio', 'is_byok': False, 'previous_errors': [{'code': 400, 'message': 'Provider returned error', 'provider_name': 'Google', 'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n'}]}}, 'user_id': 'user_39tqTGq7cVe8BTNkzY4auN81HXj'}
+2026-06-26 11:53:48 | WARNING  | sciparser | Execution attempt 2 failed: Error code: 400 - {'error': {'message': 'Provider returned error', 'code': 400, 'metadata': {'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n', 'provider_name': 'Google AI Studio', 'is_byok': False, 'previous_errors': [{'code': 400, 'message': 'Provider returned error', 'provider_name': 'Google', 'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n'}]}}, 'user_id': 'user_39tqTGq7cVe8BTNkzY4auN81HXj'}
+2026-06-26 11:53:48 | INFO     | sciparser | Running Critic to revise strategy for attempt 3...
+2026-06-26 11:53:48 | INFO     | sciparser | Running Critic to revise strategy for attempt 3...
+2026-06-26 11:53:50 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 11:53:53 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 3)...
+2026-06-26 11:53:53 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 3)...
+2026-06-26 11:53:54 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 11:53:59 | INFO     | sciparser | Starting live preview stream for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541
+2026-06-26 11:53:59 | INFO     | sciparser | Starting live preview stream for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541
+2026-06-26 11:54:07 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 400 Bad Request"
+2026-06-26 11:54:07 | WARNING  | sciparser | Execution attempt 3 failed: Error code: 400 - {'error': {'message': 'Provider returned error', 'code': 400, 'metadata': {'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n', 'provider_name': 'Google AI Studio', 'is_byok': False, 'previous_errors': [{'code': 400, 'message': 'Provider returned error', 'provider_name': 'Google', 'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n'}]}}, 'user_id': 'user_39tqTGq7cVe8BTNkzY4auN81HXj'}
+2026-06-26 11:54:07 | WARNING  | sciparser | Execution attempt 3 failed: Error code: 400 - {'error': {'message': 'Provider returned error', 'code': 400, 'metadata': {'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n', 'provider_name': 'Google AI Studio', 'is_byok': False, 'previous_errors': [{'code': 400, 'message': 'Provider returned error', 'provider_name': 'Google', 'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n'}]}}, 'user_id': 'user_39tqTGq7cVe8BTNkzY4auN81HXj'}
+2026-06-26 11:54:07 | ERROR    | sciparser | All 3 attempts failed.
+2026-06-26 11:54:07 | ERROR    | sciparser | All 3 attempts failed.
+2026-06-26 11:59:55 | INFO     | src.agents.mcp_agent | >>> Closing MCP Session for http://localhost:54065...
+2026-06-26 11:59:57 | ERROR    | sciparser | [User 6e1cecfb-c94b-4d02-96ef-b94690fe8541] Error closing MCP manager: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-26 11:59:57 | ERROR    | sciparser | [User 6e1cecfb-c94b-4d02-96ef-b94690fe8541] Error closing MCP manager: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-26 11:59:57 | INFO     | sciparser | Session for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541 fully cleaned up.
+2026-06-26 11:59:57 | INFO     | sciparser | Session for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541 fully cleaned up.
+2026-06-26 12:50:36 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 12:50:37 | INFO     | sciparser | Preparing MCP manager for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541...
+2026-06-26 12:50:37 | INFO     | sciparser | Preparing MCP manager for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541...
+2026-06-26 12:50:37 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server connecting to http://localhost:59984...
+2026-06-26 12:51:03 | INFO     | src.agents.mcp_agent | >>> MCP Session Ready. 16 tools active.
+2026-06-26 12:51:03 | INFO     | sciparser | Discovered 17 tools for execution.
+2026-06-26 12:51:03 | INFO     | sciparser | Discovered 17 tools for execution.
+2026-06-26 12:51:03 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-06-26 12:51:03 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-06-26 12:51:06 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 12:51:12 | INFO     | sciparser | Starting live preview stream for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541
+2026-06-26 12:51:12 | INFO     | sciparser | Starting live preview stream for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541
+2026-06-26 12:51:20 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 400 Bad Request"
+2026-06-26 12:51:21 | WARNING  | sciparser | Execution attempt 1 failed: Error code: 400 - {'error': {'message': 'Provider returned error', 'code': 400, 'metadata': {'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n', 'provider_name': 'Google AI Studio', 'is_byok': False, 'previous_errors': [{'code': 400, 'message': 'Provider returned error', 'provider_name': 'Google', 'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n'}]}}, 'user_id': 'user_39tqTGq7cVe8BTNkzY4auN81HXj'}
+2026-06-26 12:51:21 | WARNING  | sciparser | Execution attempt 1 failed: Error code: 400 - {'error': {'message': 'Provider returned error', 'code': 400, 'metadata': {'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n', 'provider_name': 'Google AI Studio', 'is_byok': False, 'previous_errors': [{'code': 400, 'message': 'Provider returned error', 'provider_name': 'Google', 'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n'}]}}, 'user_id': 'user_39tqTGq7cVe8BTNkzY4auN81HXj'}
+2026-06-26 12:51:21 | INFO     | sciparser | Running Critic to revise strategy for attempt 2...
+2026-06-26 12:51:21 | INFO     | sciparser | Running Critic to revise strategy for attempt 2...
+2026-06-26 12:51:22 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 12:51:25 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 2)...
+2026-06-26 12:51:25 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 2)...
+2026-06-26 12:51:27 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 12:51:33 | INFO     | sciparser | Starting live preview stream for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541
+2026-06-26 12:51:33 | INFO     | sciparser | Starting live preview stream for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541
+2026-06-26 12:51:42 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 400 Bad Request"
+2026-06-26 12:51:43 | WARNING  | sciparser | Execution attempt 2 failed: Error code: 400 - {'error': {'message': 'Provider returned error', 'code': 400, 'metadata': {'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n', 'provider_name': 'Google AI Studio', 'is_byok': False, 'previous_errors': [{'code': 400, 'message': 'Provider returned error', 'provider_name': 'Google', 'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n'}]}}, 'user_id': 'user_39tqTGq7cVe8BTNkzY4auN81HXj'}
+2026-06-26 12:51:43 | WARNING  | sciparser | Execution attempt 2 failed: Error code: 400 - {'error': {'message': 'Provider returned error', 'code': 400, 'metadata': {'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n', 'provider_name': 'Google AI Studio', 'is_byok': False, 'previous_errors': [{'code': 400, 'message': 'Provider returned error', 'provider_name': 'Google', 'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n'}]}}, 'user_id': 'user_39tqTGq7cVe8BTNkzY4auN81HXj'}
+2026-06-26 12:51:43 | INFO     | sciparser | Running Critic to revise strategy for attempt 3...
+2026-06-26 12:51:43 | INFO     | sciparser | Running Critic to revise strategy for attempt 3...
+2026-06-26 12:51:45 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 12:51:48 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 3)...
+2026-06-26 12:51:48 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 3)...
+2026-06-26 12:51:49 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 12:51:54 | INFO     | sciparser | Starting live preview stream for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541
+2026-06-26 12:51:54 | INFO     | sciparser | Starting live preview stream for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541
+2026-06-26 12:52:02 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 400 Bad Request"
+2026-06-26 12:52:03 | WARNING  | sciparser | Execution attempt 3 failed: Error code: 400 - {'error': {'message': 'Provider returned error', 'code': 400, 'metadata': {'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n', 'provider_name': 'Google AI Studio', 'is_byok': False, 'previous_errors': [{'code': 400, 'message': 'Provider returned error', 'provider_name': 'Google', 'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n'}]}}, 'user_id': 'user_39tqTGq7cVe8BTNkzY4auN81HXj'}
+2026-06-26 12:52:03 | WARNING  | sciparser | Execution attempt 3 failed: Error code: 400 - {'error': {'message': 'Provider returned error', 'code': 400, 'metadata': {'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n', 'provider_name': 'Google AI Studio', 'is_byok': False, 'previous_errors': [{'code': 400, 'message': 'Provider returned error', 'provider_name': 'Google', 'raw': '{\n  "error": {\n    "code": 400,\n    "message": "The input token count exceeds the maximum number of tokens allowed 1048576.",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n'}]}}, 'user_id': 'user_39tqTGq7cVe8BTNkzY4auN81HXj'}
+2026-06-26 12:52:03 | ERROR    | sciparser | All 3 attempts failed.
+2026-06-26 12:52:03 | ERROR    | sciparser | All 3 attempts failed.
+2026-06-26 12:54:34 | ERROR    | asyncio | an error occurred during closing of asynchronous generator <async_generator object create_session at 0x000001EB247CF0A0>
+asyncgen: <async_generator object create_session at 0x000001EB247CF0A0>
+  + Exception Group Traceback (most recent call last):
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\anyio\_backends\_asyncio.py", line 783, in __aexit__
+  |     raise BaseExceptionGroup(
+  | BaseExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 272, in _create_stdio_session
+    |     yield session
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 458, in create_session
+    |     yield session
+    | GeneratorExit
+    +------------------------------------
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 268, in _create_stdio_session
+    async with (
+  File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\shared\session.py", line 238, in __aexit__
+    return await self._task_group.__aexit__(exc_type, exc_val, exc_tb)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\anyio\_backends\_asyncio.py", line 789, in __aexit__
+    if self.cancel_scope.__exit__(type(exc), exc, exc.__traceback__):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\anyio\_backends\_asyncio.py", line 461, in __exit__
+    raise RuntimeError(
+RuntimeError: Attempted to exit cancel scope in a different task than it was entered in
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 457, in create_session
+    async with _create_stdio_session(**params) as session:
+  File "C:\Program Files\Python312\Lib\contextlib.py", line 231, in __aexit__
+    await self.gen.athrow(value)
+  File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 268, in _create_stdio_session
+    async with (
+  File "C:\Program Files\Python312\Lib\contextlib.py", line 231, in __aexit__
+    await self.gen.athrow(value)
+RuntimeError: athrow(): asynchronous generator is already running
+2026-06-26 12:54:34 | ERROR    | asyncio | an error occurred during closing of asynchronous generator <async_generator object stdio_client at 0x000001EB24838C10>
+asyncgen: <async_generator object stdio_client at 0x000001EB24838C10>
+  + Exception Group Traceback (most recent call last):
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\anyio\_backends\_asyncio.py", line 783, in __aexit__
+  |     raise BaseExceptionGroup(
+  | BaseExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\client\stdio\__init__.py", line 189, in stdio_client
+    |     yield read_stream, write_stream
+    | GeneratorExit
+    +------------------------------------
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\client\stdio\__init__.py", line 182, in stdio_client
+    async with (
+  File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\anyio\_backends\_asyncio.py", line 789, in __aexit__
+    if self.cancel_scope.__exit__(type(exc), exc, exc.__traceback__):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\anyio\_backends\_asyncio.py", line 461, in __exit__
+    raise RuntimeError(
+RuntimeError: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-26 12:54:34 | ERROR    | asyncio | an error occurred during closing of asynchronous generator <async_generator object MultiServerMCPClient.session at 0x000001EB248B4480>
+asyncgen: <async_generator object MultiServerMCPClient.session at 0x000001EB248B4480>
+Traceback (most recent call last):
+  File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\client.py", line 150, in session
+    yield session
+GeneratorExit
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\client.py", line 145, in session
+    async with create_session(
+  File "C:\Program Files\Python312\Lib\contextlib.py", line 231, in __aexit__
+    await self.gen.athrow(value)
+RuntimeError: athrow(): asynchronous generator is already running
+2026-06-26 12:54:34 | ERROR    | asyncio | an error occurred during closing of asynchronous generator <async_generator object _create_stdio_session at 0x000001EB24838EB0>
+asyncgen: <async_generator object _create_stdio_session at 0x000001EB24838EB0>
+Traceback (most recent call last):
+  File "C:\Program Files\Python312\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python312\Lib\asyncio\base_events.py", line 685, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+asyncio.exceptions.CancelledError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Program Files\Python312\Lib\asyncio\runners.py", line 194, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python312\Lib\asyncio\runners.py", line 123, in run
+    raise KeyboardInterrupt()
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+RuntimeError: aclose(): asynchronous generator is already running
+2026-06-26 12:55:15 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 12:55:15 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 12:55:15 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 12:55:15 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 12:55:15 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 12:55:15 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 12:55:15 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 12:55:15 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 12:55:15 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 12:55:15 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 12:55:15 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 12:55:15 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 12:55:15 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 12:55:15 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 12:55:17 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 12:55:17 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 13:33:46 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 13:33:46 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 13:33:46 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 13:33:46 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 13:33:46 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 13:33:46 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 13:33:46 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 13:33:46 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 13:33:46 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 13:33:46 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 13:33:46 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 13:33:46 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 13:33:46 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 13:33:46 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 13:33:48 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 13:33:48 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 13:38:00 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 13:38:00 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 13:38:00 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 13:38:00 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 13:38:00 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 13:38:00 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 13:38:00 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 13:38:00 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 13:38:00 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 13:38:00 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 13:38:01 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 13:38:01 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 13:38:01 | INFO     | sciparser | Adding 'token_usage' column to messages...
+2026-06-26 13:38:01 | INFO     | sciparser | Adding 'token_usage' column to messages...
+2026-06-26 13:38:01 | INFO     | sciparser | Adding 'cost' column to messages...
+2026-06-26 13:38:01 | INFO     | sciparser | Adding 'cost' column to messages...
+2026-06-26 13:38:01 | INFO     | sciparser | Adding 'token_usage' column to agent_execution_logs...
+2026-06-26 13:38:01 | INFO     | sciparser | Adding 'token_usage' column to agent_execution_logs...
+2026-06-26 13:38:01 | INFO     | sciparser | Adding 'cost' column to agent_execution_logs...
+2026-06-26 13:38:01 | INFO     | sciparser | Adding 'cost' column to agent_execution_logs...
+2026-06-26 13:38:01 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 13:38:01 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 13:38:02 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 13:38:02 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 14:34:29 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:34:30 | INFO     | sciparser | Preparing MCP manager for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541...
+2026-06-26 14:34:30 | INFO     | sciparser | Preparing MCP manager for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541...
+2026-06-26 14:34:30 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server connecting to http://localhost:61957...
+2026-06-26 14:34:55 | INFO     | src.agents.mcp_agent | >>> MCP Session Ready. 16 tools active.
+2026-06-26 14:34:55 | INFO     | sciparser | Discovered 17 tools for execution.
+2026-06-26 14:34:55 | INFO     | sciparser | Discovered 17 tools for execution.
+2026-06-26 14:34:55 | INFO     | sciparser | Starting live preview stream for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541, chat thread-1b00e2f2-8f10-47f5-89d6-3946a744b7fe
+2026-06-26 14:34:55 | INFO     | sciparser | Starting live preview stream for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541, chat thread-1b00e2f2-8f10-47f5-89d6-3946a744b7fe
+2026-06-26 14:34:55 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-06-26 14:34:55 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-06-26 14:34:56 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:35:03 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:35:12 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:35:15 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:35:18 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:35:21 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:35:23 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:35:25 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:35:31 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:35:33 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:35:36 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:35:39 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:35:42 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:35:45 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:35:49 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:35:52 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:35:55 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:36:05 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:36:11 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:36:14 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:36:16 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:36:19 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:36:23 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:36:26 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:36:29 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:36:32 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:36:34 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:36:43 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:36:47 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:36:51 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:36:59 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:37:04 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:37:08 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:37:12 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:37:15 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:37:20 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:37:23 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:37:29 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:37:34 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:37:38 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:37:41 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:37:44 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:37:48 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:37:52 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:37:56 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:37:59 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:38:06 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:38:10 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:38:14 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:38:20 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:38:25 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:38:30 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:38:33 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:38:37 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:38:40 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:38:44 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:38:49 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:38:56 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:39:02 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:39:08 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:39:11 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:39:16 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:39:19 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:39:23 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:39:27 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:39:30 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:39:34 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:39:38 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:39:44 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:39:49 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:39:52 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:39:56 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:40:01 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:40:05 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:40:11 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:40:20 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:40:23 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:40:30 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:40:36 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:40:44 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:40:56 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:41:01 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:41:06 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:41:12 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:41:17 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:41:22 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:41:27 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:51:19 | INFO     | src.agents.mcp_agent | >>> Closing MCP Session for http://localhost:61957...
+2026-06-26 14:51:21 | ERROR    | sciparser | [User 6e1cecfb-c94b-4d02-96ef-b94690fe8541] Error closing MCP manager: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-26 14:51:21 | ERROR    | sciparser | [User 6e1cecfb-c94b-4d02-96ef-b94690fe8541] Error closing MCP manager: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-26 14:51:21 | INFO     | sciparser | Session for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541 fully cleaned up.
+2026-06-26 14:51:21 | INFO     | sciparser | Session for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541 fully cleaned up.
+2026-06-26 14:52:02 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 14:52:02 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 14:52:02 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 14:52:02 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 14:52:02 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 14:52:02 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 14:52:02 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 14:52:02 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 14:52:02 | INFO     | sciparser | Adding 'tool_calls' column to messages...
+2026-06-26 14:52:02 | INFO     | sciparser | Adding 'tool_calls' column to messages...
+2026-06-26 14:52:02 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 14:52:02 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 14:52:02 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 14:52:02 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 14:52:02 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 14:52:02 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 14:52:05 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 14:52:05 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 14:54:56 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:54:57 | INFO     | sciparser | Preparing MCP manager for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541...
+2026-06-26 14:54:57 | INFO     | sciparser | Preparing MCP manager for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541...
+2026-06-26 14:54:57 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server connecting to http://localhost:58938...
+2026-06-26 14:55:14 | INFO     | src.agents.mcp_agent | >>> MCP Session Ready. 16 tools active.
+2026-06-26 14:55:14 | INFO     | sciparser | Discovered 17 tools for execution.
+2026-06-26 14:55:14 | INFO     | sciparser | Discovered 17 tools for execution.
+2026-06-26 14:55:14 | INFO     | sciparser | Starting live preview stream for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541, chat thread-1b00e2f2-8f10-47f5-89d6-3946a744b7fe
+2026-06-26 14:55:14 | INFO     | sciparser | Starting live preview stream for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541, chat thread-1b00e2f2-8f10-47f5-89d6-3946a744b7fe
+2026-06-26 14:55:14 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-06-26 14:55:14 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-06-26 14:55:16 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:55:26 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:55:35 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:55:38 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:55:43 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:55:46 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:55:48 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:55:51 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:55:55 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:55:58 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:56:02 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:56:07 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:56:11 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:56:19 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:56:24 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:56:28 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:56:31 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:56:35 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:56:39 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:56:44 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:56:49 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:56:53 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:56:55 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:57:05 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:57:11 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:57:18 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:57:22 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:57:25 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:57:28 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:57:32 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:57:36 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:57:39 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:57:46 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:57:52 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:57:56 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:57:59 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:58:03 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:58:06 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:58:10 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:58:14 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:58:21 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:58:24 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:58:27 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:58:31 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:58:42 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:58:49 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:58:57 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:59:00 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:59:03 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:59:06 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 14:59:17 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:00:43 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:00:48 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:00:54 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:01:00 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:01:03 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:01:07 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:01:11 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:01:17 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:01:22 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:15:15 | INFO     | src.agents.mcp_agent | >>> Closing MCP Session for http://localhost:58938...
+2026-06-26 15:15:17 | ERROR    | sciparser | [User 6e1cecfb-c94b-4d02-96ef-b94690fe8541] Error closing MCP manager: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-26 15:15:17 | ERROR    | sciparser | [User 6e1cecfb-c94b-4d02-96ef-b94690fe8541] Error closing MCP manager: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-26 15:15:17 | INFO     | sciparser | Session for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541 fully cleaned up.
+2026-06-26 15:15:17 | INFO     | sciparser | Session for user 6e1cecfb-c94b-4d02-96ef-b94690fe8541 fully cleaned up.
+2026-06-26 15:21:37 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 15:21:37 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 15:21:37 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 15:21:37 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 15:21:37 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 15:21:37 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 15:21:37 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 15:21:37 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 15:21:37 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 15:21:37 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 15:21:37 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 15:21:37 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 15:21:37 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 15:21:37 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 15:21:39 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 15:21:39 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 15:21:46 | ERROR    | sciparser | Auth validation error: 401: User not found
+2026-06-26 15:21:46 | ERROR    | sciparser | Auth validation error: 401: User not found
+2026-06-26 15:21:46 | ERROR    | sciparser | Auth validation error: 401: User not found
+2026-06-26 15:21:46 | ERROR    | sciparser | Auth validation error: 401: User not found
+2026-06-26 15:22:38 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:22:39 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-26 15:22:39 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-26 15:22:39 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server connecting to http://localhost:52244...
+2026-06-26 15:22:52 | INFO     | src.agents.mcp_agent | >>> MCP Session Ready. 16 tools active.
+2026-06-26 15:22:52 | INFO     | sciparser | Discovered 17 tools for execution.
+2026-06-26 15:22:52 | INFO     | sciparser | Discovered 17 tools for execution.
+2026-06-26 15:22:52 | INFO     | sciparser | Starting live preview stream for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04, chat thread-0089c6fa-b48a-4378-b7b9-604340ff006d
+2026-06-26 15:22:52 | INFO     | sciparser | Starting live preview stream for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04, chat thread-0089c6fa-b48a-4378-b7b9-604340ff006d
+2026-06-26 15:22:52 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-06-26 15:22:52 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-06-26 15:22:53 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:23:00 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:23:11 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:23:14 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:23:17 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:23:21 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:23:24 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:23:28 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:23:31 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:23:35 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:23:38 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:23:41 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:36:43 | INFO     | src.agents.mcp_agent | >>> Closing MCP Session for http://localhost:52244...
+2026-06-26 15:36:45 | ERROR    | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] Error closing MCP manager: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-26 15:36:45 | ERROR    | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] Error closing MCP manager: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-26 15:36:45 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-26 15:36:45 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-26 15:37:02 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 15:37:02 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 15:37:02 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 15:37:02 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 15:37:02 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 15:37:02 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 15:37:02 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 15:37:02 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 15:37:02 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 15:37:02 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 15:37:02 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 15:37:02 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 15:37:02 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 15:37:02 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 15:37:04 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 15:37:04 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 15:38:59 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:39:00 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-26 15:39:00 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-26 15:39:00 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server connecting to http://localhost:52369...
+2026-06-26 15:39:04 | ERROR    | src.agents.mcp_agent | >>> MCP Initialization Failed: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:39:04 | ERROR    | sciparser | Error in process_message: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:39:04 | ERROR    | sciparser | Error in process_message: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:39:04 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: unhandled errors in a TaskGroup (1 sub-exception)
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 187, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:39:04 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: unhandled errors in a TaskGroup (1 sub-exception)
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 187, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:40:38 | INFO     | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] MCP manager closed.
+2026-06-26 15:40:38 | INFO     | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] MCP manager closed.
+2026-06-26 15:40:38 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 reset and cleaned up.
+2026-06-26 15:40:38 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 reset and cleaned up.
+2026-06-26 15:40:51 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 15:40:51 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 15:40:51 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 15:40:51 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 15:40:51 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 15:40:51 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 15:40:51 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 15:40:51 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 15:40:51 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 15:40:51 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 15:40:51 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 15:40:51 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 15:40:51 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 15:40:51 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 15:40:53 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 15:40:53 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 15:41:54 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:41:55 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-26 15:41:55 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-26 15:41:55 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server connecting to http://localhost:49416...
+2026-06-26 15:41:58 | ERROR    | src.agents.mcp_agent | >>> MCP Initialization Failed: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:41:58 | ERROR    | sciparser | Error in process_message: MCP Bridge failed to initialize: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:41:58 | ERROR    | sciparser | Error in process_message: MCP Bridge failed to initialize: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:41:58 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: MCP Bridge failed to initialize: unhandled errors in a TaskGroup (1 sub-exception)
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 187, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: MCP Bridge failed to initialize: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:41:58 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: MCP Bridge failed to initialize: unhandled errors in a TaskGroup (1 sub-exception)
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 187, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: MCP Bridge failed to initialize: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:46:27 | INFO     | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] MCP manager closed.
+2026-06-26 15:46:27 | INFO     | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] MCP manager closed.
+2026-06-26 15:46:27 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 reset and cleaned up.
+2026-06-26 15:46:27 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 reset and cleaned up.
+2026-06-26 15:46:38 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 15:46:38 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 15:46:38 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 15:46:38 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 15:46:38 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 15:46:38 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 15:46:38 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 15:46:38 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 15:46:38 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 15:46:38 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 15:46:38 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 15:46:38 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 15:46:38 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 15:46:38 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 15:46:41 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 15:46:41 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 15:46:49 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:46:50 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-26 15:46:50 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-26 15:46:50 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server connecting to http://localhost:64461...
+2026-06-26 15:46:53 | ERROR    | src.agents.mcp_agent | >>> MCP Initialization Failed: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:46:53 | ERROR    | sciparser | Error in process_message: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:46:53 | ERROR    | sciparser | Error in process_message: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:46:53 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 187, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:46:53 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 187, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:47:23 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:47:24 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server connecting to http://localhost:64461...
+2026-06-26 15:47:28 | ERROR    | src.agents.mcp_agent | >>> MCP Initialization Failed: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:47:28 | ERROR    | sciparser | Error in process_message: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:47:28 | ERROR    | sciparser | Error in process_message: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:47:28 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 187, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:47:28 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 187, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:51:37 | INFO     | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] MCP manager closed.
+2026-06-26 15:51:37 | INFO     | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] MCP manager closed.
+2026-06-26 15:51:37 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 reset and cleaned up.
+2026-06-26 15:51:37 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 reset and cleaned up.
+2026-06-26 15:52:15 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 15:52:15 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 15:52:15 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 15:52:15 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 15:52:15 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 15:52:15 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 15:52:15 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 15:52:15 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 15:52:15 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 15:52:15 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 15:52:15 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 15:52:15 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 15:52:15 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 15:52:15 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 15:52:17 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 15:52:17 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 15:52:43 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 15:52:43 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-26 15:52:43 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-26 15:52:43 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server connecting to http://localhost:64945...
+2026-06-26 15:52:47 | ERROR    | src.agents.mcp_agent | >>> MCP Sub-Exception Traceback:
+  + Exception Group Traceback (most recent call last):
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\client\stdio\__init__.py", line 189, in stdio_client
+  |     yield read_stream, write_stream
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 268, in _create_stdio_session
+  |     async with (
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\shared\session.py", line 238, in __aexit__
+  |     return await self._task_group.__aexit__(exc_type, exc_val, exc_tb)
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\anyio\_backends\_asyncio.py", line 783, in __aexit__
+  |     raise BaseExceptionGroup(
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 272, in _create_stdio_session
+    |     yield session
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 458, in create_session
+    |     yield session
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\client.py", line 149, in session
+    |     await session.initialize()
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\client\session.py", line 171, in initialize
+    |     result = await self.send_request(
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\shared\session.py", line 306, in send_request
+    |     raise McpError(response_or_error.error)
+    | mcp.shared.exceptions.McpError: Connection closed
+    +------------------------------------
+
+2026-06-26 15:52:47 | ERROR    | sciparser | Failed to initialize MCP tools: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:52:47 | ERROR    | sciparser | Failed to initialize MCP tools: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:52:47 | ERROR    | sciparser | Error in process_message: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:52:47 | ERROR    | sciparser | Error in process_message: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:52:47 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 187, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:52:47 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 187, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 15:53:09 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 reset and cleaned up.
+2026-06-26 15:53:09 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 reset and cleaned up.
+2026-06-26 16:01:02 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 16:01:02 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 16:01:02 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 16:01:02 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 16:01:02 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 16:01:02 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 16:01:02 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 16:01:02 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 16:01:02 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 16:01:02 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 16:01:02 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 16:01:02 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 16:01:02 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 16:01:02 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 16:01:04 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 16:01:04 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 16:01:18 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 403 Forbidden"
+2026-06-26 16:01:18 | ERROR    | sciparser | Error in process_message: Error code: 403 - {'error': {'message': 'Key limit exceeded (daily limit). Manage it using https://openrouter.ai/workspaces/default/keys/92595540114bc35d878991e15aee13c788aebc1f4ef0f469d0854e531b37ffa3', 'code': 403}}
+2026-06-26 16:01:18 | ERROR    | sciparser | Error in process_message: Error code: 403 - {'error': {'message': 'Key limit exceeded (daily limit). Manage it using https://openrouter.ai/workspaces/default/keys/92595540114bc35d878991e15aee13c788aebc1f4ef0f469d0854e531b37ffa3', 'code': 403}}
+2026-06-26 16:01:18 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: Error code: 403 - {'error': {'message': 'Key limit exceeded (daily limit). Manage it using https://openrouter.ai/workspaces/default/keys/92595540114bc35d878991e15aee13c788aebc1f4ef0f469d0854e531b37ffa3', 'code': 403}}
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 187, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: Error code: 403 - {'error': {'message': 'Key limit exceeded (daily limit). Manage it using https://openrouter.ai/workspaces/default/keys/92595540114bc35d878991e15aee13c788aebc1f4ef0f469d0854e531b37ffa3', 'code': 403}}
+2026-06-26 16:01:18 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: Error code: 403 - {'error': {'message': 'Key limit exceeded (daily limit). Manage it using https://openrouter.ai/workspaces/default/keys/92595540114bc35d878991e15aee13c788aebc1f4ef0f469d0854e531b37ffa3', 'code': 403}}
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 187, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: Error code: 403 - {'error': {'message': 'Key limit exceeded (daily limit). Manage it using https://openrouter.ai/workspaces/default/keys/92595540114bc35d878991e15aee13c788aebc1f4ef0f469d0854e531b37ffa3', 'code': 403}}
+2026-06-26 16:01:24 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 reset and cleaned up.
+2026-06-26 16:01:24 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 reset and cleaned up.
+2026-06-26 16:07:29 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 16:07:29 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 16:07:29 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 16:07:29 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 16:07:29 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 16:07:29 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 16:07:29 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 16:07:29 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 16:07:29 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 16:07:29 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 16:07:29 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 16:07:29 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 16:07:29 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 16:07:29 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 16:07:30 | ERROR    | sciparser | Failed to initialize brain during startup: The api_key client option must be set either by passing api_key to the client or by setting the OPENAI_API_KEY environment variable
+2026-06-26 16:07:30 | ERROR    | sciparser | Failed to initialize brain during startup: The api_key client option must be set either by passing api_key to the client or by setting the OPENAI_API_KEY environment variable
+2026-06-26 16:07:48 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 16:07:48 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 16:07:48 | ERROR    | sciparser | Error in process_message: The api_key client option must be set either by passing api_key to the client or by setting the OPENAI_API_KEY environment variable
+2026-06-26 16:07:48 | ERROR    | sciparser | Error in process_message: The api_key client option must be set either by passing api_key to the client or by setting the OPENAI_API_KEY environment variable
+2026-06-26 16:07:48 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: The api_key client option must be set either by passing api_key to the client or by setting the OPENAI_API_KEY environment variable
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 187, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: The api_key client option must be set either by passing api_key to the client or by setting the OPENAI_API_KEY environment variable
+2026-06-26 16:07:48 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: The api_key client option must be set either by passing api_key to the client or by setting the OPENAI_API_KEY environment variable
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 187, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: The api_key client option must be set either by passing api_key to the client or by setting the OPENAI_API_KEY environment variable
+2026-06-26 16:08:18 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 reset and cleaned up.
+2026-06-26 16:08:18 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 reset and cleaned up.
+2026-06-26 16:08:29 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 16:08:29 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 16:08:29 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 16:08:29 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 16:08:29 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 16:08:29 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 16:08:29 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 16:08:29 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 16:08:29 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 16:08:29 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 16:08:29 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 16:08:29 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 16:08:29 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 16:08:29 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 16:08:33 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 16:08:33 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 16:08:45 | INFO     | httpx | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/openai/chat/completions "HTTP/1.1 400 Bad Request"
+2026-06-26 16:08:45 | ERROR    | sciparser | Error in process_message: Error code: 400 - [{'error': {'code': 400, 'message': '* GenerateContentRequest.contents: contents is not specified\n', 'status': 'INVALID_ARGUMENT'}}]
+2026-06-26 16:08:45 | ERROR    | sciparser | Error in process_message: Error code: 400 - [{'error': {'code': 400, 'message': '* GenerateContentRequest.contents: contents is not specified\n', 'status': 'INVALID_ARGUMENT'}}]
+2026-06-26 16:08:45 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: Error code: 400 - [{'error': {'code': 400, 'message': '* GenerateContentRequest.contents: contents is not specified\n', 'status': 'INVALID_ARGUMENT'}}]
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 187, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: Error code: 400 - [{'error': {'code': 400, 'message': '* GenerateContentRequest.contents: contents is not specified\n', 'status': 'INVALID_ARGUMENT'}}]
+2026-06-26 16:08:45 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: Error code: 400 - [{'error': {'code': 400, 'message': '* GenerateContentRequest.contents: contents is not specified\n', 'status': 'INVALID_ARGUMENT'}}]
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 187, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: Error code: 400 - [{'error': {'code': 400, 'message': '* GenerateContentRequest.contents: contents is not specified\n', 'status': 'INVALID_ARGUMENT'}}]
+2026-06-26 17:03:25 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 17:03:25 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 17:03:25 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 17:03:25 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 17:03:25 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 17:03:25 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 17:03:25 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 17:03:25 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 17:03:25 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 17:03:25 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 17:03:25 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 17:03:25 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 17:03:25 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 17:03:25 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 17:03:31 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 17:03:31 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 17:04:07 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 17:05:27 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-26 17:05:27 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-26 17:05:27 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server connecting to http://localhost:52941...
+2026-06-26 17:05:34 | ERROR    | src.agents.mcp_agent | >>> MCP Sub-Exception Traceback:
+  + Exception Group Traceback (most recent call last):
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\client\stdio\__init__.py", line 189, in stdio_client
+  |     yield read_stream, write_stream
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 268, in _create_stdio_session
+  |     async with (
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\shared\session.py", line 238, in __aexit__
+  |     return await self._task_group.__aexit__(exc_type, exc_val, exc_tb)
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\anyio\_backends\_asyncio.py", line 783, in __aexit__
+  |     raise BaseExceptionGroup(
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 272, in _create_stdio_session
+    |     yield session
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 458, in create_session
+    |     yield session
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\client.py", line 149, in session
+    |     await session.initialize()
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\client\session.py", line 171, in initialize
+    |     result = await self.send_request(
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\shared\session.py", line 306, in send_request
+    |     raise McpError(response_or_error.error)
+    | mcp.shared.exceptions.McpError: Connection closed
+    +------------------------------------
+
+2026-06-26 17:05:34 | ERROR    | sciparser | Failed to initialize MCP tools: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 17:05:34 | ERROR    | sciparser | Failed to initialize MCP tools: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 17:05:34 | ERROR    | sciparser | Error in process_message: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 17:05:34 | ERROR    | sciparser | Error in process_message: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 17:05:34 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 187, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 17:05:34 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 187, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-26 17:07:44 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 reset and cleaned up.
+2026-06-26 17:07:44 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 reset and cleaned up.
+2026-06-26 17:08:11 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 17:08:11 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 17:08:11 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 17:08:11 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 17:08:11 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 17:08:11 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 17:08:11 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 17:08:11 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 17:08:11 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 17:08:11 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 17:08:11 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 17:08:11 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 17:08:11 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 17:08:11 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 17:08:13 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 17:08:13 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 17:11:36 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 403 Forbidden"
+2026-06-26 17:11:36 | ERROR    | sciparser | Error in process_message: Error code: 403 - {'error': {'message': 'Key limit exceeded (daily limit). Manage it using https://openrouter.ai/workspaces/default/keys/92595540114bc35d878991e15aee13c788aebc1f4ef0f469d0854e531b37ffa3', 'code': 403}}
+2026-06-26 17:11:36 | ERROR    | sciparser | Error in process_message: Error code: 403 - {'error': {'message': 'Key limit exceeded (daily limit). Manage it using https://openrouter.ai/workspaces/default/keys/92595540114bc35d878991e15aee13c788aebc1f4ef0f469d0854e531b37ffa3', 'code': 403}}
+2026-06-26 17:11:36 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: Error code: 403 - {'error': {'message': 'Key limit exceeded (daily limit). Manage it using https://openrouter.ai/workspaces/default/keys/92595540114bc35d878991e15aee13c788aebc1f4ef0f469d0854e531b37ffa3', 'code': 403}}
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 183, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: Error code: 403 - {'error': {'message': 'Key limit exceeded (daily limit). Manage it using https://openrouter.ai/workspaces/default/keys/92595540114bc35d878991e15aee13c788aebc1f4ef0f469d0854e531b37ffa3', 'code': 403}}
+2026-06-26 17:11:36 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: Error code: 403 - {'error': {'message': 'Key limit exceeded (daily limit). Manage it using https://openrouter.ai/workspaces/default/keys/92595540114bc35d878991e15aee13c788aebc1f4ef0f469d0854e531b37ffa3', 'code': 403}}
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 183, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: Error code: 403 - {'error': {'message': 'Key limit exceeded (daily limit). Manage it using https://openrouter.ai/workspaces/default/keys/92595540114bc35d878991e15aee13c788aebc1f4ef0f469d0854e531b37ffa3', 'code': 403}}
+2026-06-26 17:12:33 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-26 17:12:33 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-26 17:12:46 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 17:12:46 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-26 17:12:46 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 17:12:46 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-26 17:12:46 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 17:12:46 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-26 17:12:46 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 17:12:46 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-26 17:12:46 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 17:12:46 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-26 17:12:46 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 17:12:46 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-26 17:12:46 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 17:12:46 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-26 17:12:48 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 17:12:48 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-26 17:13:06 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 17:13:48 | INFO     | sciparser | Cancellation signal sent to task for chat_id thread-5326357a-dada-4097-ad21-d01024ebda91
+2026-06-26 17:13:48 | INFO     | sciparser | Cancellation signal sent to task for chat_id thread-5326357a-dada-4097-ad21-d01024ebda91
+2026-06-26 17:13:48 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-26 17:13:48 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-26 17:13:48 | INFO     | sciparser | Browser session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 closed via stop_process.
+2026-06-26 17:13:48 | INFO     | sciparser | Browser session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 closed via stop_process.
+2026-06-26 17:14:16 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 17:18:06 | INFO     | sciparser | Cancellation signal sent to task for chat_id thread-a6208947-fac9-4e56-9625-19f80852bbcc
+2026-06-26 17:18:06 | INFO     | sciparser | Cancellation signal sent to task for chat_id thread-a6208947-fac9-4e56-9625-19f80852bbcc
+2026-06-26 17:18:06 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-26 17:18:06 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-26 17:18:06 | INFO     | sciparser | Browser session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 closed via stop_process.
+2026-06-26 17:18:06 | INFO     | sciparser | Browser session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 closed via stop_process.
+2026-06-26 17:18:20 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-26 17:23:11 | ERROR    | sciparser | Error in process_message: {'message': 'Provider returned error', 'code': 504}
+2026-06-26 17:23:11 | ERROR    | sciparser | Error in process_message: {'message': 'Provider returned error', 'code': 504}
+2026-06-26 17:23:11 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: {'message': 'Provider returned error', 'code': 504}
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 183, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: {'message': 'Provider returned error', 'code': 504}
+2026-06-26 17:23:11 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: {'message': 'Provider returned error', 'code': 504}
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 183, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: {'message': 'Provider returned error', 'code': 504}
+2026-06-26 17:44:04 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-26 17:44:04 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-27 10:16:35 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-27 10:16:35 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-27 10:16:35 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-27 10:16:35 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-27 10:16:35 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-27 10:16:35 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-27 10:16:35 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-27 10:16:35 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-27 10:16:35 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-27 10:16:35 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-27 10:16:35 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-27 10:16:35 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-27 10:16:35 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-27 10:16:35 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-27 10:16:37 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-27 10:16:37 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-27 10:20:07 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 10:20:09 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-27 10:20:09 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-27 10:20:09 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server connecting to http://localhost:58578...
+2026-06-27 10:20:12 | ERROR    | src.agents.mcp_agent | >>> MCP Sub-Exception Traceback:
+  + Exception Group Traceback (most recent call last):
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\client\stdio\__init__.py", line 189, in stdio_client
+  |     yield read_stream, write_stream
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 268, in _create_stdio_session
+  |     async with (
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\shared\session.py", line 238, in __aexit__
+  |     return await self._task_group.__aexit__(exc_type, exc_val, exc_tb)
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\anyio\_backends\_asyncio.py", line 783, in __aexit__
+  |     raise BaseExceptionGroup(
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 272, in _create_stdio_session
+    |     yield session
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 458, in create_session
+    |     yield session
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\client.py", line 149, in session
+    |     await session.initialize()
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\client\session.py", line 171, in initialize
+    |     result = await self.send_request(
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\shared\session.py", line 306, in send_request
+    |     raise McpError(response_or_error.error)
+    | mcp.shared.exceptions.McpError: Connection closed
+    +------------------------------------
+
+2026-06-27 10:20:12 | ERROR    | sciparser | Error in process_message: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-27 10:20:12 | ERROR    | sciparser | Error in process_message: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-27 10:20:12 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 183, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-27 10:20:12 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 183, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-27 10:29:46 | INFO     | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] MCP manager closed.
+2026-06-27 10:29:46 | INFO     | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] MCP manager closed.
+2026-06-27 10:29:46 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-27 10:29:46 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-27 10:30:26 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-27 10:30:26 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-27 10:30:26 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-27 10:30:26 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-27 10:30:26 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-27 10:30:26 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-27 10:30:26 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-27 10:30:26 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-27 10:30:26 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-27 10:30:26 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-27 10:30:26 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-27 10:30:26 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-27 10:30:26 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-27 10:30:26 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-27 10:30:29 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-27 10:30:29 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-27 10:31:16 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 10:31:16 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-27 10:31:16 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-27 10:31:16 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server connecting to http://localhost:54849...
+2026-06-27 10:31:21 | ERROR    | src.agents.mcp_agent | >>> MCP Sub-Exception Traceback:
+  + Exception Group Traceback (most recent call last):
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\client\stdio\__init__.py", line 189, in stdio_client
+  |     yield read_stream, write_stream
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 268, in _create_stdio_session
+  |     async with (
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\shared\session.py", line 238, in __aexit__
+  |     return await self._task_group.__aexit__(exc_type, exc_val, exc_tb)
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\anyio\_backends\_asyncio.py", line 783, in __aexit__
+  |     raise BaseExceptionGroup(
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 272, in _create_stdio_session
+    |     yield session
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 458, in create_session
+    |     yield session
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\client.py", line 149, in session
+    |     await session.initialize()
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\client\session.py", line 171, in initialize
+    |     result = await self.send_request(
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\shared\session.py", line 306, in send_request
+    |     raise McpError(response_or_error.error)
+    | mcp.shared.exceptions.McpError: Connection closed
+    +------------------------------------
+
+2026-06-27 10:31:21 | ERROR    | sciparser | Error in process_message: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-27 10:31:21 | ERROR    | sciparser | Error in process_message: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-27 10:31:21 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 183, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-27 10:31:21 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 183, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-27 10:32:19 | INFO     | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] MCP manager closed.
+2026-06-27 10:32:19 | INFO     | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] MCP manager closed.
+2026-06-27 10:32:19 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-27 10:32:19 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-27 10:37:21 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-27 10:37:21 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-27 10:37:21 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-27 10:37:21 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-27 10:37:21 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-27 10:37:21 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-27 10:37:21 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-27 10:37:21 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-27 10:37:21 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-27 10:37:21 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-27 10:37:21 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-27 10:37:21 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-27 10:37:21 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-27 10:37:21 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-27 10:37:24 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-27 10:37:24 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-27 10:37:57 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 10:37:58 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-27 10:37:58 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-27 10:37:58 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server connecting to http://localhost:52848...
+2026-06-27 10:38:03 | ERROR    | src.agents.mcp_agent | >>> MCP Sub-Exception Traceback:
+  + Exception Group Traceback (most recent call last):
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\client\stdio\__init__.py", line 189, in stdio_client
+  |     yield read_stream, write_stream
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 268, in _create_stdio_session
+  |     async with (
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\shared\session.py", line 238, in __aexit__
+  |     return await self._task_group.__aexit__(exc_type, exc_val, exc_tb)
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\anyio\_backends\_asyncio.py", line 783, in __aexit__
+  |     raise BaseExceptionGroup(
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 272, in _create_stdio_session
+    |     yield session
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 458, in create_session
+    |     yield session
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\client.py", line 149, in session
+    |     await session.initialize()
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\client\session.py", line 171, in initialize
+    |     result = await self.send_request(
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\shared\session.py", line 306, in send_request
+    |     raise McpError(response_or_error.error)
+    | mcp.shared.exceptions.McpError: Connection closed
+    +------------------------------------
+
+2026-06-27 10:38:03 | ERROR    | sciparser | Error in process_message: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-27 10:38:03 | ERROR    | sciparser | Error in process_message: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-27 10:38:03 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 183, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-27 10:38:03 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 183, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: Browser Bridge Error: ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-27 10:39:00 | INFO     | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] MCP manager closed.
+2026-06-27 10:39:00 | INFO     | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] MCP manager closed.
+2026-06-27 10:39:00 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-27 10:39:00 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-27 11:01:59 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-27 11:01:59 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-27 11:01:59 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-27 11:01:59 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-27 11:01:59 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-27 11:01:59 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-27 11:01:59 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-27 11:01:59 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-27 11:01:59 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-27 11:01:59 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-27 11:01:59 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-27 11:01:59 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-27 11:01:59 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-27 11:01:59 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-27 11:02:02 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-27 11:02:02 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-27 11:04:42 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 11:04:42 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-27 11:04:42 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-27 11:04:42 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server connecting to http://localhost:60999...
+2026-06-27 11:04:47 | ERROR    | src.agents.mcp_agent | >>> MCP Initialization Failed: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-27 11:04:47 | ERROR    | sciparser | Error in process_message: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-27 11:04:47 | ERROR    | sciparser | Error in process_message: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-27 11:04:47 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: unhandled errors in a TaskGroup (1 sub-exception)
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 183, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-27 11:04:47 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: unhandled errors in a TaskGroup (1 sub-exception)
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 183, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: unhandled errors in a TaskGroup (1 sub-exception)
+2026-06-27 12:33:16 | INFO     | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] MCP manager closed.
+2026-06-27 12:33:16 | INFO     | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] MCP manager closed.
+2026-06-27 12:33:16 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-27 12:33:16 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-27 12:34:21 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-27 12:34:21 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-27 12:34:21 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-27 12:34:21 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-27 12:34:21 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-27 12:34:21 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-27 12:34:21 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-27 12:34:21 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-27 12:34:21 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-27 12:34:21 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-27 12:34:21 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-27 12:34:21 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-27 12:34:21 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-27 12:34:21 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-27 12:34:23 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-27 12:34:23 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-27 12:35:02 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 12:35:03 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-27 12:35:03 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-27 12:35:03 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server connecting to http://localhost:53802...
+2026-06-27 12:35:07 | ERROR    | src.agents.mcp_agent | >>> MCP Initialization Failed: unhandled errors in a TaskGroup (1 sub-exception)
+  + Exception Group Traceback (most recent call last):
+  |   File "d:\Project\SciParser\Backend\src\agents\mcp_agent.py", line 75, in initialize
+  |     session = await self.stack.enter_async_context(
+  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |   File "C:\Program Files\Python312\Lib\contextlib.py", line 659, in enter_async_context
+  |     result = await _enter(cm)
+  |              ^^^^^^^^^^^^^^^^
+  |   File "C:\Program Files\Python312\Lib\contextlib.py", line 210, in __aenter__
+  |     return await anext(self.gen)
+  |            ^^^^^^^^^^^^^^^^^^^^^
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\client.py", line 145, in session
+  |     async with create_session(
+  |   File "C:\Program Files\Python312\Lib\contextlib.py", line 231, in __aexit__
+  |     await self.gen.athrow(value)
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 457, in create_session
+  |     async with _create_stdio_session(**params) as session:
+  |   File "C:\Program Files\Python312\Lib\contextlib.py", line 231, in __aexit__
+  |     await self.gen.athrow(value)
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 268, in _create_stdio_session
+  |     async with (
+  |   File "C:\Program Files\Python312\Lib\contextlib.py", line 231, in __aexit__
+  |     await self.gen.athrow(value)
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\client\stdio\__init__.py", line 182, in stdio_client
+  |     async with (
+  |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\anyio\_backends\_asyncio.py", line 783, in __aexit__
+  |     raise BaseExceptionGroup(
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Exception Group Traceback (most recent call last):
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\client\stdio\__init__.py", line 189, in stdio_client
+    |     yield read_stream, write_stream
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 268, in _create_stdio_session
+    |     async with (
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\shared\session.py", line 238, in __aexit__
+    |     return await self._task_group.__aexit__(exc_type, exc_val, exc_tb)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\anyio\_backends\_asyncio.py", line 783, in __aexit__
+    |     raise BaseExceptionGroup(
+    | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+    +-+---------------- 1 ----------------
+      | Traceback (most recent call last):
+      |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 272, in _create_stdio_session
+      |     yield session
+      |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\sessions.py", line 458, in create_session
+      |     yield session
+      |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\langchain_mcp_adapters\client.py", line 149, in session
+      |     await session.initialize()
+      |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\client\session.py", line 171, in initialize
+      |     result = await self.send_request(
+      |              ^^^^^^^^^^^^^^^^^^^^^^^^
+      |   File "C:\Users\DhayalanPanneerselva\AppData\Roaming\Python\Python312\site-packages\mcp\shared\session.py", line 306, in send_request
+      |     raise McpError(response_or_error.error)
+      | mcp.shared.exceptions.McpError: Connection closed
+      +------------------------------------
+2026-06-27 12:35:07 | ERROR    | sciparser | Error in process_message: MCP Server failed to start: unhandled errors in a TaskGroup (1 sub-exception) (Sub-errors: unhandled errors in a TaskGroup (1 sub-exception))
+2026-06-27 12:35:07 | ERROR    | sciparser | Error in process_message: MCP Server failed to start: unhandled errors in a TaskGroup (1 sub-exception) (Sub-errors: unhandled errors in a TaskGroup (1 sub-exception))
+2026-06-27 12:35:07 | WARNING  | sciparser | Detected anyio TaskGroup error, attempting to extract root cause.
+2026-06-27 12:35:07 | WARNING  | sciparser | Detected anyio TaskGroup error, attempting to extract root cause.
+2026-06-27 12:35:07 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: MCP Server failed to start: unhandled errors in a TaskGroup (1 sub-exception) (Sub-errors: unhandled errors in a TaskGroup (1 sub-exception))
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 183, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: MCP Server failed to start: unhandled errors in a TaskGroup (1 sub-exception) (Sub-errors: unhandled errors in a TaskGroup (1 sub-exception))
+2026-06-27 12:35:07 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: MCP Server failed to start: unhandled errors in a TaskGroup (1 sub-exception) (Sub-errors: unhandled errors in a TaskGroup (1 sub-exception))
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 183, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: MCP Server failed to start: unhandled errors in a TaskGroup (1 sub-exception) (Sub-errors: unhandled errors in a TaskGroup (1 sub-exception))
+2026-06-27 12:37:23 | INFO     | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] MCP manager closed.
+2026-06-27 12:37:23 | INFO     | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] MCP manager closed.
+2026-06-27 12:37:23 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-27 12:37:23 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-27 12:37:53 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-27 12:37:53 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-27 12:37:53 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-27 12:37:53 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-27 12:37:53 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-27 12:37:53 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-27 12:37:53 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-27 12:37:53 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-27 12:37:53 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-27 12:37:53 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-27 12:37:53 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-27 12:37:53 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-27 12:37:53 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-27 12:37:53 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-27 12:37:55 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-27 12:37:55 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-27 12:38:14 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 12:38:15 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-27 12:38:15 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-27 12:38:15 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server connecting to http://localhost:49273...
+2026-06-27 12:38:32 | INFO     | src.agents.mcp_agent | >>> MCP Session Ready. 16 tools active.
+2026-06-27 12:38:32 | INFO     | sciparser | Discovered 17 tools for execution.
+2026-06-27 12:38:32 | INFO     | sciparser | Discovered 17 tools for execution.
+2026-06-27 12:38:32 | INFO     | sciparser | Starting live preview stream for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04, chat thread-a6208947-fac9-4e56-9625-19f80852bbcc
+2026-06-27 12:38:32 | INFO     | sciparser | Starting live preview stream for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04, chat thread-a6208947-fac9-4e56-9625-19f80852bbcc
+2026-06-27 12:38:32 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-06-27 12:38:32 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-06-27 12:38:34 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 12:38:40 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 12:38:53 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 12:38:55 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 12:38:58 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 12:39:00 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 12:39:03 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 12:39:06 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 12:39:08 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 12:39:14 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 12:39:16 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 12:39:23 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 12:39:25 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 12:39:28 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 12:39:31 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 12:39:33 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 12:39:35 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 12:39:38 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 12:39:42 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 12:39:48 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 12:39:49 | ERROR    | sciparser | Error in process_message: 'tool_calls' is an invalid keyword argument for Message
+2026-06-27 12:39:49 | ERROR    | sciparser | Error in process_message: 'tool_calls' is an invalid keyword argument for Message
+2026-06-27 12:39:50 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: 'tool_calls' is an invalid keyword argument for Message
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 183, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: 'tool_calls' is an invalid keyword argument for Message
+2026-06-27 12:39:50 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: 'tool_calls' is an invalid keyword argument for Message
+Traceback (most recent call last):
+  File "d:\Project\SciParser\Backend\src\main.py", line 183, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: 'tool_calls' is an invalid keyword argument for Message
+2026-06-27 13:01:49 | INFO     | src.agents.mcp_agent | >>> Closing MCP Session for http://localhost:49273...
+2026-06-27 13:01:51 | ERROR    | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] Error closing MCP manager: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-27 13:01:51 | ERROR    | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] Error closing MCP manager: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-27 13:01:51 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-27 13:01:51 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-27 13:02:28 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-27 13:02:28 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-27 13:02:28 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-27 13:02:28 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-27 13:02:28 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-27 13:02:28 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-27 13:02:28 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-27 13:02:28 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-27 13:02:28 | INFO     | sciparser | Adding missing 'tool_calls' column to messages table...
+2026-06-27 13:02:28 | INFO     | sciparser | Adding missing 'tool_calls' column to messages table...
+2026-06-27 13:02:28 | INFO     | sciparser | Successfully added 'tool_calls' column.
+2026-06-27 13:02:28 | INFO     | sciparser | Successfully added 'tool_calls' column.
+2026-06-27 13:02:28 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-27 13:02:28 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-27 13:02:28 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-27 13:02:28 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-27 13:02:28 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-27 13:02:28 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-27 13:02:30 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-27 13:02:30 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-27 13:02:44 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:02:45 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-27 13:02:45 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-27 13:02:45 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server connecting to http://localhost:52166...
+2026-06-27 13:02:48 | INFO     | src.agents.mcp_agent | >>> MCP Session Ready. 16 tools active.
+2026-06-27 13:02:48 | INFO     | sciparser | Discovered 17 tools for execution.
+2026-06-27 13:02:48 | INFO     | sciparser | Discovered 17 tools for execution.
+2026-06-27 13:02:48 | INFO     | sciparser | Starting live preview stream for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04, chat thread-a6208947-fac9-4e56-9625-19f80852bbcc
+2026-06-27 13:02:48 | INFO     | sciparser | Starting live preview stream for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04, chat thread-a6208947-fac9-4e56-9625-19f80852bbcc
+2026-06-27 13:02:49 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-06-27 13:02:49 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-06-27 13:02:50 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:02:57 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:03:13 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:03:16 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:03:19 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:03:21 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:03:23 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:03:26 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:03:27 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:03:30 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:03:32 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:03:37 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:03:42 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:03:45 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:03:51 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:03:54 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:03:59 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:04:08 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:04:11 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:04:15 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:04:19 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:04:26 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:04:29 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:04:34 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:04:37 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:04:40 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:04:52 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 13:05:17 | INFO     | sciparser | Cancellation signal sent to task for chat_id thread-a6208947-fac9-4e56-9625-19f80852bbcc
+2026-06-27 13:05:17 | INFO     | sciparser | Cancellation signal sent to task for chat_id thread-a6208947-fac9-4e56-9625-19f80852bbcc
+2026-06-27 13:05:17 | INFO     | src.agents.mcp_agent | >>> Closing MCP Session for http://localhost:52166...
+2026-06-27 13:05:19 | ERROR    | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] Error closing MCP manager: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-27 13:05:19 | ERROR    | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] Error closing MCP manager: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-27 13:05:19 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-27 13:05:19 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-27 13:05:19 | INFO     | sciparser | Browser session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 closed via stop_process.
+2026-06-27 13:05:19 | INFO     | sciparser | Browser session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 closed via stop_process.
+2026-06-27 14:23:29 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-27 14:23:29 | INFO     | sciparser | Connecting to MySQL server to create database 'sciparser_v1'...
+2026-06-27 14:23:29 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-27 14:23:29 | INFO     | sciparser | Database 'sciparser_v1' checked/created successfully.
+2026-06-27 14:23:29 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-27 14:23:29 | INFO     | sciparser | Creating tables in database 'sciparser_v1'...
+2026-06-27 14:23:29 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-27 14:23:29 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-27 14:23:29 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-27 14:23:29 | INFO     | sciparser | Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...
+2026-06-27 14:23:29 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-27 14:23:29 | INFO     | sciparser | Successfully updated 'tool_output' column.
+2026-06-27 14:23:29 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-27 14:23:29 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-27 14:23:32 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-27 14:23:32 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-27 14:28:23 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 14:28:23 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-27 14:28:23 | INFO     | sciparser | Preparing MCP manager for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04...
+2026-06-27 14:28:23 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server connecting to http://localhost:49579...
+2026-06-27 14:28:29 | INFO     | src.agents.mcp_agent | >>> MCP Session Ready. 16 tools active.
+2026-06-27 14:28:29 | INFO     | sciparser | Discovered 17 tools for execution.
+2026-06-27 14:28:29 | INFO     | sciparser | Discovered 17 tools for execution.
+2026-06-27 14:28:29 | INFO     | sciparser | Starting live preview stream for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04, chat thread-a6208947-fac9-4e56-9625-19f80852bbcc
+2026-06-27 14:28:29 | INFO     | sciparser | Starting live preview stream for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04, chat thread-a6208947-fac9-4e56-9625-19f80852bbcc
+2026-06-27 14:28:29 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-06-27 14:28:29 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-06-27 14:28:31 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 14:28:37 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 14:28:48 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 14:28:50 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 14:28:53 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 14:28:55 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 14:28:58 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 14:29:09 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 14:29:12 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 14:29:21 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-27 14:39:32 | INFO     | src.agents.mcp_agent | >>> Closing MCP Session for http://localhost:49579...
+2026-06-27 14:39:34 | ERROR    | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] Error closing MCP manager: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-27 14:39:34 | ERROR    | sciparser | [User b149b4c4-20a1-4f4b-9fd6-1b634d876f04] Error closing MCP manager: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-27 14:39:34 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.
+2026-06-27 14:39:34 | INFO     | sciparser | Session for user b149b4c4-20a1-4f4b-9fd6-1b634d876f04 fully cleaned up.

@@ -4,26 +4,7 @@ import { NotFound } from "./components/ui/ghost-404-page";
 import { Signup1 } from "./components/ui/signup-1";
 import { motion } from "framer-motion";
 import { sciparserApi } from "./api";
-
-// Create context to coordinate theme across all components
-interface ThemeContextType {
-  theme: "light" | "dark";
-  setTheme: (theme: "light" | "dark") => void;
-  toggleTheme: () => void;
-}
-
-export const ThemeContext = React.createContext<ThemeContextType | undefined>(undefined);
-
-export function useTheme() {
-  const context = React.useContext(ThemeContext);
-  if (!context) {
-    const rootTheme = typeof window !== "undefined"
-      ? (window.document.documentElement.getAttribute("data-theme") as "light" | "dark" || "light")
-      : "light";
-    return { theme: rootTheme, setTheme: () => {}, toggleTheme: () => {} };
-  }
-  return context;
-}
+import { useTheme } from "./contexts/ThemeContext";
 
 const customBezier: [number, number, number, number] = [0.43, 0.13, 0.23, 0.96];
 
@@ -42,19 +23,7 @@ const containerVariants = {
 };
 
 export default function App() {
-  const [theme, setTheme] = React.useState<"light" | "dark">(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("theme");
-      if (stored === "light" || stored === "dark") return stored;
-      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    }
-    return "light";
-  });
-
-  const toggleTheme = React.useCallback(() => {
-    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
-  }, []);
-
+  const { theme } = useTheme();
   const [isLoggedIn, setIsLoggedIn] = React.useState(false);
   const [hasError, setHasError] = React.useState<string>("");  // ← Changed from false to ""
   const [isLoading, setIsLoading] = React.useState(true);
@@ -108,45 +77,10 @@ export default function App() {
       root.classList.remove("dark");
       root.setAttribute("data-theme", "light");
     }
-    localStorage.setItem("theme", theme);
-  }, [theme]);
-
-  // Handle systemic preferences change instantly
-  React.useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const handleChange = (e: MediaQueryListEvent) => {
-      const stored = localStorage.getItem("theme");
-      if (!stored) {
-        setTheme(e.matches ? "dark" : "light");
-      }
-    };
-    mediaQuery.addEventListener("change", handleChange);
-    return () => mediaQuery.removeEventListener("change", handleChange);
-  }, []);
-
-  // Set up MutationObserver to ensure the React state is always perfectly synchronized 
-  // with any programmatically changed data-theme values on the root document element.
-  React.useEffect(() => {
-    const root = window.document.documentElement;
-    const observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        if (mutation.attributeName === "data-theme") {
-          const val = root.getAttribute("data-theme");
-          if (val === "dark" || val === "light") {
-            if (val !== theme) {
-              setTheme(val);
-            }
-          }
-        }
-      }
-    });
-    observer.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
-    return () => observer.disconnect();
   }, [theme]);
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
-      <motion.div initial="hidden" animate="visible" variants={containerVariants}>
+    <motion.div initial="hidden" animate="visible" variants={containerVariants}>
         {isLoading ? (
           <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
@@ -164,11 +98,11 @@ export default function App() {
             window.location.reload();
           }} />
         ) : isLoggedIn ? (
-          <div className="w-screen h-screen flex flex-col font-sans selection:bg-indigo-500 selection:text-white overflow-hidden bg-white text-slate-900 dark:bg-[#212121] dark:text-slate-100 transition-colors duration-300">
+          <div className="w-screen h-screen flex flex-col font-sans selection:bg-indigo-500 selection:text-white overflow-hidden bg-background text-foreground transition-colors duration-300">
             <ChatPage onLoginStateChange={(status) => setIsLoggedIn(!!status)} />
           </div>
         ) : (
-          <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 flex flex-col items-center justify-center p-2 sm:p-6 font-sans selection:bg-indigo-500 selection:text-white transition-colors duration-300">
+          <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-2 sm:p-6 font-sans selection:bg-indigo-500 selection:text-white transition-colors duration-300">
             <Signup1 
               isLoginMode={isLoginMode}
               onToggleMode={() => setIsLoginMode(!isLoginMode)}
@@ -208,7 +142,6 @@ export default function App() {
           </div>
         )}
       </motion.div>
-    </ThemeContext.Provider>
   );
 }
 

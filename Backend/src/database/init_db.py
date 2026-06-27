@@ -55,6 +55,21 @@ async def migrate_tables(conn):
             await conn.execute(text("ALTER TABLE messages ADD COLUMN plan_data TEXT"))
             logger.info("Successfully added 'plan_data' column.")
 
+        # Check if tool_calls column exists in messages
+        result = await conn.execute(text("""
+            SELECT COUNT(*) 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'messages' 
+            AND COLUMN_NAME = 'tool_calls'
+        """))
+        tool_calls_exists = result.scalar() > 0
+        
+        if not tool_calls_exists:
+            logger.info("Adding missing 'tool_calls' column to messages table...")
+            await conn.execute(text("ALTER TABLE messages ADD COLUMN tool_calls TEXT"))
+            logger.info("Successfully added 'tool_calls' column.")
+
         # Check if form_data column exists in messages
         result = await conn.execute(text("""
             SELECT COUNT(*) 
@@ -136,6 +151,44 @@ async def migrate_tables(conn):
         logger.info("Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...")
         await conn.execute(text("ALTER TABLE tool_execution_logs MODIFY COLUMN tool_output LONGTEXT"))
         logger.info("Successfully updated 'tool_output' column.")
+
+        # --- Token Usage and Cost Migrations ---
+        
+        # Check if token_usage column exists in messages
+        result = await conn.execute(text("""
+            SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'messages' AND COLUMN_NAME = 'token_usage'
+        """))
+        if result.scalar() == 0:
+            logger.info("Adding 'token_usage' column to messages...")
+            await conn.execute(text("ALTER TABLE messages ADD COLUMN token_usage TEXT"))
+
+        # Check if cost column exists in messages
+        result = await conn.execute(text("""
+            SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'messages' AND COLUMN_NAME = 'cost'
+        """))
+        if result.scalar() == 0:
+            logger.info("Adding 'cost' column to messages...")
+            await conn.execute(text("ALTER TABLE messages ADD COLUMN cost TEXT"))
+
+        # Check if token_usage column exists in agent_execution_logs
+        result = await conn.execute(text("""
+            SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'agent_execution_logs' AND COLUMN_NAME = 'token_usage'
+        """))
+        if result.scalar() == 0:
+            logger.info("Adding 'token_usage' column to agent_execution_logs...")
+            await conn.execute(text("ALTER TABLE agent_execution_logs ADD COLUMN token_usage TEXT"))
+
+        # Check if cost column exists in agent_execution_logs
+        result = await conn.execute(text("""
+            SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'agent_execution_logs' AND COLUMN_NAME = 'cost'
+        """))
+        if result.scalar() == 0:
+            logger.info("Adding 'cost' column to agent_execution_logs...")
+            await conn.execute(text("ALTER TABLE agent_execution_logs ADD COLUMN cost TEXT"))
             
     except Exception as e:
         logger.warning(f"Migration check encountered an issue (may be expected): {e}")

@@ -29,18 +29,27 @@ class MCPToolManager:
         # This ensures the browser is launched with the correct CDP port and config
         bridge_path = os.path.join(os.path.dirname(__file__), "browser_use_bridge.py")
         
+        # Create a unique user data directory for this user/session to ensure isolation
+        # and prevent "two browsers" or profile lock issues.
+        base_temp_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "temp"))
+        user_data_dir = os.path.join(base_temp_dir, f"user_{port}")
+        os.makedirs(user_data_dir, exist_ok=True)
+
         self.config = config or {
             "browser-use": {
                 "command": "python",
                 "args": [bridge_path],
                 "env": {
                     **os.environ,
+                    "PYTHONPATH": os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")),
                     "OPENAI_API_KEY": os.getenv("OPENROUTER_API_KEY", ""),
                     "OPENAI_BASE_URL": "https://openrouter.ai/api/v1",
                     "OPENAI_API_BASE": "https://openrouter.ai/api/v1",
                     "BROWSER_USE_MODEL": "google/gemini-3-flash-preview",
                     "MCP_BROWSER_CDP_URL": self.cdp_url,
+                    "BROWSER_CDP_URL": self.cdp_url, # Standard env var for some MCP servers
                     "BROWSER_USE_CDP_PORT": str(port) if port else "9222",
+                    "BROWSER_USER_DATA_DIR": user_data_dir, # Pass unique profile dir
                     "MCP_BROWSER_USE_OWN_BROWSER": "true",
                     "BROWSER_USE_HEADLESS": os.getenv("BROWSER_USE_HEADLESS", "false"),
                     "BROWSER_USE_DISABLE_SECURITY": "true"
@@ -71,22 +80,31 @@ class MCPToolManager:
         all_tools = []
         try:
             for server_name in self.config:
-                # Initialize session for each configured server
-                session = await self.stack.enter_async_context(
-                    self.client.session(server_name, auto_initialize=True)
-                )
-                # Load tools from the session using the adapter helper
-                server_tools = await load_mcp_tools(session)
-                all_tools.extend(server_tools)
+                # Initialize session for each configured server with a timeout
+                try:
+                    async with asyncio.timeout(30): # 30 second timeout for server startup
+                        session = await self.stack.enter_async_context(
+                            self.client.session(server_name, auto_initialize=True)
+                        )
+                        # Load tools from the session using the adapter helper
+                        server_tools = await load_mcp_tools(session)
+                        all_tools.extend(server_tools)
+                except asyncio.TimeoutError:
+                    raise Exception(f"MCP Server '{server_name}' timed out during startup.")
             
             self._tools = all_tools
             self._initialized = True
             logger.info(f">>> MCP Session Ready. {len(self._tools)} tools active.")
         except Exception as e:
-            logger.error(f">>> MCP Initialization Failed: {e}")
+            logger.error(f">>> MCP Initialization Failed: {e}", exc_info=True)
+            # Unwrap ExceptionGroup if possible
+            error_msg = str(e)
+            if hasattr(e, 'exceptions') and e.exceptions:
+                error_msg = f"{error_msg} (Sub-errors: {', '.join([str(ex) for ex in e.exceptions])})"
+            
             await self.stack.aclose()
             self._initialized = False
-            raise
+            raise Exception(f"MCP Server failed to start: {error_msg}")
 
     async def get_tools(self) -> List[BaseTool]:
         if not self._initialized:

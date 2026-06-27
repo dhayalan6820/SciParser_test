@@ -302,6 +302,20 @@ REFINED PROMPT:
 [A precise instruction to fix the specific diagnostic issue. Focus on UNBLOCKING the UI first.]
 """
 
+PROMPT_6_CONTEXT_SUMMARIZER = """
+You are a Context Compression Agent. Your job is to summarize a long browser execution history into a concise, logic-preserving summary.
+
+## GOAL
+Reduce the token count while keeping:
+1. The original user intent.
+2. Key milestones achieved (e.g., "Successfully logged in", "Reached the checkout page").
+3. Critical failures and their causes.
+4. Current page state summary.
+
+## OUTPUT
+Provide a structured summary that an automation agent can use to continue the task without needing the full raw logs.
+"""
+
 class ATAGProcessor:
     """Processes user requests using a decoupled multi-step pipeline.
 
@@ -392,6 +406,21 @@ class ATAGProcessor:
         response = await self.llm.ainvoke([SystemMessage(content=formatted_prompt)])
         return response.content
 
+    async def summarize_context(self, history: List[Dict[str, Any]], current_page: str) -> str:
+        """Summarizes the execution history and page state when tokens are near limit."""
+        history_str = json.dumps(history, indent=2)
+        formatted_prompt = PROMPT_6_CONTEXT_SUMMARIZER + f"\n\nRAW HISTORY:\n{history_str}\n\nCURRENT PAGE (TRUNCATED):\n{current_page[:5000]}"
+        # Gemini requires a HumanMessage if SystemMessage is used in some contexts
+        response = await self.llm.ainvoke([
+            SystemMessage(content="You are a helpful assistant."),
+            HumanMessage(content=formatted_prompt)
+        ])
+        return response.content
+
+    def _estimate_tokens(self, text: str) -> int:
+        """Rough estimation of token count (4 chars per token)."""
+        return len(text) // 4
+
     def _self_check_code(self, code: str) -> tuple[bool, str]:
         """Validates Python syntax of the generated code."""
         try:
@@ -400,42 +429,65 @@ class ATAGProcessor:
         except Exception as e:
             return False, str(e)
 
-    async def run_script_generation(self, task_summary: str, execution_history: List[Dict[str, Any]]) -> str:
-        """Generates a production-ready Playwright script based on the execution history."""
+    async def run_script_generation(self, task_summary: str, execution_history: List[Dict[str, Any]], framework: str = "playwright") -> str:
+        """Generates a production-ready script based on the execution history using the specified framework."""
         
-        SYSTEM_PROMPT = """
-        You are a Senior Python Automation Engineer specializing in Playwright.
+        if framework == "playwright":
+            SYSTEM_PROMPT = """
+            You are a Senior Python Automation Engineer specializing in Playwright.
 
-        TASK:
-        Convert browser execution traces into a COMPLETE, EXECUTABLE, PRODUCTION-READY Python Playwright script.
+            TASK:
+            Convert browser execution traces into a COMPLETE, EXECUTABLE, PRODUCTION-READY Python Playwright script.
 
-        OUTPUT RULES (ABSOLUTE)
-        * Return ONLY raw Python code.
-        * Do NOT use markdown.
-        * Do NOT use ```python blocks.
-        * Do NOT provide explanations or notes.
-        * Script must be directly runnable.
+            OUTPUT RULES (ABSOLUTE)
+            * Return ONLY raw Python code.
+            * Do NOT use markdown.
+            * Do NOT use ```python blocks.
+            * Do NOT provide explanations or notes.
+            * Script must be directly runnable.
 
-        SCRIPT REQUIREMENTS:
-        * All imports (asyncio, json, playwright, pathlib).
-        * Helper functions (e.g., get_downloads_dir).
-        * main() function returning the final result.
-        * asyncio.run(main()) at the end.
-        * Robust error handling (try/except/finally).
-        * Data extraction logic returning structured JSON.
-        * If result is large, save to 'extracted_data.json' in Downloads.
+            PARALLEL EXECUTION REQUIREMENTS:
+            * Use a UNIQUE temporary user_data_dir for every run to avoid profile locks.
+            * Use a random available port for remote debugging if needed.
+            * Ensure the script is HEADLESS by default for server-side parallel runs.
 
-        PLAYWRIGHT CONFIGURATION:
-        * browser = await p.chromium.launch(headless=False, args=["--start-maximized"], timeout=60000)
-        * context = await browser.new_context(no_viewport=True)
-        * page = await context.new_page()
-        * page.set_default_timeout(60000)
+            SCRIPT REQUIREMENTS:
+            * All imports (asyncio, json, playwright, pathlib, tempfile).
+            * Helper functions (e.g., get_downloads_dir).
+            * main() function returning the final result.
+            * asyncio.run(main()) at the end.
+            * Robust error handling (try/except/finally).
+            * Data extraction logic returning structured JSON.
 
-        WAIT & SELECTOR STRATEGY:
-        * Use page.wait_for_load_state("domcontentloaded") after navigation.
-        * Use page.wait_for_selector(selector, timeout=60000) before interactions.
-        * Prefer role, label, and placeholder selectors over deep CSS/XPath.
-        """
+            PLAYWRIGHT CONFIGURATION:
+            * browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
+            * context = await browser.new_context()
+            * page = await context.new_page()
+            """
+        else:
+            SYSTEM_PROMPT = """
+            You are a Senior Python Automation Engineer specializing in the 'browser-use' library.
+
+            TASK:
+            Convert browser execution traces into a COMPLETE, EXECUTABLE Python script using 'browser-use'.
+
+            OUTPUT RULES (ABSOLUTE)
+            * Return ONLY raw Python code.
+            * Do NOT use markdown.
+            * Do NOT use ```python blocks.
+            * Do NOT provide explanations or notes.
+
+            SCRIPT REQUIREMENTS:
+            * All imports (asyncio, browser_use).
+            * Use Agent from browser_use.
+            * Use Controller if needed for custom actions.
+            * main() function returning the final result.
+            * asyncio.run(main()) at the end.
+
+            BROWSER-USE CONFIGURATION:
+            * Use the standard Agent(task=..., llm=...) pattern.
+            * The task should be derived from the user intent and execution trace.
+            """
 
         history_str = json.dumps(execution_history, indent=2)
         USER_PROMPT = f"""
@@ -443,7 +495,7 @@ class ATAGProcessor:
         EXECUTION TRACE (Tool Calls):
         {history_str}
 
-        Generate the script. Ensure every quote is paired, indentation is 4 spaces, and the browser lifecycle is correctly managed.
+        Generate the {framework} script. Ensure every quote is paired, indentation is 4 spaces, and the browser lifecycle is correctly managed.
         """
 
         # Initial generation
@@ -471,15 +523,5 @@ class ATAGProcessor:
             content = response.content.strip()
             content = re.sub(r"```(?:python)?\n?(.*?)\n?```", r"\1", content, flags=re.DOTALL)
 
-        # Ensure critical imports are present
-        required_imports = [
-            "import asyncio",
-            "import json",
-            "from pathlib import Path",
-            "from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError"
-        ]
-        missing_imports = [imp for imp in required_imports if imp not in content]
-        if missing_imports:
-            content = "\n".join(missing_imports) + "\n\n" + content
+        return content
 
-        return content.strip()

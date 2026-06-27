@@ -110,7 +110,10 @@ class Message(Base):
     content = Column(Text, nullable=False) # Changed to Text for long messages
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     plan_data = Column(Text) # Added to store the final agent plan
+    tool_calls = Column(Text) # Added to store tool execution summary
     form_data = Column(Text) # Added to store dynamic forms for NEEDS_INPUT status
+    token_usage = Column(Text) # JSON: {"input": int, "output": int, "total": int}
+    cost = Column(Text) # String or Float for cost tracking
     
     user: Mapped["User"] = relationship("User", back_populates="messages")
 
@@ -203,6 +206,8 @@ class AgentExecutionLog(Base):
     output_data = Column(Text)
     status = Column(String(20), default="PENDING")
     error_message = Column(Text)
+    token_usage = Column(Text) # JSON: {"input": int, "output": int, "total": int}
+    cost = Column(Text)
     created_at = Column(TIMESTAMP, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(TIMESTAMP, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 

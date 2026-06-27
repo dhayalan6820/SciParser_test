@@ -8,9 +8,13 @@ import {
   CircleDotDashed,
   CircleX,
   Sparkles,
-  Coins
+  Coins,
+  X
 } from "lucide-react";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
+
+import { useTheme } from "../../contexts/ThemeContext";
+import { cn } from "../../../lib/utils";
 
 // Type definitions
 export interface Subtask {
@@ -43,6 +47,7 @@ export interface Task {
 interface PlanProps {
   tasks?: Task[];
   thoughts?: string[];
+  onHide?: () => void;
 }
 
 // Initial task data for demo/default
@@ -124,8 +129,10 @@ const initialTasks: Task[] = [
   },
 ];
 
-export default function Plan({ tasks: propTasks, thoughts = [] }: PlanProps) {
+export default function Plan({ tasks: propTasks, thoughts = [], onHide }: PlanProps) {
+  const { theme } = useTheme();
   const [tasks, setTasks] = useState<Task[]>(propTasks || initialTasks);
+  const [isVisible, setIsVisible] = useState(true);
   
   useEffect(() => {
     if (propTasks) {
@@ -152,6 +159,14 @@ export default function Plan({ tasks: propTasks, thoughts = [] }: PlanProps) {
     typeof window !== 'undefined' 
       ? window.matchMedia('(prefers-reduced-motion: reduce)').matches 
       : false;
+
+  if (!isVisible) return null;
+
+  const handleHide = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsVisible(false);
+    if (onHide) onHide();
+  };
 
   // Toggle task expansion
   const toggleTaskExpansion = (taskId: string) => {
@@ -322,7 +337,7 @@ export default function Plan({ tasks: propTasks, thoughts = [] }: PlanProps) {
   return (
     <div className="bg-background text-foreground h-full overflow-auto p-2">
       <motion.div 
-        className="bg-card border-border rounded-lg border shadow overflow-hidden"
+        className="bg-card border-border rounded-xl border shadow-xl overflow-hidden relative"
         initial={{ opacity: 0, y: 10 }}
         animate={{ 
           opacity: 1, 
@@ -345,10 +360,10 @@ export default function Plan({ tasks: propTasks, thoughts = [] }: PlanProps) {
                     animate="visible"
                     variants={taskVariants}
                   >
-                    <motion.div 
-                      className="group flex items-center px-3 py-1.5 rounded-md"
-                      whileHover={{ backgroundColor: "rgba(0,0,0,0.03)", transition: { duration: 0.2 } }}
-                    >
+                      <motion.div 
+                        className="group flex items-center px-3 py-1.5 rounded-md"
+                        whileHover={{ backgroundColor: theme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)", transition: { duration: 0.2 } }}
+                      >
                       <motion.div
                         className="mr-2 flex-shrink-0 cursor-pointer"
                         onClick={(e) => {
@@ -386,13 +401,7 @@ export default function Plan({ tasks: propTasks, thoughts = [] }: PlanProps) {
                         onClick={() => toggleTaskExpansion(task.id)}
                       >
                         <div className="mr-2 flex-1 truncate">
-                          <span className={`${
-                            task.status === "completed" ? "text-green-600 dark:text-green-400" : 
-                            task.status === "failed" ? "text-red-600 dark:text-red-400" :
-                            task.status === "need-help" ? "text-yellow-600 dark:text-yellow-400" :
-                            task.status === "in-progress" ? "text-blue-600 dark:text-blue-400 font-medium" :
-                            ""
-                          }`}>
+                          <span className="text-sm font-bold text-foreground">
                             {task.title}
                             {task.status === "in-progress" && (
                               <motion.span 
@@ -426,13 +435,14 @@ export default function Plan({ tasks: propTasks, thoughts = [] }: PlanProps) {
                           )}
 
                           <motion.span
-                            className={`rounded px-1.5 py-0.5 ${
-                              task.status === "completed" ? "bg-green-100 text-green-700" :
-                              task.status === "in-progress" ? "bg-blue-100 text-blue-700" :
-                              task.status === "need-help" ? "bg-yellow-100 text-yellow-700" :
-                              task.status === "failed" ? "bg-red-100 text-red-700" :
+                            className={cn(
+                              "rounded px-1.5 py-0.5 font-bold uppercase text-[9px] tracking-wider",
+                              task.status === "completed" ? "bg-emerald-500/10 text-emerald-500" :
+                              task.status === "in-progress" ? "bg-blue-500/10 text-blue-500" :
+                              task.status === "need-help" ? "bg-yellow-500/10 text-yellow-500" :
+                              task.status === "failed" ? "bg-red-500/10 text-red-500" :
                               "bg-muted text-muted-foreground"
-                            }`}
+                            )}
                             variants={statusBadgeVariants}
                             initial="initial"
                             animate="animate"
@@ -441,11 +451,11 @@ export default function Plan({ tasks: propTasks, thoughts = [] }: PlanProps) {
                             {task.status}
                           </motion.span>
                           
-                          {task.token_usage && (
+                          {task.token_usage && typeof task.token_usage.cost === 'number' && (
                             <motion.div 
                               initial={{ opacity: 0, x: 5 }}
                               animate={{ opacity: 1, x: 0 }}
-                              className="flex items-center gap-1 bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded border border-indigo-100"
+                              className="flex items-center gap-1 bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded border border-emerald-500/20"
                             >
                               <Coins className="w-3 h-3" />
                               <span className="font-bold">${task.token_usage.cost.toFixed(4)}</span>
@@ -468,9 +478,9 @@ export default function Plan({ tasks: propTasks, thoughts = [] }: PlanProps) {
                           <div className="absolute top-0 bottom-0 left-[20px] border-l-2 border-dashed border-muted-foreground/30" />
                           
                           {/* Thoughts List - Now with better "Step-by-Step" styling */}
-                          {task.status === "in-progress" && thoughts.length > 0 && (
-                            <div className="ml-8 mt-2 mb-4 space-y-2 border-l-2 border-indigo-500/20 pl-4">
-                              <div className="flex items-center gap-2 text-[10px] font-bold text-indigo-500 uppercase tracking-widest mb-2">
+                          {thoughts.length > 0 && (
+                            <div className="ml-8 mt-2 mb-4 space-y-2 border-l-2 border-emerald-500/20 pl-4">
+                              <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-500 uppercase tracking-widest mb-2">
                                 <Sparkles className="w-3 h-3 animate-pulse" />
                                 Execution Logic
                               </div>
@@ -480,12 +490,19 @@ export default function Plan({ tasks: propTasks, thoughts = [] }: PlanProps) {
                                     key={idx}
                                     initial={{ opacity: 0, x: -10 }}
                                     animate={{ opacity: 1, x: 0 }}
-                                    className="text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-white/5 p-2.5 rounded-lg border border-slate-100 dark:border-white/10 leading-relaxed shadow-sm"
+                                    className="text-xs text-foreground/90 bg-muted/50 p-2.5 rounded-lg border border-border leading-relaxed shadow-sm"
                                   >
                                     {thought}
                                   </motion.div>
                                 ))}
                               </div>
+                            </div>
+                          )}
+
+                          {/* Task Details (if any) */}
+                          {task.details && (
+                            <div className="ml-8 mb-4 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/10 text-xs text-foreground/80 italic">
+                              {task.details}
                             </div>
                           )}
 
@@ -544,13 +561,7 @@ export default function Plan({ tasks: propTasks, thoughts = [] }: PlanProps) {
                                       </AnimatePresence>
                                     </motion.div>
 
-                                    <span className={`cursor-pointer text-sm ${
-                                      subtask.status === "completed" ? "text-green-600 dark:text-green-400" : 
-                                      subtask.status === "failed" ? "text-red-600 dark:text-red-400" :
-                                      subtask.status === "need-help" ? "text-yellow-600 dark:text-yellow-400" :
-                                      subtask.status === "in-progress" ? "text-blue-600 dark:text-blue-400 font-medium" :
-                                      ""
-                                    }`}>
+                                    <span className="cursor-pointer text-sm text-foreground font-medium">
                                       {subtask.title}
                                       {subtask.status === "in-progress" && (
                                         <motion.span 

@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Button } from "./button";
 import { sciparserApi } from "../../api";
-import { useTheme } from "../../App";
+import { useTheme } from "../../contexts/ThemeContext";
 import { cn } from "../../../lib/utils";
 import { 
   Calendar, Clock, Code, Play, Pencil, Trash, 
@@ -118,16 +118,16 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-slate-50 dark:bg-[#0f0f11] overflow-hidden">
+    <div className="flex flex-col h-full w-full bg-background overflow-hidden">
       {/* Header */}
-      <div className="h-16 border-b border-slate-200 dark:border-[#232329] bg-white dark:bg-[#16161a] px-6 flex items-center justify-between shrink-0">
+      <div className="h-16 border-b border-border bg-card px-6 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={onBack} className="rounded-full">
             <ChevronLeft className="w-5 h-5" />
           </Button>
           <div>
-            <h1 className="text-lg font-bold tracking-tight">Automation Schedules</h1>
-            <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Manage your recurring browser tasks</p>
+            <h1 className="text-lg font-bold tracking-tight text-foreground">Automation Schedules</h1>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Manage your recurring browser tasks</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -140,20 +140,20 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
 
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar - Schedule List */}
-        <div className="w-80 border-r border-slate-200 dark:border-[#232329] bg-white dark:bg-[#16161a] flex flex-col shrink-0">
-          <div className="p-4 border-b border-slate-100 dark:border-white/5">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Your Schedules</div>
+        <div className="w-80 border-r border-border bg-card flex flex-col shrink-0">
+          <div className="p-4 border-b border-border">
+            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Your Schedules</div>
           </div>
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
             {loading ? (
               <div className="flex flex-col items-center justify-center h-40 gap-3">
                 <div className="w-6 h-6 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
-                <span className="text-xs text-slate-400">Loading...</span>
+                <span className="text-xs text-muted-foreground">Loading...</span>
               </div>
             ) : schedules.length === 0 ? (
               <div className="p-8 text-center space-y-3">
-                <Calendar className="w-8 h-8 text-slate-300 mx-auto" />
-                <p className="text-xs text-slate-400">No schedules found. Create one from the chat!</p>
+                <Calendar className="w-8 h-8 text-muted-foreground mx-auto" />
+                <p className="text-xs text-muted-foreground">No schedules found. Create one from the chat!</p>
               </div>
             ) : (
               schedules.map((s) => (
@@ -164,12 +164,12 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                     "p-3 rounded-xl cursor-pointer transition-all border",
                     selectedSchedule?.schedule_id === s.schedule_id
                       ? "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-500/30"
-                      : "bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-white/5"
+                      : "bg-transparent border-transparent hover:bg-muted"
                   )}
                 >
-                  <div className="font-bold text-sm truncate mb-1">{s.title}</div>
-                  <div className="flex items-center gap-2 text-[10px] text-slate-500">
-                    <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/10 uppercase font-bold tracking-tighter">
+                  <div className="font-bold text-sm truncate mb-1 text-foreground">{s.title}</div>
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                    <span className="px-1.5 py-0.5 rounded bg-muted uppercase font-bold tracking-tighter">
                       {s.schedule_type}
                     </span>
                     <span>•</span>
@@ -182,7 +182,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
         </div>
 
         {/* Main Content - Details */}
-        <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-[#0f0f11] p-8">
+        <div className="flex-1 overflow-y-auto bg-background p-8">
           {selectedSchedule ? (
             <motion.div 
               initial={{ opacity: 0, y: 10 }}
@@ -192,8 +192,8 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
               {/* Title & Actions */}
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
-                  <h2 className="text-2xl font-bold tracking-tight">{selectedSchedule.title}</h2>
-                  <div className="flex items-center gap-4 text-sm text-slate-500">
+                  <h2 className="text-2xl font-bold tracking-tight text-foreground">{selectedSchedule.title}</h2>
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
                     <div className="flex items-center gap-1.5">
                       <Mail className="w-4 h-4" />
                       <span>{selectedSchedule.email_recipient}</span>

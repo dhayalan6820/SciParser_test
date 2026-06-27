@@ -40,7 +40,7 @@ from src.services.ATAG import (
 class DatabaseManager:
     """Manages transaction-scoped database operations securely to prevent locking connection pools."""
     
-    async def log_agent_execution(self, user_id: str, chat_id: str, stage: str, name: str, status: str, input_data: Any = None, output_data: Any = None, error: str = None):
+    async def log_agent_execution(self, user_id: str, chat_id: str, stage: str, name: str, status: str, input_data: Any = None, output_data: Any = None, error: str = None, token_usage: Dict[str, int] = None, cost: float = None):
         async with AsyncSessionLocal() as db:
             try:
                 log = AgentExecutionLog(
@@ -51,7 +51,9 @@ class DatabaseManager:
                     status=status,
                     input_data=json.dumps(input_data) if input_data else None,
                     output_data=json.dumps(output_data) if output_data else None,
-                    error_message=error
+                    error_message=error,
+                    token_usage=json.dumps(token_usage) if token_usage else None,
+                    cost=str(cost) if cost is not None else None
                 )
                 db.add(log)
                 await db.commit()
@@ -145,7 +147,7 @@ class Brain:
         
         # Specialized model for code generation
         self.code_llm = ChatOpenAI(
-            model="moonshotai/kimi-k2.7-code",
+            model="google/gemini-3-flash-preview",
             openai_api_key=os.getenv("OPENROUTER_API_KEY"),
             base_url="https://openrouter.ai/api/v1",
             temperature=0.1,
@@ -159,26 +161,66 @@ class Brain:
         self.initialized = True
         logger.info("Multi-agent orchestrator initialization complete.")
 
-    async def _stream_browser_frames(self, user_id: str, tools: List[BaseTool], stop_event: asyncio.Event):
-        """Background task to poll for browser screenshots during execution."""
+    async def _stream_browser_frames(self, user_id: str, chat_id: str, tools: List[BaseTool], stop_event: asyncio.Event):
+        """Background task to poll for browser screenshots during execution for a specific chat."""
         state_tool = next((t for t in tools if t.name == "browser_get_state"), None)
         if not state_tool:
             logger.warning("browser_get_state tool not found, live preview disabled.")
             return
             
-        logger.info(f"Starting live preview stream for user {user_id}")
+        logger.info(f"Starting live preview stream for user {user_id}, chat {chat_id}")
         while not stop_event.is_set():
             try:
                 # Get screenshot via MCP tool
-                res = await state_tool.ainvoke({"include_screenshot": True})
-                if "[SCREENSHOT]" in str(res):
-                    match = re.search(r'\[SCREENSHOT\](.*?)\s*\[/SCREENSHOT\]', str(res), re.DOTALL)
-                    if match and self.stream_manager:
-                        await self.stream_manager.broadcast_frame(match.group(1).strip(), user_id)
+                # We pass chat_id to the tool so the MCP server knows which tab to capture
+                res = await state_tool.ainvoke({"include_screenshot": True, "chat_id": chat_id})
+                
+                screenshot_data = None
+                res_str = str(res)
+                
+                # 1. Try to find [SCREENSHOT] tags in the string representation
+                if "[SCREENSHOT]" in res_str:
+                    match = re.search(r'\[SCREENSHOT\](.*?)\s*\[/SCREENSHOT\]', res_str, re.DOTALL)
+                    if match:
+                        screenshot_data = match.group(1).strip()
+                
+                # 2. If not found, and res is a list, look for an image block or data field
+                if not screenshot_data and isinstance(res, list):
+                    for block in res:
+                        if isinstance(block, dict):
+                            # Some MCP servers return type: image
+                            if block.get("type") == "image" and block.get("data"):
+                                screenshot_data = block["data"]
+                                break
+                            # Others might return a text block with the screenshot
+                            elif block.get("type") == "text" and "[SCREENSHOT]" in block.get("text", ""):
+                                match = re.search(r'\[SCREENSHOT\](.*?)\s*\[/SCREENSHOT\]', block["text"], re.DOTALL)
+                                if match:
+                                    screenshot_data = match.group(1).strip()
+                                    break
+                
+                if screenshot_data and self.stream_manager:
+                    # Broadcast with chat_id so frontend can route correctly
+                    await self.stream_manager.broadcast_frame(
+                        json.dumps({"chat_id": chat_id, "frame": screenshot_data}), 
+                        user_id
+                    )
             except Exception as e:
-                # Silently ignore polling errors to not disrupt the main agent
-                pass
-            await asyncio.sleep(0.8) # Poll every 800ms to balance live feel and performance
+                logger.error(f"Error in browser frame stream: {e}")
+            await asyncio.sleep(1.5) # Lowered frame rate for parallel stability as requested
+
+    def _calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
+        """Calculates the cost of an LLM call based on OpenRouter pricing (approximate)."""
+        # Pricing per 1M tokens (approximate for Gemini 3 Flash Preview)
+        prices = {
+            "google/gemini-3-flash-preview": {"input": 0.1, "output": 0.4},
+            "moonshotai/kimi-k2.7-code": {"input": 0.5, "output": 1.5},
+            "default": {"input": 0.1, "output": 0.4}
+        }
+        
+        p = prices.get(model, prices["default"])
+        cost = (input_tokens / 1_000_000 * p["input"]) + (output_tokens / 1_000_000 * p["output"])
+        return round(cost, 6)
 
     async def _execute_tool_graph(self, graph_input: Dict[str, Any], tools: List[BaseTool], user_id: str, chat_id: str, task_summary: str, confirmed_inputs: Dict[str, Any], update_ui_func=None) -> Dict[str, Any]:
         """Executes a LangGraph tool-calling graph for the given input and tools."""
@@ -240,11 +282,49 @@ class Brain:
             
             # Ensure system message is always at the start and not duplicated
             current_messages = list(messages)
-            if not any(isinstance(m, SystemMessage) for m in current_messages):
-                current_messages.insert(0, SystemMessage(content=system_message_content))
             
+            # --- NEW: Token Management & Summarization (80% Rule) ---
+            full_text = "".join([m.content for m in current_messages if isinstance(m.content, str)])
+            estimated_tokens = self.atag_processor._estimate_tokens(full_text)
+            
+            if estimated_tokens > 600000:
+                logger.info(f"Token count ({estimated_tokens}) reached limit in tool graph. Summarizing history...")
+                # Summarize the history (excluding the system message)
+                summary = await self.atag_processor.summarize_context(execution_history, "History summarized due to token limit.")
+                
+                # Replace history with a single summary message
+                # We keep the system message and the last user message if possible
+                summary_msg = HumanMessage(content=f"SUMMARY OF PREVIOUS ACTIONS:\n{summary}")
+                
+                # Reconstruct messages: [System, Summary, Last User Message]
+                new_history = []
+                system_msg = next((m for m in current_messages if isinstance(m, SystemMessage)), None)
+                if system_msg: new_history.append(system_msg)
+                else: new_history.append(SystemMessage(content=system_message_content))
+                
+                new_history.append(summary_msg)
+                
+                # Keep the very last message if it's from the user
+                if isinstance(current_messages[-1], HumanMessage):
+                    new_history.append(current_messages[-1])
+                
+                current_messages = new_history
+                logger.info("Conversation history summarized and compressed.")
+
             response = await llm_with_tools.ainvoke(current_messages)
             
+            # Capture token usage and cost
+            token_usage = {}
+            cost = 0.0
+            if hasattr(response, "response_metadata") and "token_usage" in response.response_metadata:
+                usage = response.response_metadata["token_usage"]
+                token_usage = {
+                    "input": usage.get("prompt_tokens", 0),
+                    "output": usage.get("completion_tokens", 0),
+                    "total": usage.get("total_tokens", 0)
+                }
+                cost = self._calculate_cost(self.llm.model_name, token_usage["input"], token_usage["output"])
+
             # Broadcast thinking to UI
             if response.content:
                 # Clean up any leaked internal tool markers (common in some OpenRouter models)
@@ -260,7 +340,7 @@ class Brain:
                 if clean_content:
                     # Update Task 2 Details (Main Chat)
                     if update_ui_func:
-                        await update_ui_func(1, "in-progress", details=clean_content)
+                        await update_ui_func(1, "in-progress", details=clean_content, token_usage=token_usage, cost=cost)
                 
             return {"messages": [response]}
 
@@ -291,8 +371,12 @@ class Brain:
                     observation = f"Error: Tool {tool_call['name']} not found."
                 else:
                     try:
+                        # --- NEW: Inject chat_id into tool arguments for isolation ---
+                        # This ensures the MCP server acts on the correct tab/context
+                        tool_args = {**tool_call["args"], "chat_id": chat_id}
+                        
                         # 2. Execute the actual tool (Playwright or Tavily) SEQUENTIALLY
-                        observation = await tool.ainvoke(tool_call["args"])
+                        observation = await tool.ainvoke(tool_args)
                     except Exception as e:
                         observation = f"Error executing tool: {str(e)}"
                 
@@ -310,6 +394,11 @@ class Brain:
                     tool_input=tool_call["args"],
                     tool_output=clean_obs[:1000] # Increased limit but kept clean
                 )
+
+                # --- NEW: Truncate observation for LLM history to prevent token overflow ---
+                llm_observation = str(observation)
+                if len(llm_observation) > 30000:
+                    llm_observation = llm_observation[:30000] + "... [TRUNCATED DUE TO SIZE TO PREVENT CRASH]"
 
                 # --- NEW: Explicit cleanup if browser was closed ---
                 if tool_call["name"] in ["browser_close_session", "browser_close_all"] and status == "SUCCESS":
@@ -334,8 +423,8 @@ class Brain:
                         is_tool=True
                     )
                 
-                new_messages.append(ToolMessage(content=str(observation), tool_call_id=tool_call["id"]))
-                execution_history.append({"tool": tool_call["name"], "status": status, "result": str(observation)})
+                new_messages.append(ToolMessage(content=llm_observation, tool_call_id=tool_call["id"]))
+                execution_history.append({"tool": tool_call["name"], "status": status, "result": llm_observation[:500]})
             
             return {"messages": new_messages, "execution_history": execution_history}
 
@@ -354,22 +443,13 @@ class Brain:
 
         app = workflow.compile(checkpointer=self.checkpointer)
         
-        # --- Option B: Start background streaming task ---
-        stop_event = asyncio.Event()
-        stream_task = asyncio.create_task(self._stream_browser_frames(user_id, tools, stop_event))
-
         try:
             # Execute the graph with a thread_id for persistence
             config = {"configurable": {"thread_id": chat_id}}
             final_state = await app.ainvoke(graph_input, config=config)
             return final_state
         finally:
-            # Stop the streaming task
-            stop_event.set()
-            try:
-                await asyncio.wait_for(stream_task, timeout=2.0)
-            except Exception:
-                pass
+            pass
 
     async def process_chat_message(
         self,
@@ -420,17 +500,29 @@ class Brain:
         """
         Runs Agent 1 (Analysis) -> Agent 2 (Strategy) -> Agent 3 (Execution) with UI updates and Critic retries.
         """
+        # --- NEW: Limit parallel tasks per user ---
+        if self.session_manager.get_active_count(user_id) >= 2:
+            return {
+                "success": False, 
+                "message": "You have reached the limit of 2 parallel automation tasks. Please wait for one to finish."
+            }
+        
+        self.session_manager.add_active_chat(user_id, chat_id)
+
         current_plan = [
             {"id": "1", "title": "Task 1: Analysis", "description": "Understanding user intent", "status": "pending", "priority": "high", "level": 0, "dependencies": [], "subtasks": [], "details": None},
             {"id": "2", "title": "Task 2: Execution", "description": "Running browser tools", "status": "pending", "priority": "high", "level": 0, "dependencies": ["1"], "subtasks": [], "details": None}
         ]
 
-        async def update_ui(idx, status, input_data=None, output_data=None, error=None, details=None):
+        async def update_ui(idx, status, input_data=None, output_data=None, error=None, details=None, token_usage=None, cost=None):
             # Ensure idx is within bounds of current_plan
             if idx < len(current_plan):
                 current_plan[idx]["status"] = status
                 if details:
                     current_plan[idx]["details"] = details
+                
+                if token_usage:
+                    current_plan[idx]["token_usage"] = token_usage
                 
                 stage_name = current_plan[idx]["title"]
             else:
@@ -444,7 +536,9 @@ class Brain:
                 status=status.upper(),
                 input_data=input_data,
                 output_data=output_data,
-                error=error
+                error=error,
+                token_usage=token_usage,
+                cost=cost
             )
             if self.stream_manager:
                 await self.stream_manager.broadcast_plan(chat_id, current_plan)
@@ -452,6 +546,10 @@ class Brain:
         try:
             if not self.initialized: await self.initialize()
             session = await self.db_manager.get_or_create_chat_session(user_id, chat_id)
+            
+            # Initialize stream variables to None for finally block safety
+            stop_stream = None
+            stream_task = None
             
             # --- NEW: Fetch Chat History for Context ---
             async with AsyncSessionLocal() as db:
@@ -524,6 +622,7 @@ class Brain:
             max_retries = 3
             last_error = None
             final_response = None
+            all_tool_calls = [] # Track all tool calls for saving to DB
 
             # 1. Get the user's private session
             session_obj = self.session_manager.get_session(user_id)
@@ -543,6 +642,10 @@ class Brain:
                 all_tools = list(all_tools) + [self.search_tool]
             
             logger.info(f"Discovered {len(all_tools)} tools for execution.")
+
+            # --- NEW: Start isolated frame stream for this chat ---
+            stop_stream = asyncio.Event()
+            stream_task = asyncio.create_task(self._stream_browser_frames(user_id, chat_id, all_tools, stop_stream))
 
             while retry_count < max_retries:
                 try:
@@ -571,6 +674,10 @@ class Brain:
                                 json_match = re.search(r"\[.*\]", plan_str, re.DOTALL)
                                 if json_match:
                                     plan_data = json.loads(json_match.group(0))
+                                    # --- FIX: Ensure unique IDs to prevent React key warnings ---
+                                    # We re-index the plan starting from 2 (since Analysis is 1)
+                                    for i, task in enumerate(plan_data):
+                                        task["id"] = str(i + 2)
                                     current_plan = [current_plan[0]] + plan_data
                                     if self.stream_manager:
                                         await self.stream_manager.broadcast_plan(chat_id, current_plan)
@@ -587,6 +694,18 @@ class Brain:
                         graph_input, all_tools, user_id, chat_id, task_summary, confirmed_inputs, update_ui_func=update_ui
                     )
                     
+                    # Capture tool calls from the graph execution
+                    if "execution_history" in graph_output:
+                        for entry in graph_output["execution_history"]:
+                            all_tool_calls.append({
+                                "id": str(uuid.uuid4()),
+                                "tool_name": entry["tool"],
+                                "tool_input": {}, # Input is not easily available here, but we have the result
+                                "tool_output": entry["result"][:1000],
+                                "status": entry["status"],
+                                "created_at": datetime.now(timezone.utc).isoformat()
+                            })
+
                     final_msg = graph_output["messages"][-1].content
                     if "Error" not in final_msg and "failed" not in final_msg.lower():
                         final_response = final_msg
@@ -631,6 +750,7 @@ class Brain:
                     role="ai",
                     content=final_response,
                     plan_data=json.dumps(current_plan),
+                    tool_calls=json.dumps(all_tool_calls),
                     created_at=datetime.now(timezone.utc)
                 )
                 db.add(ai_msg)
@@ -650,8 +770,35 @@ class Brain:
 
         except Exception as e:
             logger.error(f"Error in process_message: {e}")
-            await update_ui(len(current_plan) - 1, "failed", error=str(e), details=f"Overall task failed: {e}")
-            return {"success": False, "message": f"An unexpected error occurred: {e}"}
+            
+            # --- NEW: Unwrap ExceptionGroup (Python 3.11+) or TaskGroup errors ---
+            error_detail = str(e)
+            if "TaskGroup" in error_detail or "sub-exception" in error_detail:
+                try:
+                    # If it's a PEP 654 ExceptionGroup
+                    if hasattr(e, 'exceptions') and e.exceptions:
+                        error_detail = f"Multiple errors occurred: {', '.join([str(ex) for ex in e.exceptions])}"
+                    # Fallback for anyio TaskGroup strings
+                    elif "1 sub-exception" in error_detail:
+                        logger.warning("Detected anyio TaskGroup error, attempting to extract root cause.")
+                except:
+                    pass
+
+            # Ensure current_plan exists before using it
+            if 'current_plan' in locals():
+                await update_ui(len(current_plan) - 1, "failed", error=error_detail, details=f"Overall task failed: {error_detail}")
+            return {"success": False, "message": f"An unexpected error occurred: {error_detail}"}
+        finally:
+            # Safely cleanup stream tasks if they were initialized
+            if 'stop_stream' in locals() and stop_stream:
+                stop_stream.set()
+            if 'stream_task' in locals() and stream_task:
+                try:
+                    await asyncio.wait_for(stream_task, timeout=1.0)
+                except Exception:
+                    pass
+            self.session_manager.remove_active_chat(user_id, chat_id)
+            self.active_tasks.pop(chat_id, None)
 
     async def _save_session_state(self, chat_id: str, updated_state: dict):
         """Safely commits processed state dictionaries back into short-lived database queries."""
@@ -664,7 +811,7 @@ class Brain:
 
     async def shutdown(self):
         """Shutdown helper invoked on lifespan exit."""
-        await self.browser_manager.shutdown_all()
+        await self.session_manager.shutdown_all()
 
 
 # ============================================================

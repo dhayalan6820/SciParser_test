@@ -27,9 +27,22 @@ class SessionManager:
                 "mcp_manager": None,
                 "port": find_free_port(),
                 "cdp_url": None, # Can be set externally to connect to existing browser
-                "active_tasks": []
+                "active_chat_ids": set() # Track active chat IDs for this user
             }
         return self.sessions[user_id]
+
+    def add_active_chat(self, user_id: str, chat_id: str):
+        session = self.get_session(user_id)
+        session["active_chat_ids"].add(chat_id)
+
+    def remove_active_chat(self, user_id: str, chat_id: str):
+        if user_id in self.sessions:
+            self.sessions[user_id]["active_chat_ids"].discard(chat_id)
+
+    def get_active_count(self, user_id: str) -> int:
+        if user_id in self.sessions:
+            return len(self.sessions[user_id]["active_chat_ids"])
+        return 0
 
     async def shutdown_session(self, user_id: str):
         """Cleanly releases and stops processes allocated to a user."""

@@ -117,6 +117,8 @@ class ChatService:
                     "content": msg.content,
                     "plan": json.loads(msg.plan_data) if msg.plan_data else [],
                     "form": json.loads(msg.form_data) if msg.form_data else None,
+                    "token_usage": json.loads(msg.token_usage) if msg.token_usage else None,
+                    "cost": msg.cost,
                     "timestamp": msg.created_at.isoformat() if msg.created_at else datetime.now(timezone.utc).isoformat()
                 }
                 for msg in messages
