@@ -9,12 +9,13 @@ import { Component as AiLoader } from "./ai-loader";
 import { MessageLoading } from "./message-loading";
 import { BrowserPreview } from "./browser-preview";
 import { SchedulesPage } from "./schedules-page";
+import { ProcessingPanel } from "./processing-panel";
 import { 
   Sparkles, User2, Database, RefreshCw, CheckCircle2, 
   BookOpen, MessageSquare, Plus, LogOut, Trash, Pencil, Check, Menu, X, 
   ChevronDown, Globe, Send, PanelLeftClose, PanelLeftOpen, Search, Code, Terminal,
   Sun, Moon, FileText, Paperclip, X as XIcon,
-  Loader2, Download, Table as TableIcon, Calendar
+  Loader2, Download, Table as TableIcon, Calendar, Clock
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import Plan, { Task } from "./agent-plan";
@@ -77,6 +78,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const [visiblePlans, setVisiblePlans] = React.useState<Record<string, boolean>>({});
   const [visibleTools, setVisibleTools] = React.useState<Record<string, boolean>>({});
 
+  const [agentHistory, setAgentHistory] = React.useState<any[]>([]);
+  const [showHistory, setShowHistory] = React.useState(false);
+
   const togglePlanVisibility = (msgId: string) => {
     setVisiblePlans(prev => ({
       ...prev,
@@ -116,7 +120,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   
   // Resizable panel states
   const [browserPanelWidth, setBrowserPanelWidth] = React.useState(50); // percentage
-  const [agentPanelHeight, setAgentPanelHeight] = React.useState(200); // pixels
+  const [historyPanelWidth, setHistoryPanelWidth] = React.useState(320); // pixels
   
   // File upload states
   const [isDraggingFile, setIsDraggingFile] = React.useState(false);
@@ -127,7 +131,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const toolLogsScrollRef = React.useRef<HTMLDivElement>(null);
   const browserPanelRef = React.useRef<HTMLDivElement>(null);
-  const [isResizing, setIsResizing] = React.useState(false);
+  const historyPanelRef = React.useRef<HTMLDivElement>(null);
+  const [resizingPanel, setResizingPanel] = React.useState<'browser' | 'history' | null>(null);
   const [isAtBottom, setIsAtBottom] = React.useState(true);
 
   // Handle tool logs auto-scroll
@@ -136,6 +141,51 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       const { scrollTop, scrollHeight, clientHeight } = toolLogsScrollRef.current;
       const atBottom = scrollHeight - scrollTop <= clientHeight + 50; // 50px buffer
       setIsAtBottom(atBottom);
+    }
+  };
+
+  const normalizeJsonValue = (value: any) => {
+    if (typeof value === "string") {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  };
+
+  const loadExecutionLogs = async (chatId: string) => {
+    try {
+      const [agentLogsRes, toolLogsRes] = await Promise.all([
+        sciparserApi.getAgentExecutionLogs(chatId),
+        sciparserApi.getToolExecutionLogs(chatId),
+      ]);
+
+      setAgentHistory(agentLogsRes || []);
+
+      // Prefer persisted tool logs when a thread is selected.
+      const normalizedTools = (toolLogsRes || []).map((log: any) => ({
+        ...log,
+        tool_input: normalizeJsonValue(log.tool_input) || {},
+        tool_output: normalizeJsonValue(log.tool_output) || {},
+      }));
+      setToolLogs(normalizedTools);
+
+      // Rehydrate the latest execution plan from the agent log if it exists.
+      const latestPlanLog = [...(agentLogsRes || [])].reverse().find((log: any) => {
+        const output = normalizeJsonValue(log.output_data);
+        return Array.isArray(output) || (output && typeof output === "object");
+      });
+
+      if (latestPlanLog) {
+        const output = normalizeJsonValue(latestPlanLog.output_data);
+        if (Array.isArray(output)) {
+          setCurrentPlan(output as Task[]);
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to load execution logs:", err);
     }
   };
 
@@ -173,38 +223,59 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   };
 
   // Resizable panel handlers
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setIsResizing(true);
+  const handleBrowserResizeStart = (e: React.MouseEvent) => {
+    setResizingPanel('browser');
+    e.preventDefault();
+  };
+
+  const handleHistoryResizeStart = (e: React.MouseEvent) => {
+    setResizingPanel('history');
     e.preventDefault();
   };
 
   React.useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing || !browserPanelRef.current) return;
+      if (!resizingPanel) return;
       
-      const containerRect = browserPanelRef.current.parentElement?.getBoundingClientRect();
-      if (!containerRect) return;
-      
-      const newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
-      if (newWidth > 20 && newWidth < 80) {
-        setBrowserPanelWidth(newWidth);
+      if (resizingPanel === 'browser' && browserPanelRef.current) {
+        const containerRect = browserPanelRef.current.parentElement?.getBoundingClientRect();
+        if (!containerRect) return;
+        const newWidth = 100 - (((e.clientX - containerRect.left) / containerRect.width) * 100);
+        if (newWidth > 10 && newWidth < 90) {
+          setBrowserPanelWidth(Math.round(newWidth));
+        }
+      } else if (resizingPanel === 'history' && historyPanelRef.current) {
+        const containerRect = historyPanelRef.current.parentElement?.getBoundingClientRect();
+        if (!containerRect) return;
+        
+        // History panel is on the right of the chat column. 
+        // The handle is on the LEFT of the history panel.
+        // So width = historyRect.right - mouseX
+        const historyRect = historyPanelRef.current.getBoundingClientRect();
+        const newWidth = historyRect.right - e.clientX;
+        
+        if (newWidth > 160 && newWidth < 800) {
+          setHistoryPanelWidth(Math.round(newWidth));
+        }
       }
     };
 
     const handleMouseUp = () => {
-      setIsResizing(false);
+      setResizingPanel(null);
     };
 
-    if (isResizing) {
+    if (resizingPanel) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
     }
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'default';
     };
-  }, [isResizing]);
+  }, [resizingPanel]);
 
   React.useEffect(() => {
     const token = localStorage.getItem("access_token");
@@ -234,10 +305,11 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   React.useEffect(() => {
     // We want to listen for frames even if browserActive is false to support auto-open
     if (!userProfile?.user_id) return;
+    if (!activeThreadId) return;
 
     const token = localStorage.getItem("access_token");
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//localhost:8000/sciparser/v1/browser/stream?chat_id=${activeThreadId || 'none'}&token=${token}`;
+    const wsUrl = `${protocol}//localhost:8000/sciparser/v1/browser/stream?chat_id=${activeThreadId}&token=${token}`;
     const ws = new WebSocket(wsUrl);
 
     ws.onmessage = (event) => {
@@ -255,15 +327,30 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             frameData = { frame: rawData };
           }
 
-          // --- NEW: Route frames by chat_id ---
-          if (frameData.chat_id && frameData.chat_id !== activeThreadId) {
-            return; // Ignore frames for other chats
+          // --- FIX: Route frames by chat_id with fallback ---
+          // If the frame doesn't have a chat_id, or if it matches the active thread,
+          // or if we only have one active session, we should display it.
+          const frameChatId = frameData.chat_id ? String(frameData.chat_id) : null;
+          const activeId = activeThreadId ? String(activeThreadId) : null;
+          
+          if (frameChatId && activeId && frameChatId !== activeId) {
+            // Only ignore if both IDs exist and they explicitly mismatch
+            return;
           }
 
           // Extract the actual frame data (handle nested objects or raw strings)
           let actualFrame = frameData.frame;
           if (typeof actualFrame === 'object' && actualFrame !== null) {
             actualFrame = actualFrame.data || actualFrame.text || JSON.stringify(actualFrame);
+          }
+
+          if (!actualFrame && typeof rawData === "string") {
+            try {
+              const parsedRaw = JSON.parse(rawData);
+              actualFrame = parsedRaw.frame || parsedRaw.screenshot || parsedRaw.data || parsedRaw.image;
+            } catch {
+              // ignore parse errors here
+            }
           }
 
           if (actualFrame) {
@@ -314,7 +401,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     ws.onclose = () => console.log("Browser stream disconnected");
 
     return () => ws.close();
-  }, [browserActive, activeThreadId]);
+  }, [activeThreadId, userProfile?.user_id]);
 
   // WebSocket for Live Agent Plan (Analysis -> Strategy -> Execution)
   React.useEffect(() => {
@@ -405,9 +492,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             t.id === latestThreadId ? { ...t, messages: historyData.messages } : t
           ));
         }
-
-        // Tool logs are now live-only, no need to fetch history here
-        setToolLogs([]);
+        await loadExecutionLogs(latestThreadId);
       } catch (historyErr: any) {
         console.warn(`Could not load history for thread ${latestThreadId}:`, historyErr);
         setMessages([]);
@@ -494,8 +579,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       const res = await sciparserApi.getChatHistory(idStr);
       setMessages(res?.messages || []);
       
-      // Tool logs are now live-only, no need to fetch history here
-      setToolLogs([]);
+      await loadExecutionLogs(idStr);
     } catch (e: any) {
       console.error("Failed to load thread data:", e);
       if (e.message?.includes("404") || e.message?.includes("Not Found")) {
@@ -612,8 +696,10 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       );
       
       const aiMsg = response.message;
-      if (response.plan && aiMsg) {
-        aiMsg.plan = response.plan;
+      const responsePlan = response.plan || aiMsg?.plan;
+      if (responsePlan && aiMsg) {
+        aiMsg.plan = responsePlan;
+        setCurrentPlan(responsePlan);
       }
 
       if (aiMsg) {
@@ -712,141 +798,87 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const renderMessage = (msg: ChatMessage) => {
     const isSelected = selectedMessages.includes(msg.id || "");
     const isPlanVisible = visiblePlans[msg.id || ""] ?? (msg.role === 'ai' && msg.plan && msg.plan.length > 0);
-    
+    const isUser = msg.role === "user" || msg.role === "human";
+
     return (
       <div 
         key={msg.id} 
+        className={cn(
+          "flex flex-col gap-4 transition-all duration-300", 
+          isUser ? "items-end" : "items-start",
+          isSelectionMode && "cursor-pointer hover:opacity-80"
+        )}
         onClick={() => {
           if (isSelectionMode && msg.id) {
             setSelectedMessages(prev => 
-              prev.includes(msg.id!) ? prev.filter(id => id !== msg.id) : [...prev, msg.id!]
+              prev.includes(msg.id) ? prev.filter(id => id !== msg.id) : [...prev, msg.id]
             );
           }
         }}
-        className={cn(
-          "flex flex-col gap-2 transition-all duration-200", 
-          msg.role === 'user' ? "items-end" : "items-start",
-          isSelectionMode && "cursor-pointer hover:opacity-80",
-          isSelectionMode && isSelected && "ring-2 ring-emerald-500 ring-offset-2 rounded-2xl"
-        )}
       >
+        {/* Agent Plan Section (Above AI Response) */}
+        {!isUser && msg.plan && msg.plan.length > 0 && (
+          <div className="w-full max-w-2xl ml-12 mb-2">
+            <div className="flex items-center gap-3 mb-3 px-1">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                <span className="text-[10px] font-black text-[#F8FAFC] uppercase tracking-[0.2em]">Execution Trace</span>
+              </div>
+              <div className="h-px flex-1 bg-[#2A2A2A]" />
+            </div>
+            <Plan tasks={msg.plan} />
+          </div>
+        )}
+
         <div className={cn(
-          "rounded-2xl px-4 py-3 shadow-sm max-w-[85%] break-words overflow-hidden relative group",
-          msg.role === 'user' ? "bg-emerald-600 text-white" : "bg-card border border-border text-foreground",
-          isSelectionMode && isSelected && "bg-emerald-50 dark:bg-emerald-900/20"
+          "group relative flex gap-4 max-w-[85%] transition-all duration-300",
+          isUser ? "flex-row-reverse" : "flex-row"
         )}>
-          {isSelectionMode && (
+          {/* Selection Checkbox Overlay */}
+          {isSelectionMode && msg.id && (
             <div className={cn(
-              "absolute top-2 right-2 w-4 h-4 rounded-full border-2 flex items-center justify-center",
-              isSelected ? "bg-emerald-500 border-indigo-500" : "border-slate-300 dark:border-slate-600"
+              "absolute -top-2 -right-2 z-10 h-6 w-6 rounded-full border-2 flex items-center justify-center transition-all shadow-lg",
+              isSelected ? "bg-indigo-600 border-indigo-500 text-white" : "bg-slate-900 border-slate-700 text-transparent"
             )}>
-              {isSelected && <Check className="w-2.5 h-2.5 text-white" />}
-            </div>
-          )}
-          
-          {msg.role === 'ai' && msg.plan && msg.plan.length > 0 && (
-            <div className="mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-500 uppercase tracking-widest">
-                  <Database className="w-3 h-3" />
-                  <span>Agent Workflow</span>
-                </div>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    togglePlanVisibility(msg.id || "");
-                  }}
-                  className="h-6 px-2 text-[9px] font-bold text-muted-foreground hover:text-emerald-500 gap-1"
-                >
-                  {/* {isPlanVisible ? <XIcon className="w-3 h-3" /> : <Plus className="w-3 h-3" />} */}
-                  {isPlanVisible ? "HIDE WORKFLOW" : "SHOW WORKFLOW"}
-                </Button>
-              </div>
-              
-              <AnimatePresence>
-                {isPlanVisible && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0, filter: "blur(10px)" }}
-                    animate={{ 
-                      opacity: 1, 
-                      height: "auto", 
-                      filter: "blur(0px)",
-                      transition: { 
-                        height: { type: "spring", stiffness: 300, damping: 30 },
-                        opacity: { duration: 0.2 },
-                        filter: { duration: 0.3 }
-                      }
-                    }}
-                    exit={{ 
-                      opacity: 0, 
-                      height: 0, 
-                      filter: "blur(10px)",
-                      transition: { 
-                        height: { duration: 0.3 },
-                        opacity: { duration: 0.2 },
-                        filter: { duration: 0.2 }
-                      }
-                    }}
-                    className="overflow-hidden"
-                  >
-                    <Plan 
-                      tasks={msg.plan} 
-                      onHide={() => togglePlanVisibility(msg.id || "")}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-              <div className="mt-4 border-b border-border" />
+              <Check className="h-3.5 w-3.5" />
             </div>
           )}
 
-          {/* NEW: Tool Execution Timeline */}
-          {msg.role === 'ai' && msg.plan && msg.plan.length > 0 && (
-            <div className="mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2 text-[10px] font-bold text-blue-500 uppercase tracking-widest">
-                  <Terminal className="w-3 h-3" />
-                  <span>Tool Activity</span>
-                </div>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleToolVisibility(msg.id || "");
-                  }}
-                  className="h-6 px-2 text-[9px] font-bold text-muted-foreground hover:text-blue-500 gap-1"
-                >
-                  
-                </Button>
+          {/* Avatar */}
+          <div className={cn(
+            "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-lg transition-transform duration-300 group-hover:scale-110",
+            isUser ? "bg-emerald-600 text-white" : "bg-[#1E1E1E] border border-[#2A2A2A] text-white"
+          )}>
+            {isUser ? <User2 className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
+          </div>
+
+          {/* Message Bubble */}
+          <div className="flex flex-col gap-2 min-w-0">
+            <div className={cn(
+              "px-5 py-3.5 rounded-2xl shadow-sm border transition-all duration-200",
+              isUser 
+                ? "bg-emerald-600 border-emerald-500 text-white rounded-tr-none shadow-emerald-500/10" 
+                : "bg-[#1a1a1a] border-[#343434] text-slate-100 rounded-tl-none hover:border-[#4a4a4a]",
+              isSelectionMode && isSelected && "ring-2 ring-indigo-500 border-indigo-500"
+            )}>
+              <div className={cn(
+                "text-sm leading-relaxed font-medium whitespace-pre-wrap break-words",
+                isUser ? "text-white" : "text-slate-100"
+              )}>
+                {renderFormattedContent(msg.content, isUser)}
               </div>
+            </div>
             
-              <div className="mt-4 border-b border-border" />
+            {/* Timestamp & Actions */}
+            <div className={cn(
+              "flex items-center gap-3 px-1 opacity-0 group-hover:opacity-100 transition-opacity",
+              isUser ? "flex-row-reverse" : "flex-row"
+            )}>
+              <span className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+                {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
             </div>
-          )}
-
-          {renderFormattedContent(msg.content, msg.role === 'user')}
-
-          {/* Show "Edit Details" button if form exists in history */}
-          {msg.role === 'ai' && msg.form && !isSelectionMode && (
-            <div className="mt-3 pt-3 border-t border-slate-100 dark:border-white/5">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveForm(msg.form);
-                  setActiveThreadId(activeThreadId); 
-                }}
-                className="h-7 px-3 text-[10px] font-bold gap-1.5 border-indigo-500/20 text-indigo-500 hover:bg-indigo-500/5"
-              >
-                <Pencil className="w-3 h-3" />
-                EDIT & PROCESS AGAIN
-              </Button>
-            </div>
-          )}
+          </div>
         </div>
       </div>
     );
@@ -905,7 +937,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     return boldParts.map((bPart, bIdx) => {
       if (bPart.startsWith("**") && bPart.endsWith("**")) {
         return (
-          <strong key={bIdx} className={cn("font-extrabold", isUser ? "text-white" : "text-slate-900 dark:text-white")}>
+          <strong key={bIdx} className={cn("font-extrabold", isUser ? "text-white" : "text-white dark:text-white")}>
             {bPart.slice(2, -2)}
           </strong>
         );
@@ -916,15 +948,32 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           return (
             <code key={iIdx} className={cn(
               "px-1.5 py-0.5 mx-0.5 rounded font-mono text-[13px] font-bold",
-              isUser ? "bg-white/20 text-white" : "bg-slate-100 dark:bg-[#2a2a2d] text-indigo-700 dark:text-indigo-400"
+              isUser ? "bg-white/20 text-white" : "bg-white/90 text-sky-500 dark:bg-white/90 dark:text-sky-600"
             )}>
               {iPart.slice(1, -1)}
             </code>
           );
         }
-        return iPart;
+        const urlRegex = /(https?:\/\/[^\s)]+)|www\.[^\s)]+/g;
+        return iPart.split(urlRegex).map((segment, segIdx) => {
+          if (!segment) return null;
+          if (urlRegex.test(segment)) {
+            urlRegex.lastIndex = 0;
+            const href = segment.startsWith("http") ? segment : `https://${segment}`;
+            return (
+              <a key={`${iIdx}-${segIdx}`} href={href} target="_blank" rel="noreferrer" className="text-sky-400 underline underline-offset-2 decoration-sky-400/50 hover:text-sky-300">
+                {segment}
+              </a>
+            );
+          }
+          return segment;
+        });
       });
     });
+  };
+
+  const parseTableCellContent = (text: string, isUser: boolean = false) => {
+    return parseInlineFormatting(text.replace(/\s+/g, " ").trim(), isUser);
   };
 
   const downloadTableData = (data: any[][], filename: string) => {
@@ -957,12 +1006,12 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         const code = language ? lines.slice(1).join("\n") : lines.join("\n");
         
         return (
-          <div key={index} className="my-3.5 rounded-xl border border-border bg-muted/50 overflow-hidden font-mono text-[13px] shadow-md">
-            <div className="flex justify-between items-center px-4 py-1.5 bg-muted text-xs text-muted-foreground font-sans border-b border-border select-none font-bold">
-              <span className="uppercase text-[10px] tracking-widest">{language || "text"}</span>
+          <div key={index} className="my-3.5 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden font-mono text-[13px] shadow-md">
+            <div className="flex justify-between items-center px-4 py-1.5 bg-[#232323] text-xs text-slate-400 font-sans border-b border-[#2A2A2A] select-none font-bold">
+              <span className="uppercase text-[10px] tracking-widest text-white">{language || "text"}</span>
               <span className="text-[10px] lowercase font-medium">ready</span>
             </div>
-            <pre className="p-4 overflow-x-auto text-foreground/90 leading-relaxed whitespace-pre font-medium">
+            <pre className="p-4 overflow-x-auto text-[#E5E7EB] leading-relaxed whitespace-pre font-medium">
               {code}
             </pre>
           </div>
@@ -977,40 +1026,64 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           const rows = tableLines.map(line => 
             line.split("|").filter(cell => cell.trim() !== "").map(cell => cell.trim())
           );
-          const headers = rows[0];
-          const body = rows.slice(2); // Skip header and separator line
+          const isSeparatorRow = (row: string[]) =>
+            row.every(cell => /^:?-{3,}:?$/.test(cell.replace(/\s+/g, "")));
+
+          const headerRow = rows.find(row => !isSeparatorRow(row)) || [];
+          const separatorIndex = rows.findIndex(isSeparatorRow);
+          const body = separatorIndex >= 0 ? rows.slice(separatorIndex + 1).filter(row => !isSeparatorRow(row)) : rows.slice(1);
 
           return (
-            <div key={index} className="my-4 overflow-hidden rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1a1a1e] shadow-sm">
-              <div className="flex items-center justify-between px-4 py-2 bg-slate-50 dark:bg-white/5 border-b border-slate-200 dark:border-white/10">
-                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  <TableIcon className="w-3 h-3" />
+            <div className="my-5 overflow-hidden rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] shadow-[0_8px_30px_rgba(0,0,0,0.35)]">
+              <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 bg-[#232323] border-b border-[#2A2A2A]">
+                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  <TableIcon className="w-3.5 h-3.5 text-indigo-500" />
                   <span>Data Table</span>
                 </div>
                 <Button 
                   variant="ghost" 
                   size="sm" 
                   onClick={() => downloadTableData(rows.filter((_, i) => i !== 1), "sciparser_data")}
-                  className="h-6 px-2 text-[9px] font-bold text-indigo-500 hover:bg-indigo-500/10 gap-1"
+                  className="h-8 px-3 text-[10px] font-black text-sky-400 hover:bg-sky-500/10 gap-1.5 rounded-xl"
                 >
-                  <Download className="w-3 h-3" />
+                  <Download className="w-3.5 h-3.5" />
                   DOWNLOAD CSV
                 </Button>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-[13px] border-collapse">
+                <table className="w-full text-left text-[13px] border-collapse min-w-max">
                   <thead>
-                    <tr className="bg-slate-50 dark:bg-white/5">
-                      {headers.map((h, i) => (
-                        <th key={i} className="px-4 py-2.5 font-bold text-slate-700 dark:text-slate-200 border-b border-slate-200 dark:border-white/10">{h}</th>
+                    <tr className="bg-[#232323]">
+                      {headerRow.map((h, i) => (
+                        <th key={i} className="px-4 sm:px-5 py-3.5 font-black text-white border-b border-[#2A2A2A] whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            {i === 0 && <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500/70" />}
+                            <span className={cn(isUser ? "text-white" : "text-white dark:text-white")}>{parseTableCellContent(h, isUser)}</span>
+                          </div>
+                        </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {body.map((row, ri) => (
-                      <tr key={ri} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                      <tr
+                        key={ri}
+                        className={cn(
+                          "transition-colors border-b border-[#2A2A2A]",
+                          ri % 2 === 0 ? "bg-[#1A1A1A]" : "bg-[#202020]",
+                          "hover:bg-[#262626]"
+                        )}
+                      >
                         {row.map((cell, ci) => (
-                          <td key={ci} className="px-4 py-2.5 text-slate-600 dark:text-slate-300 border-b border-slate-100 dark:border-white/5">{cell}</td>
+                          <td
+                            key={ci}
+                            className={cn(
+                                "px-4 sm:px-5 py-3.5 text-[#E5E7EB] align-top",
+                                ci === 0 ? "font-medium text-[#E5E7EB] min-w-[22rem]" : "whitespace-nowrap"
+                            )}
+                          >
+                              <div className={cn(ci === 0 ? "whitespace-normal leading-relaxed" : "font-semibold text-[#D1D5DB]")}>{parseTableCellContent(cell, isUser)}</div>
+                          </td>
                         ))}
                       </tr>
                     ))}
@@ -1023,6 +1096,10 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       }
 
       const lines = part.split("\n");
+      const firstRenderableLineIndex = lines.findIndex((line) => {
+        const trimmed = line.trim();
+        return !!trimmed && !trimmed.startsWith("|");
+      });
       return (
         <div key={index} className="space-y-2.5">
           {lines.map((line, lineIdx) => {
@@ -1054,10 +1131,19 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               );
             }
             
+            const isLeadSentence = !isUser && lineIdx === firstRenderableLineIndex;
+            const isSectionHeading = !isUser && (/^Current Status:$/i.test(trimmedLine) || /^Verification Details:$/i.test(trimmedLine) || /^Verification Details:$/i.test(trimmedLine) || /^Current State:$/i.test(trimmedLine));
+
             return (
               <p key={lineIdx} className={cn(
                 "relative leading-relaxed text-[15px] font-medium font-sans",
-                isUser ? "text-white" : (line.includes("--- Execution Summary ---") ? "text-primary mt-4 pt-4 border-t border-border font-bold" : "text-foreground/90")
+                isUser
+                  ? "text-white"
+                  : isLeadSentence
+                    ? "text-[#E5E7EB]"
+                    : isSectionHeading
+                      ? "text-white dark:text-white font-bold"
+                      : (line.includes("--- Execution Summary ---") ? "text-slate-400 dark:text-slate-400 mt-4 pt-4 border-t border-border font-bold" : "text-[#E5E7EB]")
               )}>
                 {parseInlineFormatting(line, isUser)}
               </p>
@@ -1077,19 +1163,23 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       try {
         const res = await sciparserApi.checkBrowserSession();
         if (!res.is_active) {
-          setSuccess("Browser is not initialized. Start a web task to launch it.");
+          setSuccess("Browser is not initialized yet. Opening the preview panel anyway.");
           setTimeout(() => setSuccess(""), 3000);
-          return; // Don't open the panel
         }
       } catch (err) {
         console.error("Failed to check browser session:", err);
-        return;
+        setSuccess("Browser session check failed. Opening the preview panel anyway.");
+        setTimeout(() => setSuccess(""), 3000);
       }
     }
     
     setBrowserActive(isActive);
     setLastManualToggle(Date.now()); // Track manual interaction
   };
+
+  const sidebarItemBase = "group flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-colors text-sm font-medium";
+  const sidebarItemInactive = "text-[#D1D5DB] hover:text-white hover:bg-[#232323]";
+  const sidebarItemActive = "bg-emerald-600 text-white shadow-lg shadow-emerald-500/20";
 
   const handleCreateSchedule = async () => {
     if (!activeThreadId) return;
@@ -1432,7 +1522,13 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                         <Code className="w-4 h-4 text-emerald-500" />
                         <span className="text-[11px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider">{log.tool_name}</span>
                       </div>
-                      <div className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-[9px] font-black text-emerald-600 uppercase">{log.status}</div>
+                      <div className={cn(
+                        "px-2 py-0.5 rounded-md text-[9px] font-black uppercase",
+                        log.status === 'SUCCESS' ? "bg-emerald-500/10 text-emerald-600" : 
+                        log.status === 'FAILED' ? "bg-red-500/10 text-red-600" : "bg-blue-500/10 text-blue-600"
+                      )}>
+                        {log.status}
+                      </div>
                     </div>
                     <div className="space-y-3">
                       <div className="space-y-1.5">
@@ -1441,12 +1537,22 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                           {typeof log.tool_input === 'string' ? log.tool_input : JSON.stringify(log.tool_input, null, 2)}
                         </div>
                       </div>
-                      <div className="space-y-1.5">
-                        <span className="text-[9px] font-bold text-emerald-500/70 uppercase tracking-widest ml-1">Output</span>
-                        <div className="text-[11px] text-slate-600 dark:text-slate-300 bg-emerald-50/30 dark:bg-emerald-500/5 p-3 rounded-xl border border-emerald-100/30 dark:border-emerald-500/10 font-mono whitespace-pre-wrap">
-                          {log.tool_output}
+                      {log.tool_output && (
+                        <div className="space-y-1.5">
+                          <span className="text-[9px] font-bold text-emerald-500/70 uppercase tracking-widest ml-1">Output</span>
+                          <div className="text-[11px] text-slate-600 dark:text-slate-300 bg-emerald-50/30 dark:bg-emerald-500/5 p-3 rounded-xl border border-emerald-100/30 dark:border-emerald-500/10 font-mono whitespace-pre-wrap">
+                            {log.tool_output}
+                          </div>
                         </div>
-                      </div>
+                      )}
+                      {log.error_message && (
+                        <div className="space-y-1.5">
+                          <span className="text-[9px] font-bold text-red-500/70 uppercase tracking-widest ml-1">Error</span>
+                          <div className="text-[11px] text-red-600 dark:text-red-400 bg-red-50/30 dark:bg-red-500/5 p-3 rounded-xl border border-red-100/30 dark:border-red-500/10 font-mono whitespace-pre-wrap">
+                            {log.error_message}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -1468,173 +1574,231 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       {/* Sidebar */}
       <div 
         className={cn(
-          "h-full bg-card border-r border-border flex flex-col transition-all duration-300 z-20 shrink-0",
-          isSidebarCollapsed ? "w-0 -translate-x-full overflow-hidden border-r-0" : "w-64"
+          "h-full flex flex-col shrink-0 transition-all duration-300 z-20 overflow-hidden border-r border-[#232B36] backdrop-blur-xl",
+          isSidebarCollapsed ? "w-0 -translate-x-full border-r-0" : "w-[320px] lg:w-[340px] xl:w-[360px] bg-[#05070A]/95"
         )}
       >
-        {/* Sidebar Header */}
-        <div className="p-4 border-b border-border flex items-center justify-between">
-          <div className="flex items-center gap-2 font-bold text-lg tracking-tight text-foreground">
-            <Sparkles className="w-5 h-5 text-emerald-500" />
-            <span>SciParser AI</span>
-          </div>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => handleNewChat(true)}
-            className="hover:bg-muted"
-          >
-            <Plus className="w-5 h-5" />
-          </Button>
-        </div>
+        <div className="relative flex h-full flex-col bg-[#05070A]/95">
+          <div className="pointer-events-none absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_28%),radial-gradient(circle_at_bottom,rgba(16,185,129,0.06),transparent_22%)]" />
 
-        {/* Sidebar Search */}
-        <div className="p-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search chats..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm rounded-lg bg-muted border-none focus:outline-none focus:ring-2 focus:ring-indigo-500 text-foreground"
-            />
-          </div>
-        </div>
-
-        {/* Sidebar Thread List */}
-        <div className="flex-1 overflow-y-auto px-2 py-1 space-y-1">
-          {/* Navigation Section */}
-          <div className="space-y-1 mb-4">
-            <div
-              onClick={() => handleSwitchView("chat")}
-              className={cn(
-                "group flex items-center gap-2.5 px-3 py-2.5 rounded-lg cursor-pointer transition-all text-sm font-bold",
-                currentView === "chat"
-                  ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/20"
-                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#1e1e24]"
-              )}
-            >
-              <MessageSquare className="w-4 h-4 shrink-0" />
-              <span>AI Chat Core</span>
-            </div>
-
-            <div
-              onClick={() => handleSwitchView("schedules")}
-              className={cn(
-                "group flex items-center gap-2.5 px-3 py-2.5 rounded-lg cursor-pointer transition-all text-sm font-bold",
-                currentView === "schedules"
-                  ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/20"
-                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#1e1e24]"
-              )}
-            >
-              <Calendar className="w-4 h-4 shrink-0" />
-              <span>Automation Schedules</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 px-3 mb-2">
-            <div className="h-px flex-1 bg-slate-100 dark:bg-white/5" />
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Recent Chats</span>
-            <div className="h-px flex-1 bg-slate-100 dark:bg-white/5" />
-          </div>
-
-          {filteredThreads.map((t) => {
-            const isActive = t.id === activeThreadId;
-            return (
-              <div
-                key={t.id}
-                onClick={() => handleSelectThread(t.id)}
-                className={cn(
-                  "group flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-colors text-sm font-medium",
-                  isActive 
-                    ? "bg-primary/20 text-primary" 
-                    : "hover:bg-muted text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <MessageSquare className="w-4 h-4 shrink-0" />
-                  <span className="truncate">{t.title}</span>
+          {/* Sidebar Header */}
+          <div className="relative z-10 px-4 pt-4 pb-3">
+            <div className="rounded-[18px] border border-[#232B36] bg-white/[0.03] px-4 py-4 shadow-[0_14px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#22D3EE]/20 bg-[#0B0F14] text-[#10B981] shadow-[0_0_18px_rgba(16,185,129,0.16)]">
+                    <Sparkles className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate text-[17px] font-semibold tracking-tight text-[#F8FAFC]">SciParser AI</div>
+                    <div className="text-[11px] text-[#6B7280]">Orchestration dashboard</div>
+                  </div>
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDeletingThreadId(String(t.id));
-                  }}
-                  className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-200 dark:hover:bg-[#2f2f3d] rounded transition-opacity"
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleNewChat(true)}
+                  className="h-10 w-10 rounded-[14px] border border-[#232B36] bg-[#111827]/60 text-[#F8FAFC] hover:bg-[#161B22] hover:text-[#22D3EE]"
                 >
-                  <Trash className="w-3.5 h-3.5 text-slate-400 hover:text-red-500" />
+                  <Plus className="h-5 w-5" />
+                </Button>
+              </div>
+
+              {/* Sidebar Search */}
+              <div className="mt-4 relative">
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748B]" />
+                <input
+                  type="text"
+                  placeholder="Search chats..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full rounded-[14px] border border-[#232B36] bg-[#0B0F14]/80 py-3 pl-10 pr-12 text-sm text-[#E5E7EB] outline-none placeholder:text-[#64748B] focus:border-[#22D3EE]/50 focus:ring-2 focus:ring-[#22D3EE]/15"
+                />
+                <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-[#232B36] bg-white/[0.03] px-2 py-0.5 text-[10px] font-semibold text-[#64748B]">
+                  ⌘K
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleSwitchView("chat")}
+                  className={cn(
+                    "flex items-center justify-between rounded-[14px] border px-3 py-3 text-left transition-all duration-200",
+                    currentView === "chat"
+                      ? "border-[#22D3EE]/35 bg-gradient-to-r from-[#10B981]/20 to-[#22D3EE]/15 text-[#F8FAFC] shadow-[0_0_24px_rgba(34,211,238,0.12)]"
+                      : "border-[#232B36] bg-white/[0.02] text-[#D1D5DB] hover:border-[#22D3EE]/25 hover:bg-[#161B22] hover:text-[#F8FAFC]"
+                  )}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <MessageSquare className="h-4 w-4 shrink-0" />
+                    <span className="truncate text-sm font-semibold">AI Chat Core</span>
+                  </div>
+                  <Sparkles className="h-4 w-4 shrink-0 text-[#22D3EE]" />
+                </button>
+
+                <button
+                  onClick={() => handleSwitchView("schedules")}
+                  className={cn(
+                    "flex items-center justify-between rounded-[14px] border px-3 py-3 text-left transition-all duration-200",
+                    currentView === "schedules"
+                      ? "border-[#22D3EE]/35 bg-gradient-to-r from-[#10B981]/20 to-[#22D3EE]/15 text-[#F8FAFC] shadow-[0_0_24px_rgba(34,211,238,0.12)]"
+                      : "border-[#232B36] bg-white/[0.02] text-[#D1D5DB] hover:border-[#22D3EE]/25 hover:bg-[#161B22] hover:text-[#F8FAFC]"
+                  )}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Calendar className="h-4 w-4 shrink-0" />
+                    <span className="truncate text-sm font-semibold">Automation</span>
+                  </div>
+                  <div className="h-2 w-2 rounded-full bg-[#22D3EE]" />
                 </button>
               </div>
-            );
-          })}
-        </div>
-
-        {/* Delete Chat Confirmation Modal */}
-        {deletingThreadId && (
-          <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="w-full max-w-sm bg-white dark:bg-[#1a1a1e] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#2f2f3d] p-6 text-center space-y-4"
-            >
-              <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mx-auto">
-                <Trash className="w-6 h-6 text-red-500" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="font-bold text-lg text-slate-900 dark:text-white">Delete Chat?</h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  This will permanently remove this conversation and all its history.
-                </p>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <Button 
-                  variant="ghost" 
-                  onClick={() => setDeletingThreadId(null)} 
-                  className="flex-1 text-xs font-bold"
-                >
-                  CANCEL
-                </Button>
-                <Button 
-                  onClick={() => handleDeleteThread(deletingThreadId)} 
-                  className="flex-1 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-xl"
-                >
-                  DELETE
-                </Button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-
-        {/* Sidebar Footer */}
-        <div className="p-4 border-t border-border bg-card space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold shadow-lg shadow-emerald-500/20">
-              {userProfile?.username.slice(0, 2).toUpperCase()}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold truncate text-foreground tracking-tight">{userProfile?.username}</p>
-              <p className="text-[11px] text-muted-foreground truncate font-medium">{userProfile?.email}</p>
             </div>
           </div>
-          <div className="flex items-center justify-end gap-1 pt-1">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={toggleTheme}
-              className="w-10 h-10 rounded-2xl hover:bg-muted text-muted-foreground transition-all active:scale-90"
+
+          {/* Sidebar Thread List */}
+          <div className="relative z-10 flex-1 overflow-y-auto px-4 pb-3 pt-1 hide-scrollbar">
+            <div className="flex items-center gap-3 px-1.5 pb-3 pt-1">
+              <div className="h-px flex-1 bg-[#232B36]" />
+              <span className="text-[10px] font-black uppercase tracking-[0.24em] text-[#10B981]">Recent Chats</span>
+              <div className="h-px flex-1 bg-[#232B36]" />
+            </div>
+
+            <div className="space-y-2">
+              {filteredThreads.map((t) => {
+                const isActive = t.id === activeThreadId;
+                return (
+                  <div
+                    key={t.id}
+                    onClick={() => handleSelectThread(t.id)}
+                    className={cn(
+                      "group relative overflow-hidden rounded-[14px] border px-3.5 py-3 transition-all duration-200 cursor-pointer",
+                      isActive
+                        ? "border-[#10B981]/35 bg-gradient-to-r from-[#10B981]/16 to-[#22D3EE]/10 shadow-[0_0_30px_rgba(16,185,129,0.12)]"
+                        : "border-[#232B36] bg-white/[0.02] hover:border-[#22D3EE]/25 hover:bg-[#161B22]"
+                    )}
+                  >
+                    {isActive && <div className="absolute left-0 top-0 h-full w-1 bg-[#10B981] shadow-[0_0_14px_rgba(16,185,129,0.65)]" />}
+                    <div className="flex items-start gap-3 pl-1">
+                      <div className={cn(
+                        "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] border",
+                        isActive ? "border-[#10B981]/20 bg-[#10B981]/10 text-[#10B981]" : "border-[#232B36] bg-[#0B0F14] text-[#9CA3AF]"
+                      )}>
+                        <MessageSquare className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={cn(
+                            "truncate text-[14px] font-semibold tracking-tight",
+                            isActive ? "text-[#F8FAFC]" : "text-[#D1D5DB] group-hover:text-[#F8FAFC]"
+                          )}>
+                            {t.title}
+                          </span>
+                          <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeletingThreadId(String(t.id));
+                              }}
+                              className="rounded-md border border-[#232B36] bg-white/[0.03] p-1.5 text-[#9CA3AF] hover:border-red-500/30 hover:text-red-400"
+                            >
+                              <Trash className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="mt-1 flex items-center justify-between gap-2">
+                          <span className="text-[11px] text-[#9CA3AF]">{isActive ? "Pinned chat" : `${t.messages?.length || 0} messages`}</span>
+                          <span className="text-[10px] text-[#6B7280]">
+                            {t.createdAt ? new Date(t.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' }) : ""}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={() => handleNewChat(true)}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-[14px] border border-[#232B36] bg-[#0B0F14]/80 px-3 py-3 text-sm font-semibold text-[#10B981] transition-all hover:border-[#10B981]/30 hover:bg-[#161B22] hover:text-[#34D399]"
             >
-              {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={handleLogout} 
-              className="w-10 h-10 rounded-2xl text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 transition-all active:scale-90"
-            >
-              <LogOut className="w-5 h-5" />
-            </Button>
+              <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#10B981]/30 bg-[#10B981]/10 text-[#10B981]">+</span>
+              New Chat
+            </button>
           </div>
+
+          {/* Sidebar Footer */}
+          <div className="relative z-10 px-4 pb-4 pt-2">
+            <div className="rounded-[16px] border border-[#232B36] bg-white/[0.03] px-4 py-3 backdrop-blur-xl shadow-[0_14px_40px_rgba(0,0,0,0.24)]">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#10B981] text-white font-black shadow-[0_0_24px_rgba(16,185,129,0.38)]">
+                    {userProfile?.username.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-[#F8FAFC]">{userProfile?.username}</p>
+                    <p className="truncate text-[11px] text-[#9CA3AF]">{userProfile?.email}</p>
+                  </div>
+                </div>
+                <button className="rounded-lg border border-[#232B36] bg-[#0B0F14] p-2 text-[#9CA3AF] transition-colors hover:border-[#22D3EE]/25 hover:text-[#F8FAFC]">
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-4 flex items-center justify-between gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleTheme}
+                  className="h-10 w-10 rounded-[12px] border border-[#232B36] bg-[#0B0F14] text-[#9CA3AF] transition-all hover:bg-[#161B22] hover:text-[#F8FAFC] active:scale-90"
+                >
+                  {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleLogout}
+                  className="h-10 w-10 rounded-[12px] border border-[#232B36] bg-[#0B0F14] text-red-400 transition-all hover:bg-[#161B22] hover:text-red-300 active:scale-90"
+                >
+                  <LogOut className="w-5 h-5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Delete Chat Confirmation Modal */}
+          {deletingThreadId && (
+            <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/65 backdrop-blur-sm p-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                className="w-full max-w-sm rounded-[20px] border border-[#232B36] bg-[#111827] p-6 text-center shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
+              >
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-red-500/20 bg-red-500/10">
+                  <Trash className="h-6 w-6 text-red-400" />
+                </div>
+                <div className="mt-4 space-y-2">
+                  <h3 className="text-lg font-bold text-[#F8FAFC]">Delete chat?</h3>
+                  <p className="text-sm text-[#9CA3AF]">This will permanently remove this conversation and all its history.</p>
+                </div>
+                <div className="mt-5 flex gap-3">
+                  <Button
+                    variant="ghost"
+                    onClick={() => setDeletingThreadId(null)}
+                    className="flex-1 rounded-xl border border-[#232B36] bg-white/[0.03] text-xs font-bold text-[#E5E7EB] hover:bg-[#161B22]"
+                  >
+                    CANCEL
+                  </Button>
+                  <Button
+                    onClick={() => handleDeleteThread(deletingThreadId)}
+                    className="flex-1 rounded-xl bg-red-500 text-xs font-bold text-white hover:bg-red-600"
+                  >
+                    DELETE
+                  </Button>
+                </div>
+              </motion.div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1645,10 +1809,13 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         ) : (
           <>
             {/* Chat Column */}
-            <div className="flex-1 flex flex-col h-full min-w-[320px] bg-background">
+            <div 
+              className="flex flex-col h-full min-w-[320px] bg-background transition-all duration-300"
+              style={{ flex: `1 1 ${100 - (browserActive ? browserPanelWidth : 0)}%` }}
+            >
               
               {/* Chat Header */}
-              <div className="h-14 border-b border-border bg-card px-4 flex items-center justify-between shrink-0">
+              <div className="h-14 border-b border-[#2A2A2A] bg-[#1A1A1A] px-4 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3">
                   <Button 
                     variant="ghost" 
@@ -1658,10 +1825,23 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   >
                     {isSidebarCollapsed ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
                   </Button>
-                  <div className="font-semibold text-sm text-foreground">{activeModel}</div>
+                  <div className="font-semibold text-sm text-[#F8FAFC]">{activeModel}</div>
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <Button
+                    variant={showHistory ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setShowHistory(!showHistory)}
+                    className={cn(
+                      "gap-1.5 text-xs font-semibold",
+                      showHistory && "bg-indigo-600 hover:bg-indigo-700 text-white border-none"
+                    )}
+                  >
+                    <Clock className="w-4 h-4" />
+                    <span>History</span>
+                  </Button>
+
                   <Button
                     variant={isSelectionMode ? "default" : "outline"}
                     size="sm"
@@ -1703,8 +1883,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     variant={browserActive ? "default" : "outline"}
                     size="sm"
                     onClick={() => {
-                      handleToggleLiveBrowser(!browserActive);
-                      setUserInterruptedBrowser(true); // Stop auto-logic if user interacts
+                      const nextState = !browserActive;
+                      handleToggleLiveBrowser(nextState);
+                      setUserInterruptedBrowser(!nextState); // Only suppress auto-open when manually closing
                     }}
                     className={cn(
                       "gap-1.5 text-xs font-semibold transition-all duration-500",
@@ -1733,99 +1914,129 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               </div>
 
               {/* Messages Container */}
-              <div 
-                ref={scrollRef}
-                className="flex-1 overflow-y-auto p-6 space-y-6"
-              >
-                {messages.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto space-y-4">
-                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-[#1e1e2f] flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                      <Sparkles className="w-6 h-6" />
+              <div className="flex-1 flex flex-row overflow-hidden">
+                <div 
+                  ref={scrollRef}
+                  className="flex-1 overflow-y-auto p-6 space-y-6"
+                >
+                  {messages.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto space-y-4">
+                      <div className="w-12 h-12 rounded-2xl bg-[#1E1E1E] flex items-center justify-center text-[#22D3EE] border border-[#2A2A2A]">
+                        <Sparkles className="w-6 h-6" />
+                      </div>
+                      <h2 className="text-xl font-bold text-[#F8FAFC]">How can I assist you today?</h2>
+                      <p className="text-sm text-[#9CA3AF]">
+                        SciParser can browse the web, analyze documents, and run complex multi-agent workflows.
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 w-full pt-4">
+                        <button 
+                          onClick={() => sendQuickPrompt("Go to Hacker News and extract top stories")}
+                          className="p-3 text-xs font-medium text-left rounded-xl border border-[#2A2A2A] text-[#E5E7EB] hover:bg-[#232323] transition-colors"
+                        >
+                          📰 Extract Hacker News
+                        </button>
+                        <button 
+                          onClick={() => sendQuickPrompt("Search for latest AI research papers")}
+                          className="p-3 text-xs font-medium text-left rounded-xl border border-[#2A2A2A] text-[#E5E7EB] hover:bg-[#232323] transition-colors"
+                        >
+                          🔬 Search AI Papers
+                        </button>
+                      </div>
                     </div>
-                    <h2 className="text-xl font-bold">How can I assist you today?</h2>
-                    <p className="text-sm text-slate-400">
-                      SciParser can browse the web, analyze documents, and run complex multi-agent workflows.
-                    </p>
-                    <div className="grid grid-cols-2 gap-2 w-full pt-4">
-                      <button 
-                        onClick={() => sendQuickPrompt("Go to Hacker News and extract top stories")}
-                        className="p-3 text-xs font-medium text-left rounded-xl border border-slate-200 dark:border-[#232329] hover:bg-slate-100 dark:hover:bg-[#16161a] transition-colors"
-                      >
-                        📰 Extract Hacker News
-                      </button>
-                      <button 
-                        onClick={() => sendQuickPrompt("Search for latest AI research papers")}
-                        className="p-3 text-xs font-medium text-left rounded-xl border border-slate-200 dark:border-[#232329] hover:bg-slate-100 dark:hover:bg-[#16161a] transition-colors"
-                      >
-                        🔬 Search AI Papers
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  messages.map(renderMessage)
-                )}
+                  ) : (
+                    messages.map(renderMessage)
+                  )}
 
-                {/* Live Plan / Loading State */}
-                {isAiTyping && (
-                  <div className="mt-4 max-w-2xl space-y-4">
-                    <div className="flex items-center justify-between px-1">
-                      <div className="flex items-center gap-3">
-                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Live Execution</div>
+                  {/* Live Plan / Loading State */}
+                  {isAiTyping && (
+                    <div className="mt-4 max-w-2xl space-y-4">
+                      <div className="flex items-center justify-between px-1">
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                            <div className="text-[10px] font-black text-[#9CA3AF] uppercase tracking-[0.2em]">Live Execution</div>
+                          </div>
+                        </div>
                         <Button 
                           variant="ghost" 
                           size="sm" 
-                          onClick={() => {
-                            setShowExecutionPlan(!showExecutionPlan);
-                            setUserInterruptedHide(true); // Stop auto-hiding if user interacts
-                          }}
-                          className="h-6 px-2 text-[9px] font-bold text-indigo-500 hover:bg-indigo-500/10 gap-1"
+                          onClick={handleStopProcess}
+                          className="h-7 px-2 text-[10px] font-bold text-red-500 hover:text-red-600 hover:bg-red-500/10 gap-1.5"
                         >
-                          {showExecutionPlan ? <XIcon className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                          {showExecutionPlan ? "HIDE PLAN" : "SHOW PLAN"}
+                          <X className="w-3 h-3" />
+                          STOP PROCESS
                         </Button>
                       </div>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={handleStopProcess}
-                        className="h-7 px-2 text-[10px] font-bold text-red-500 hover:text-red-600 hover:bg-red-500/10 gap-1.5"
-                      >
-                        <X className="w-3 h-3" />
-                        STOP PROCESS
-                      </Button>
-                    </div>
-                    
-                    <AnimatePresence>
-                      {showExecutionPlan && (
+                      
+                      <AnimatePresence>
                         <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: "auto" }}
-                          exit={{ opacity: 0, height: 0 }}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 10 }}
                           className="overflow-hidden"
                         >
                           {currentPlan ? (
-                            <div className="space-y-3">
-                              <Plan 
-                                tasks={currentPlan} 
-                                thoughts={aiThinking ? [aiThinking] : []} 
-                                onHide={() => setShowExecutionPlan(false)}
-                              />
-                            </div>
+                            <Plan 
+                              tasks={currentPlan} 
+                              thoughts={aiThinking ? [aiThinking] : []} 
+                            />
                           ) : (
-                            <div className="bg-white dark:bg-[#1e1e1e] border border-slate-200 dark:border-[#2f2f2f] rounded-2xl p-5 shadow-sm">
+                            <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl p-5 shadow-sm">
                               <MessageLoading />
                             </div>
                           )}
                         </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                )}
+                      </AnimatePresence>
+                    </div>
+                  )}
+                </div>
+
+                {/* History Panel */}
+                <AnimatePresence>
+                  {showHistory && (
+                    <>
+                      {/* Resize Handle for History */}
+                      <div 
+                        onMouseDown={handleHistoryResizeStart}
+                        className="w-1 bg-[#2A2A2A] hover:bg-indigo-500 cursor-col-resize transition-colors z-30 relative group"
+                      >
+                        <div className="absolute inset-y-0 -left-2 -right-2 cursor-col-resize" />
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-12 rounded-full bg-[#3A3A3A] group-hover:bg-white transition-colors" />
+                      </div>
+
+                      <motion.div
+                        ref={historyPanelRef}
+                        initial={{ width: 0, opacity: 0 }}
+                        animate={{ width: historyPanelWidth, opacity: 1 }}
+                        exit={{ width: 0, opacity: 0 }}
+                        className="border-l border-[#2A2A2A] bg-[#0D0D0F] overflow-hidden flex flex-col shrink-0"
+                      >
+                        <div className="p-4 border-b border-[#2A2A2A] flex items-center justify-between bg-[#1A1A1A]">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-indigo-400" />
+                            <span className="text-xs font-bold uppercase tracking-widest text-[#F8FAFC]">Agent History</span>
+                          </div>
+                          <Button variant="ghost" size="icon" onClick={() => setShowHistory(false)} className="h-6 w-6 rounded-full">
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                          <ProcessingPanel 
+                            agentHistory={agentHistory} 
+                            toolHistory={toolLogs} 
+                            isBrowserActive={false} 
+                            browserFrame={null} 
+                          />
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
               </div>
 
               {/* Chat Input Area */}
-              <div className="p-4 bg-card border-t border-border">
-                <div className="max-w-3xl mx-auto relative flex items-end gap-2 bg-muted border border-border rounded-xl p-2">
+              <div className="p-4 bg-[#1A1A1A] border-t border-[#2A2A2A]">
+                <div className="max-w-3xl mx-auto relative flex items-end gap-2 bg-[#111111] border border-[#2A2A2A] rounded-xl p-2">
                   <input 
                     type="file" 
                     ref={fileInputRef} 
@@ -1837,9 +2048,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     variant="ghost"
                     size="icon"
                     onClick={() => fileInputRef.current?.click()}
-                    className="hover:bg-muted shrink-0"
+                    className="hover:bg-[#232323] shrink-0"
                   >
-                    <Paperclip className="w-5 h-5 text-muted-foreground" />
+                    <Paperclip className="w-5 h-5 text-[#9CA3AF]" />
                   </Button>
                   <textarea
                     ref={textareaRef}
@@ -1856,7 +2067,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                       }
                     }}
                     placeholder="Ask SciParser anything..."
-                    className="flex-1 max-h-48 resize-none bg-transparent border-none focus:outline-none text-sm py-2 px-1 text-foreground"
+                    className="flex-1 max-h-48 resize-none bg-transparent border-none focus:outline-none text-sm py-2 px-1 text-[#E5E7EB] placeholder:text-[#6B7280]"
                   />
                   <Button
                     onClick={() => handleSendMessage(textareaValue)}
@@ -1875,103 +2086,34 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               <>
                 {/* Resize Handle */}
                 <div 
-                  onMouseDown={handleMouseDown}
-                  className="w-1 bg-slate-200 dark:bg-[#232329] hover:bg-indigo-500 cursor-col-resize transition-colors z-10"
-                />
-                {/* Browser Panel */}
+                  onMouseDown={handleBrowserResizeStart}
+                  className="w-1.5 bg-[#2A2A2A] hover:bg-indigo-500 cursor-col-resize transition-colors z-30 relative group"
+                >
+                  <div className="absolute inset-y-0 -left-2 -right-2 cursor-col-resize" />
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-12 rounded-full bg-[#3A3A3A] group-hover:bg-white transition-colors" />
+                </div>
+                
                 <div 
                   ref={browserPanelRef}
                   style={{ width: `${browserPanelWidth}%` }}
-                  className="h-full overflow-hidden bg-slate-900 flex flex-col shrink-0"
+                  className="h-full overflow-hidden bg-[#000000] flex flex-col shrink-0 transition-[width] duration-75 ease-out"
                 >
-                  <div className="flex-1 overflow-hidden">
-                    <BrowserPreview 
-                      frame={browserFrame} 
-                      isActive={browserActive} 
-                      onClose={() => setBrowserActive(false)} 
-                    />
-                  </div>
-                  
-                  {/* Tool Activity Panel below Browser */}
-                  <div className="h-1/3 border-t border-slate-800 bg-[#0a0a0c] flex flex-col overflow-hidden">
-                    <div className="px-4 py-2 border-b border-slate-800 flex items-center justify-between bg-[#111114]">
-                      <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                        <Code className="w-3 h-3 text-indigo-400" />
-                        <span>Tool Execution Log</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        {isAiTyping && (
-                          <>
-                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            <span className="text-[9px] text-emerald-500 font-bold uppercase">Live</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div 
-                      ref={toolLogsScrollRef}
-                      onScroll={handleToolLogsScroll}
-                      className="flex-1 overflow-y-auto p-3 font-mono text-[11px] space-y-3"
-                    >
-                      {toolLogs.length === 0 ? (
-                        <div className="h-full flex items-center justify-center text-slate-600 italic">
-                          Waiting for tool activity...
-                        </div>
-                      ) : (
-                        toolLogs.map((log, idx) => {
-                          const isSelected = selectedTools.includes(log.id || String(idx));
-                          return (
-                            <div 
-                              key={log.id || idx} 
-                              onClick={() => {
-                                if (isSelectionMode) {
-                                  const id = log.id || String(idx);
-                                  setSelectedToolIds(prev => 
-                                    prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-                                  );
-                                }
-                              }}
-                              className={cn(
-                                "flex flex-col gap-1 border-l-2 pl-3 py-1 transition-all cursor-pointer relative",
-                                log.status === 'IN_PROGRESS' ? "border-blue-500 bg-blue-500/5" : 
-                                log.status === 'SUCCESS' ? "border-emerald-500 bg-emerald-500/5" : "border-red-500 bg-red-500/5",
-                                isSelectionMode && isSelected && "bg-indigo-500/10 border-indigo-500"
-                              )}
-                            >
-                              {isSelectionMode && (
-                                <div className={cn(
-                                  "absolute top-1 right-1 w-3 h-3 rounded-full border flex items-center justify-center",
-                                  isSelected ? "bg-indigo-500 border-indigo-500" : "border-slate-600"
-                                )}>
-                                  {isSelected && <Check className="w-2 h-2 text-white" />}
-                                </div>
-                              )}
-                              <div className="flex items-center justify-between">
-                                <span className={cn(
-                                  "font-bold",
-                                  log.status === 'IN_PROGRESS' ? "text-blue-400" : 
-                                  log.status === 'SUCCESS' ? "text-emerald-400" : "text-red-400"
-                                )}>
-                                  {">"} {log.tool_name}
-                                </span>
-                                <span className="text-[9px] text-slate-500">
-                                  {log.status}
-                                </span>
-                              </div>
-                              <div className="text-slate-400 break-all opacity-70 text-[10px]">
-                                IN: {JSON.stringify(log.tool_input)}
-                              </div>
-                              {log.tool_output && (
-                                <div className="text-slate-200 break-words mt-1 bg-white/5 p-1.5 rounded border border-white/5">
-                                  OUT: {log.tool_output}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
+                  <BrowserPreview 
+                    frame={browserFrame} 
+                    isActive={browserActive} 
+                    onClose={() => setBrowserActive(false)}
+                    toolLogs={toolLogs}
+                    isAiTyping={isAiTyping}
+                    activeThreadId={activeThreadId}
+                    isSelectionMode={isSelectionMode}
+                    selectedTools={selectedTools}
+                    onToggleToolSelection={(id) => {
+                      setSelectedToolIds(prev => 
+                        prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+                      );
+                    }}
+                    onClearLogs={() => setToolLogs([])}
+                  />
                 </div>
               </>
             )}

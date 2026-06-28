@@ -2,7 +2,7 @@ import sys
 import uuid
 import json
 import asyncio
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request, Query
@@ -66,7 +66,7 @@ class PlanStreamManager:
                 except Exception:
                     pass
 
-    async def broadcast_frame(self, frame_data: str, user_id: str, is_tool: bool = False):
+    async def broadcast_frame(self, frame_data: Any, user_id: str, is_tool: bool = False):
         """Broadcasts a base64 CDP frame or tool log to all connected browser stream clients for a user."""
         if user_id in self.browser_connections:
             event_type = "tool_log" if is_tool else "frame"

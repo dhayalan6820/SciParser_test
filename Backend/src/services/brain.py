@@ -167,6 +167,73 @@ class Brain:
         if not state_tool:
             logger.warning("browser_get_state tool not found, live preview disabled.")
             return
+
+        def extract_screenshot(payload: Any) -> Optional[str]:
+            """Best-effort extraction of a screenshot payload from MCP/browser tool responses."""
+            if payload is None:
+                return None
+
+            if isinstance(payload, str):
+                text = payload.strip()
+                if not text:
+                    return None
+                # MCP browser state responses are usually JSON strings with a 'screenshot' field.
+                if text[:1] in "{[":
+                    try:
+                        parsed = json.loads(text)
+                    except Exception:
+                        parsed = None
+                    if parsed is not None:
+                        extracted = extract_screenshot(parsed)
+                        if extracted:
+                            return extracted
+                if text.startswith("data:image/"):
+                    return text
+                if "[SCREENSHOT]" in text:
+                    match = re.search(r'\[SCREENSHOT\](.*?)\s*\[/SCREENSHOT\]', text, re.DOTALL)
+                    if match:
+                        return match.group(1).strip()
+                if len(text) > 1000 and re.match(r'^[A-Za-z0-9+/=]+$', text[:100]):
+                    return text
+                return None
+
+            if isinstance(payload, dict):
+                # Common response shapes from browser/MCP tools.
+                for key in ("frame", "data", "image", "screenshot", "base64", "content", "text", "output", "result"):
+                    value = payload.get(key)
+                    if isinstance(value, str):
+                        extracted = extract_screenshot(value)
+                        if extracted:
+                            return extracted
+                    elif isinstance(value, (dict, list)):
+                        extracted = extract_screenshot(value)
+                        if extracted:
+                            return extracted
+
+                # Search nested values as a fallback.
+                for value in payload.values():
+                    if isinstance(value, (dict, list, str)):
+                        extracted = extract_screenshot(value)
+                        if extracted:
+                            return extracted
+                return None
+
+            if isinstance(payload, list):
+                for item in payload:
+                    if isinstance(item, dict):
+                        item_type = item.get("type")
+                        if item_type == "image" and item.get("data"):
+                            return extract_screenshot(item.get("data"))
+                        if item_type == "text" and item.get("text"):
+                            extracted = extract_screenshot(item.get("text"))
+                            if extracted:
+                                return extracted
+                    extracted = extract_screenshot(item)
+                    if extracted:
+                        return extracted
+                return None
+
+            return None
             
         logger.info(f"Starting live preview stream for user {user_id}, chat {chat_id}")
         while not stop_event.is_set():
@@ -174,40 +241,33 @@ class Brain:
                 # Get screenshot via MCP tool
                 # We pass chat_id to the tool so the MCP server knows which tab to capture
                 res = await state_tool.ainvoke({"include_screenshot": True, "chat_id": chat_id})
-                
-                screenshot_data = None
-                res_str = str(res)
-                
-                # 1. Try to find [SCREENSHOT] tags in the string representation
-                if "[SCREENSHOT]" in res_str:
-                    match = re.search(r'\[SCREENSHOT\](.*?)\s*\[/SCREENSHOT\]', res_str, re.DOTALL)
-                    if match:
-                        screenshot_data = match.group(1).strip()
-                
-                # 2. If not found, and res is a list, look for an image block or data field
-                if not screenshot_data and isinstance(res, list):
-                    for block in res:
-                        if isinstance(block, dict):
-                            # Some MCP servers return type: image
-                            if block.get("type") == "image" and block.get("data"):
-                                screenshot_data = block["data"]
-                                break
-                            # Others might return a text block with the screenshot
-                            elif block.get("type") == "text" and "[SCREENSHOT]" in block.get("text", ""):
-                                match = re.search(r'\[SCREENSHOT\](.*?)\s*\[/SCREENSHOT\]', block["text"], re.DOTALL)
-                                if match:
-                                    screenshot_data = match.group(1).strip()
-                                    break
-                
+
+                screenshot_data = extract_screenshot(res)
+
                 if screenshot_data and self.stream_manager:
                     # Broadcast with chat_id so frontend can route correctly
+                    # Pass as dict to avoid double-encoding in main.py
+                    logger.info(
+                        f"Broadcasting browser frame for user {user_id}, chat {chat_id}, "
+                        f"length={len(screenshot_data)}"
+                    )
                     await self.stream_manager.broadcast_frame(
-                        json.dumps({"chat_id": chat_id, "frame": screenshot_data}), 
+                        {"chat_id": chat_id, "frame": screenshot_data}, 
                         user_id
                     )
+                else:
+                    # Log if we failed to find a screenshot but got a response
+                    if res:
+                        preview = str(res)
+                        if len(preview) > 500:
+                            preview = preview[:500] + "..."
+                        logger.info(
+                            f"No screenshot found in MCP response for chat {chat_id}. "
+                            f"Response type: {type(res)} preview: {preview}"
+                        )
             except Exception as e:
                 logger.error(f"Error in browser frame stream: {e}")
-            await asyncio.sleep(1.5) # Lowered frame rate for parallel stability as requested
+            await asyncio.sleep(0.8) # Reverted to 0.8s for live feel as in previous version
 
     def _calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
         """Calculates the cost of an LLM call based on OpenRouter pricing (approximate)."""
@@ -249,10 +309,11 @@ class Brain:
                 {memory_summary}
 
                 TOOL SELECTION RULES:
-                1. Use general web search only for finding the correct target URL.
-                2. Use browser automation tools for ALL page interactions: form filling, clicking, booking, and checking availability.
-                3. Do not hardcode a specific tool name. Choose the browser action that best completes the task.
-                4. **CRITICAL:** Do NOT close the browser or the current page. Keep the session active for further instructions.
+                1. If the user provides a specific URL, your first and only priority is to navigate to that URL. Do NOT perform a search or click anything unless explicitly asked to find information.
+                2. Use general web search only for finding the correct target URL if it is missing.
+                3. Use browser automation tools for ALL page interactions: form filling, clicking, booking, and checking availability.
+                4. Do not hardcode a specific tool name. Choose the browser action that best completes the task.
+                5. **CRITICAL:** Do NOT close the browser or the current page. Keep the session active for further instructions.
 
                 VISUAL SEARCH & DYNAMIC RECOVERY:
                 - **Diagnostic Mode:** If you take an action (like typing) and the UI does not change (e.g., button stays disabled), you MUST stop and diagnose.
@@ -759,6 +820,7 @@ class Brain:
             return {
                 "success": True,
                 "execution_result": final_response,
+                "plan": current_plan,
                 "message": {
                     "id": ai_msg_id,
                     "log_id": str(uuid.uuid4()),

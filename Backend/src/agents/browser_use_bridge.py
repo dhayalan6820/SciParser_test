@@ -19,19 +19,39 @@ async def run_bridge():
     # Manual config support
     executable_path = os.getenv("BROWSER_EXECUTABLE_PATH")
     user_data_dir = os.getenv("BROWSER_USER_DATA_DIR")
+    port_env = os.getenv("BROWSER_USE_CDP_PORT")
+    port = int(port_env) if port_env and port_env != "0" else 9222
     
-    print(f"Bridge starting. CDP: {cdp_url}, Own: {own_browser}, UserData: {user_data_dir}", file=sys.stderr)
+    print(f"Bridge starting. CDP: {cdp_url}, Own: {own_browser}, UserData: {user_data_dir}, Port: {port}", file=sys.stderr)
     
+    browser = None
     # If we are connecting to an existing browser, we don't need to launch one here.
-    # We just ensure the environment variables are set for the MCP server's internal Agent.
     if cdp_url and own_browser:
         os.environ["BROWSER_CDP_URL"] = cdp_url
         print(f"Bridge configured to connect to: {cdp_url}", file=sys.stderr)
-    elif user_data_dir:
-        # If we have a unique user data dir, we let the MCP server launch its own isolated browser.
-        # This prevents the "two browsers" issue where we launch one and the server launches another.
-        os.environ["BROWSER_USER_DATA_DIR"] = user_data_dir
-        print(f"Bridge configured with isolated UserData: {user_data_dir}", file=sys.stderr)
+    else:
+        # If we don't have an existing browser to connect to, we MUST launch one
+        # so that the MCP server has a browser to interact with and take screenshots from.
+        print(f"Launching new browser for MCP server on port {port}...", file=sys.stderr)
+        try:
+            from browser_use.browser.browser import BrowserConfig
+            
+            # Configure the browser to expose the CDP port
+            config = BrowserConfig(
+                headless=os.getenv("BROWSER_USE_HEADLESS", "false").lower() == "true",
+                extra_chromium_args=[f"--remote-debugging-port={port}", "--remote-allow-origins=*"]
+            )
+            
+            browser = Browser(config=config)
+            await browser.start()
+            
+            # Set the CDP URL for the MCP server and the preview stream
+            cdp_url = f"http://localhost:{port}"
+            os.environ["BROWSER_CDP_URL"] = cdp_url
+            os.environ["MCP_BROWSER_CDP_URL"] = cdp_url
+            print(f"Bridge launched browser at: {cdp_url}", file=sys.stderr)
+        except Exception as e:
+            print(f"Failed to launch browser in bridge: {e}", file=sys.stderr)
 
     try:
         print(f"Starting MCP server...", file=sys.stderr)
@@ -45,6 +65,9 @@ async def run_bridge():
     
     except Exception as e:
         print(f"Bridge Error: {e}", file=sys.stderr)
+    finally:
+        if browser:
+            await browser.close()
 
 if __name__ == "__main__":
     asyncio.run(run_bridge())

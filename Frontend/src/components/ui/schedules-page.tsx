@@ -140,20 +140,20 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
 
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar - Schedule List */}
-        <div className="w-80 border-r border-border bg-card flex flex-col shrink-0">
-          <div className="p-4 border-b border-border">
-            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Your Schedules</div>
+        <div className="w-80 border-r border-[#232B36] bg-[#05070A]/95 flex flex-col shrink-0">
+          <div className="p-4 border-b border-[#232B36]">
+            <div className="text-[10px] font-black text-[#10B981] uppercase tracking-[0.2em]">Your Schedules</div>
           </div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          <div className="flex-1 overflow-y-auto p-3 space-y-2 hide-scrollbar">
             {loading ? (
               <div className="flex flex-col items-center justify-center h-40 gap-3">
-                <div className="w-6 h-6 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
-                <span className="text-xs text-muted-foreground">Loading...</span>
+                <div className="w-6 h-6 border-2 border-[#22D3EE]/30 border-t-[#22D3EE] rounded-full animate-spin" />
+                <span className="text-xs text-[#9CA3AF]">Loading...</span>
               </div>
             ) : schedules.length === 0 ? (
               <div className="p-8 text-center space-y-3">
-                <Calendar className="w-8 h-8 text-muted-foreground mx-auto" />
-                <p className="text-xs text-muted-foreground">No schedules found. Create one from the chat!</p>
+                <Calendar className="w-8 h-8 text-[#6B7280] mx-auto" />
+                <p className="text-xs text-[#9CA3AF]">No schedules found. Create one from the chat!</p>
               </div>
             ) : (
               schedules.map((s) => (
@@ -161,19 +161,26 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                   key={s.schedule_id}
                   onClick={() => setSelectedSchedule(s)}
                   className={cn(
-                    "p-3 rounded-xl cursor-pointer transition-all border",
+                    "group relative overflow-hidden rounded-[14px] border p-3.5 transition-all duration-200 cursor-pointer",
                     selectedSchedule?.schedule_id === s.schedule_id
-                      ? "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-500/30"
-                      : "bg-transparent border-transparent hover:bg-muted"
+                      ? "border-[#10B981]/35 bg-gradient-to-r from-[#10B981]/20 to-[#22D3EE]/15 text-white shadow-[0_0_24px_rgba(16,185,129,0.12)]"
+                      : "border-[#232B36] bg-white/[0.02] text-[#D1D5DB] hover:border-[#22D3EE]/25 hover:bg-[#161B22] hover:text-white"
                   )}
                 >
-                  <div className="font-bold text-sm truncate mb-1 text-foreground">{s.title}</div>
-                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                    <span className="px-1.5 py-0.5 rounded bg-muted uppercase font-bold tracking-tighter">
-                      {s.schedule_type}
-                    </span>
-                    <span>•</span>
-                    <span>{formatDate(s.created_at)}</span>
+                  {selectedSchedule?.schedule_id === s.schedule_id && (
+                    <div className="absolute left-0 top-0 h-full w-1 bg-[#10B981] shadow-[0_0_14px_rgba(16,185,129,0.65)]" />
+                  )}
+                  <div className="font-bold text-sm truncate mb-1.5">{s.title}</div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className={cn(
+                        "px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider",
+                        selectedSchedule?.schedule_id === s.schedule_id ? "bg-white/20 text-white" : "bg-[#232B36] text-[#9CA3AF]"
+                      )}>
+                        {s.schedule_type}
+                      </span>
+                    </div>
+                    <span className="text-[9px] text-[#6B7280] font-bold uppercase">{formatDate(s.created_at).split(',')[0]}</span>
                   </div>
                 </div>
               ))
@@ -329,18 +336,18 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
               {/* Grid Layout for Code and Results */}
               <div className="grid grid-cols-1 gap-6">
                 {/* Generated Script Toggle */}
-                <div className="bg-white dark:bg-[#16161a] rounded-2xl border border-slate-200 dark:border-[#232329] overflow-hidden shadow-sm">
-                  <div className="px-6 py-4 border-b border-slate-100 dark:border-white/5 flex items-center justify-between bg-slate-50/50 dark:bg-white/5">
+                <div className="bg-[#1A1A1A] rounded-2xl border border-[#2A2A2A] overflow-hidden shadow-sm">
+                  <div className="px-6 py-4 border-b border-[#2A2A2A] flex items-center justify-between bg-white/[0.02]">
                     <div className="flex items-center gap-2">
                       <Code className="w-4 h-4 text-indigo-500" />
-                      <span className="text-xs font-bold uppercase tracking-wider">Automation Script</span>
+                      <span className="text-xs font-bold uppercase tracking-wider text-[#F8FAFC]">Automation Script</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Button 
                         variant="outline" 
                         size="sm" 
                         onClick={() => setShowScript(!showScript)}
-                        className="h-8 px-3 text-[10px] font-bold gap-1.5 border-indigo-500/20 text-indigo-500"
+                        className="h-8 px-3 text-[10px] font-bold gap-1.5 border-indigo-500/20 text-indigo-500 hover:bg-indigo-500/10"
                       >
                         {showScript ? "HIDE SCRIPT" : "VIEW SCRIPT"}
                       </Button>
@@ -350,12 +357,12 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                             variant="ghost" 
                             size="sm" 
                             onClick={() => handleCopyCode(selectedSchedule.generated_script)}
-                            className="h-8 px-3 text-[10px] font-bold gap-1.5"
+                            className="h-8 px-3 text-[10px] font-bold gap-1.5 text-[#9CA3AF] hover:text-[#F8FAFC]"
                           >
                             {copySuccess ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                             {copySuccess || "COPY"}
                           </Button>
-                          <Button variant="ghost" size="sm" className="h-8 px-3 text-[10px] font-bold gap-1.5">
+                          <Button variant="ghost" size="sm" className="h-8 px-3 text-[10px] font-bold gap-1.5 text-[#9CA3AF] hover:text-[#F8FAFC]">
                             <Download className="w-3.5 h-3.5" />
                             DOWNLOAD
                           </Button>
@@ -373,23 +380,23 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                 </div>
 
                 {/* Last Run Results */}
-                <div className="bg-white dark:bg-[#16161a] rounded-2xl border border-slate-200 dark:border-[#232329] overflow-hidden shadow-sm">
-                  <div className="px-6 py-4 border-b border-slate-100 dark:border-white/5 flex items-center justify-between bg-slate-50/50 dark:bg-white/5">
+                <div className="bg-[#1A1A1A] rounded-2xl border border-[#2A2A2A] overflow-hidden shadow-sm">
+                  <div className="px-6 py-4 border-b border-[#2A2A2A] flex items-center justify-between bg-white/[0.02]">
                     <div className="flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                      <span className="text-xs font-bold uppercase tracking-wider">Last Run Results</span>
+                      <span className="text-xs font-bold uppercase tracking-wider text-[#F8FAFC]">Last Run Results</span>
                     </div>
-                    <span className="text-[10px] text-slate-400 font-bold">COMPLETED 2 HOURS AGO</span>
+                    <span className="text-[10px] text-[#9CA3AF] font-bold uppercase tracking-widest">COMPLETED 2 HOURS AGO</span>
                   </div>
                   <div className="p-6">
                     {selectedSchedule.extracted_content ? (
-                      <div className="prose dark:prose-invert max-w-none text-sm text-slate-600 dark:text-slate-300">
+                      <div className="prose dark:prose-invert max-w-none text-sm text-[#E5E7EB]">
                         {selectedSchedule.extracted_content}
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center py-12 text-center space-y-3">
-                        <AlertCircle className="w-8 h-8 text-slate-300" />
-                        <p className="text-xs text-slate-400">No results available yet. Run the schedule to see data.</p>
+                        <AlertCircle className="w-8 h-8 text-[#374151]" />
+                        <p className="text-xs text-[#64748B]">No results available yet. Run the schedule to see data.</p>
                       </div>
                     )}
                   </div>
