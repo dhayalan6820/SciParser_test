@@ -79,7 +79,7 @@ export default function App() {
   }, [theme]);
 
   return (
-    <motion.div initial="hidden" animate="visible" variants={containerVariants}>
+    <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-screen w-screen overflow-hidden">
         {isLoading ? (
           <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>

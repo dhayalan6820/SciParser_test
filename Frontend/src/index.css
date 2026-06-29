@@ -81,6 +81,14 @@
   --text-secondary: #666666;
 }
 
+/* Full-screen height chain — ensures h-full works on every descendant */
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
 /* Hide scrollbar for Chrome, Safari and Opera */
 ::-webkit-scrollbar {
   display: none;

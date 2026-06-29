@@ -72,6 +72,33 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
   
   const [runs, setRuns] = React.useState<ScheduleRun[]>([]);
 
+  // Resizable sidebar
+  const [sidebarWidth, setSidebarWidth] = React.useState(280);
+  const [isResizingSidebar, setIsResizingSidebar] = React.useState(false);
+
+  React.useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isResizingSidebar) return;
+      const newWidth = e.clientX;
+      if (newWidth >= 200 && newWidth <= 480) setSidebarWidth(newWidth);
+    };
+    const onMouseUp = () => {
+      if (isResizingSidebar) {
+        setIsResizingSidebar(false);
+        document.body.style.cursor = 'default';
+      }
+    };
+    if (isResizingSidebar) {
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = 'col-resize';
+    }
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [isResizingSidebar]);
+
   React.useEffect(() => {
     fetchSchedules();
   }, []);
@@ -232,9 +259,12 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
         </div>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Sidebar - Schedule List */}
-        <div className="w-[320px] border-r border-[#1F2937] bg-[#05070A] flex flex-col shrink-0">
+        <div
+          className="border-r border-[#1F2937] bg-[#05070A] flex flex-col shrink-0 relative"
+          style={{ width: sidebarWidth }}
+        >
           <div className="p-6 border-b border-[#1F2937] flex items-center justify-between">
             <div className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em]">Your Schedules</div>
             <div className="px-2 py-1 rounded-md bg-[#111827] border border-[#1F2937] text-[9px] text-[#64748B] font-bold">{schedules.length}</div>
@@ -283,18 +313,26 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
               ))
             )}
           </div>
+
+          {/* Drag handle on the right edge of the sidebar */}
+          <div
+            onMouseDown={(e) => { e.preventDefault(); setIsResizingSidebar(true); }}
+            className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize z-20 group flex items-center justify-center hover:bg-indigo-500/20 transition-colors"
+          >
+            <div className="w-0.5 h-16 rounded-full bg-[#1F2937] group-hover:bg-indigo-500 transition-colors" />
+          </div>
         </div>
 
         {/* Main Content - Premium Dashboard */}
-        <div className="flex-1 overflow-y-auto bg-[#05070A] p-8 hide-scrollbar">
+        <div className="flex-1 overflow-y-auto bg-[#05070A] p-6 hide-scrollbar min-w-0">
           {selectedSchedule ? (
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="max-w-[1400px] mx-auto space-y-8"
+              className="space-y-6"
             >
               {/* Header Section */}
-              <div className="flex items-start justify-between bg-[#111827]/40 p-8 rounded-[32px] border border-[#1F2937] relative overflow-hidden">
+              <div className="flex flex-wrap items-start gap-6 bg-[#111827]/40 p-6 rounded-[32px] border border-[#1F2937] relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-8 opacity-5">
                   <Activity className="w-40 h-40 text-indigo-500" />
                 </div>
@@ -322,7 +360,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-8 pt-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
                     {[
                       { label: 'Next Run', val: 'Tomorrow, 09:00 AM', icon: Calendar },
                       { label: 'Last Run', val: '2 hours ago', icon: History },
@@ -373,10 +411,10 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
               </div>
 
               {/* Main Dashboard Grid */}
-              <div className="grid grid-cols-12 gap-8">
+              <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
                 
                 {/* Left Column - Progress & Pipeline */}
-                <div className="col-span-8 space-y-8">
+                <div className="col-span-1 xl:col-span-8 space-y-6 min-w-0">
                   
                   {/* Current Run Progress */}
                   <div className="bg-[#111827]/40 rounded-[32px] border border-[#1F2937] p-8 flex items-center gap-10">
@@ -657,7 +695,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                 </div>
 
                 {/* Right Column - Summary & Browser */}
-                <div className="col-span-4 space-y-8">
+                <div className="col-span-1 xl:col-span-4 space-y-6 min-w-0">
                   
                   {/* Execution Summary */}
                   <div className="bg-[#111827]/40 rounded-[32px] border border-[#1F2937] p-8 space-y-6">
