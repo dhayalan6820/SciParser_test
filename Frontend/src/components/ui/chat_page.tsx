@@ -57,6 +57,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const [uploads, setUploads] = React.useState<UploadedFile[]>([]);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
+  const [isMobile, setIsMobile] = React.useState(() => window.innerWidth < 768);
   const [threads, setThreads] = React.useState<Thread[]>([]);
   const [activeThreadId, setActiveThreadId] = React.useState<string | undefined>(undefined);
   const [browserActive, setBrowserActive] = React.useState(false);
@@ -277,6 +278,12 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       document.body.style.cursor = 'default';
     };
   }, [resizingPanel]);
+
+  React.useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   React.useEffect(() => {
     const token = localStorage.getItem("access_token");
@@ -657,6 +664,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     setMessages([]);
     setBrowserActive(false);
     setCurrentView("chat");
+    setIsMobileSidebarOpen(false);
   };
 
   const handleSendMessage = async (text: string) => {
@@ -1477,15 +1485,31 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         </div>
       )}
 
+      {/* Mobile sidebar backdrop */}
+      {isMobile && isMobileSidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+          onClick={() => setIsMobileSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       <div 
         className={cn(
-          "h-full flex flex-col shrink-0 transition-all duration-300 z-20 overflow-hidden border-r border-[#232B36] backdrop-blur-xl",
-          isSidebarCollapsed
-            ? "w-0 -translate-x-full border-r-0"
-            : currentView === "schedules"
-              ? "w-16 bg-[#05070A]/95"
-              : "w-[320px] lg:w-[340px] xl:w-[360px] bg-[#05070A]/95"
+          "flex flex-col shrink-0 transition-all duration-300 overflow-hidden border-[#232B36] backdrop-blur-xl bg-[#05070A]/95",
+          isMobile
+            ? cn(
+                "fixed inset-y-0 left-0 z-50 h-full w-[320px] border-r",
+                isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
+              )
+            : cn(
+                "relative h-full z-20 border-r",
+                isSidebarCollapsed
+                  ? "w-0 border-r-0"
+                  : currentView === "schedules"
+                    ? "w-16"
+                    : "w-[320px] lg:w-[340px] xl:w-[360px]"
+              )
         )}
       >
         {/* Icon-only rail shown when on Automation page */}
@@ -1553,14 +1577,26 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     <div className="text-[11px] text-[#6B7280]">Orchestration dashboard</div>
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleNewChat(true)}
-                  className="h-10 w-10 rounded-[14px] border border-[#232B36] bg-[#111827]/60 text-[#F8FAFC] hover:bg-[#161B22] hover:text-[#22D3EE]"
-                >
-                  <Plus className="h-5 w-5" />
-                </Button>
+                <div className="flex items-center gap-1.5">
+                  {isMobile && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setIsMobileSidebarOpen(false)}
+                      className="h-10 w-10 rounded-[14px] border border-[#232B36] bg-[#111827]/60 text-[#9CA3AF] hover:bg-[#161B22] hover:text-[#F8FAFC]"
+                    >
+                      <X className="h-5 w-5" />
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleNewChat(true)}
+                    className="h-10 w-10 rounded-[14px] border border-[#232B36] bg-[#111827]/60 text-[#F8FAFC] hover:bg-[#161B22] hover:text-[#22D3EE]"
+                  >
+                    <Plus className="h-5 w-5" />
+                  </Button>
+                </div>
               </div>
 
               {/* Sidebar Search */}
@@ -1779,10 +1815,16 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                    onClick={() => {
+                      if (isMobile) {
+                        setIsMobileSidebarOpen(!isMobileSidebarOpen);
+                      } else {
+                        setIsSidebarCollapsed(!isSidebarCollapsed);
+                      }
+                    }}
                     className="hover:bg-muted"
                   >
-                    {isSidebarCollapsed ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
+                    {(isMobile ? isMobileSidebarOpen : !isSidebarCollapsed) ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeftOpen className="w-5 h-5" />}
                   </Button>
                   <div className="font-semibold text-sm text-[#F8FAFC]">{activeModel}</div>
                 </div>
