@@ -47,8 +47,9 @@ export function BrowserPreview({
   const [showGrid, setShowGrid] = useState(false);
   
   const logsEndRef = useRef<HTMLDivElement>(null);
-  const [browserWidth, setBrowserWidth] = useState(70); // Browser width %
+  const [browserHeight, setBrowserHeight] = useState(65); // Browser height %
   const containerRef = useRef<HTMLDivElement>(null);
+  const workspaceRef = useRef<HTMLDivElement>(null);
   const [isResizing, setIsResizing] = useState(false);
 
   useEffect(() => {
@@ -64,11 +65,11 @@ export function BrowserPreview({
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing || !containerRef.current) return;
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
-      if (newWidth > 20 && newWidth < 90) {
-        setBrowserWidth(newWidth);
+      if (!isResizing || !workspaceRef.current) return;
+      const containerRect = workspaceRef.current.getBoundingClientRect();
+      const newHeight = ((e.clientY - containerRect.top) / containerRect.height) * 100;
+      if (newHeight > 20 && newHeight < 85) {
+        setBrowserHeight(newHeight);
       }
     };
 
@@ -166,12 +167,12 @@ export function BrowserPreview({
         </div>
 
         {/* Main Workspace Area */}
-        <div className="flex-1 flex overflow-hidden relative">
-          {/* Left Panel: Browser Stream */}
+        <div ref={workspaceRef} className="flex-1 flex flex-col overflow-hidden relative">
+          {/* Top Panel: Browser Stream */}
           <div 
-            style={{ width: viewMode === 'browser' ? '100%' : viewMode === 'logs' ? '0%' : `${browserWidth}%` }}
+            style={{ height: viewMode === 'browser' ? '100%' : viewMode === 'logs' ? '0%' : `${browserHeight}%` }}
             className={cn(
-              "flex flex-col h-full bg-black relative transition-all duration-300",
+              "flex flex-col w-full bg-black relative transition-all duration-300 shrink-0",
               viewMode === 'logs' && "hidden"
             )}
           >
@@ -257,18 +258,18 @@ export function BrowserPreview({
           {viewMode === 'split' && (
             <div 
               onMouseDown={handleMouseDown}
-              className="w-1 bg-[#232B36] hover:bg-[#22D3EE] cursor-col-resize transition-colors z-20 relative group"
+              className="h-1.5 w-full bg-[#232B36] hover:bg-[#22D3EE] cursor-row-resize transition-colors z-20 relative group shrink-0"
             >
-              <div className="absolute inset-y-0 -left-2 -right-2 cursor-col-resize" />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-8 rounded-full bg-[#374151] group-hover:bg-[#22D3EE] transition-colors" />
+              <div className="absolute inset-x-0 -top-2 -bottom-2 cursor-row-resize" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-1 w-12 rounded-full bg-[#374151] group-hover:bg-[#22D3EE] transition-colors" />
             </div>
           )}
 
-          {/* Right Panel: Tool Execution Log */}
+          {/* Bottom Panel: Tool Execution Log */}
           <div 
-            style={{ width: viewMode === 'logs' ? '100%' : viewMode === 'browser' ? '0%' : `${100 - browserWidth}%` }}
+            style={{ height: viewMode === 'logs' ? '100%' : viewMode === 'browser' ? '0%' : `${100 - browserHeight}%` }}
             className={cn(
-              "flex flex-col h-full bg-[#0A0C10] border-l border-[#232B36] transition-all duration-300",
+              "flex flex-col w-full bg-[#0A0C10] border-t border-[#232B36] transition-all duration-300",
               viewMode === 'browser' && "hidden"
             )}
           >
