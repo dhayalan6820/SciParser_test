@@ -1481,10 +1481,63 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       <div 
         className={cn(
           "h-full flex flex-col shrink-0 transition-all duration-300 z-20 overflow-hidden border-r border-[#232B36] backdrop-blur-xl",
-          isSidebarCollapsed ? "w-0 -translate-x-full border-r-0" : "w-[320px] lg:w-[340px] xl:w-[360px] bg-[#05070A]/95"
+          isSidebarCollapsed
+            ? "w-0 -translate-x-full border-r-0"
+            : currentView === "schedules"
+              ? "w-16 bg-[#05070A]/95"
+              : "w-[320px] lg:w-[340px] xl:w-[360px] bg-[#05070A]/95"
         )}
       >
-        <div className="relative flex h-full flex-col bg-[#05070A]/95">
+        {/* Icon-only rail shown when on Automation page */}
+        {!isSidebarCollapsed && currentView === "schedules" && (
+          <div className="flex h-full flex-col items-center py-4 gap-3">
+            <div className="pointer-events-none absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_28%)]" />
+            {/* Logo */}
+            <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full border border-[#22D3EE]/20 bg-[#0B0F14] text-[#10B981] shadow-[0_0_18px_rgba(16,185,129,0.16)]">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div className="relative z-10 w-8 h-px bg-[#232B36]" />
+            {/* Chat nav icon */}
+            <button
+              onClick={() => handleSwitchView("chat")}
+              title="AI Chat"
+              className="relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border border-[#232B36] bg-white/[0.02] text-[#9CA3AF] hover:border-[#22D3EE]/25 hover:bg-[#161B22] hover:text-[#F8FAFC] transition-all"
+            >
+              <MessageSquare className="h-5 w-5" />
+            </button>
+            {/* Automation nav icon (active) */}
+            <button
+              onClick={() => handleSwitchView("schedules")}
+              title="Automation"
+              className="relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border border-[#22D3EE]/35 bg-gradient-to-b from-[#10B981]/20 to-[#22D3EE]/15 text-[#F8FAFC] shadow-[0_0_16px_rgba(34,211,238,0.15)] transition-all"
+            >
+              <Calendar className="h-5 w-5" />
+            </button>
+            {/* Spacer */}
+            <div className="flex-1" />
+            {/* Theme toggle */}
+            <button
+              onClick={toggleTheme}
+              title="Toggle theme"
+              className="relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border border-[#232B36] bg-[#0B0F14] text-[#9CA3AF] hover:bg-[#161B22] hover:text-[#F8FAFC] transition-all"
+            >
+              {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+            {/* Logout */}
+            <button
+              onClick={handleLogout}
+              title="Log out"
+              className="relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border border-[#232B36] bg-[#0B0F14] text-red-400 hover:bg-[#161B22] hover:text-red-300 transition-all"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+            {/* User avatar */}
+            <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full bg-[#10B981] text-white text-xs font-black shadow-[0_0_18px_rgba(16,185,129,0.3)]">
+              {userProfile?.username.slice(0, 2).toUpperCase()}
+            </div>
+          </div>
+        )}
+        <div className={cn("relative flex h-full flex-col bg-[#05070A]/95", (!isSidebarCollapsed && currentView === "schedules") && "hidden")}>
           <div className="pointer-events-none absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_28%),radial-gradient(circle_at_bottom,rgba(16,185,129,0.06),transparent_22%)]" />
 
           {/* Sidebar Header */}
