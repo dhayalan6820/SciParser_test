@@ -6,10 +6,10 @@ from sqlalchemy import (
     TIMESTAMP, BigInteger, Column, ForeignKey, Integer, String, Text, DateTime
 )
 
-from sqlalchemy.orm import Mapped, declarative_base, relationship, sessionmaker
+from sqlalchemy.orm import Mapped, declarative_base, relationship
 from enum import Enum as PyEnum
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -42,9 +42,8 @@ engine = create_async_engine(
     pool_pre_ping=True,
 )
 
-AsyncSessionLocal = sessionmaker(
+AsyncSessionLocal = async_sessionmaker(
     bind=engine,
-    class_=AsyncSession,
     expire_on_commit=False,
     autoflush=False,
     autocommit=False
