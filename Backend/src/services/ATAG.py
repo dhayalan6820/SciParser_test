@@ -210,6 +210,7 @@ You are an expert Browser Mission Architect. Your goal is to translate a user's 
     - **Anti-Bot**: "Interact with the page like a human. If a captcha appears, wait or try to solve it."
     - **Data Extraction**: "Extract all relevant fields into a structured format. If there are multiple pages, navigate through all of them."
 4. **Constraint-Aware**: Mention specific inputs that MUST be used.
+5. **No Redundant Loops**: Explicitly instruct the agent to STOP once the result page is reached and data is extracted. Do NOT re-navigate to the start URL once interaction has begun.
 
 ## OUTPUT FORMAT
 TASK: {task_summary}
@@ -461,7 +462,7 @@ class ATAGProcessor:
             * Data extraction logic returning structured JSON.
 
             PLAYWRIGHT CONFIGURATION:
-            * browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
+            * browser = await p.chromium.launch(headless=False, args=["--no-sandbox", "--start-maximized"])
             * context = await browser.new_context()
             * page = await context.new_page()
             """

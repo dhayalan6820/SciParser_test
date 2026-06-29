@@ -147,6 +147,7 @@ class Schedule(Base):
     selected_data = Column(Text) # JSON storing list of message_ids and tool_log_ids
     user_prompt = Column(Text, nullable=True)
     assistant_response = Column(Text, nullable=True)
+    plan_data = Column(Text, nullable=True) # Added to store the rehydrated AI plan
     playwright_steps = Column(Text, nullable=True)
     extracted_content = Column(Text, nullable=True)
     generated_script = Column(Text, nullable=True)
@@ -173,11 +174,14 @@ class ScheduleRun(Base):
     schedule_id = Column(String(36), ForeignKey("schedules.schedule_id", ondelete="CASCADE"), nullable=False, index=True)
     
     status = Column(String(20), default="running") # running, completed, failed
+    engine = Column(String(50), nullable=True) # playwright, browser-use
+    attempt = Column(Integer, default=1)
     output = Column(Text(4294967295)) # The extracted data or error message
     error_log = Column(Text)
     duration_seconds = Column(Integer)
     
     created_at = Column(TIMESTAMP, default=lambda: datetime.now(timezone.utc))
+    finished_at = Column(TIMESTAMP, nullable=True)
     PENDING = "PENDING"
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"

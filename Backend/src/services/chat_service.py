@@ -10,7 +10,7 @@ from fastapi import Depends, HTTPException, status, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 # Local Imports
-from src.database.chat_db import User, Message, ChatSession, Schedule, get_db
+from src.database.chat_db import ScheduleRun, User, Message, ChatSession, Schedule, get_db
 from src.utils import validator
 from src.utils.logger import logger
 
@@ -189,6 +189,16 @@ class ChatService:
     @staticmethod
     async def create_schedule(db: AsyncSession, user_id: str, req: any) -> Schedule:
         """Create a new automation schedule for a user."""
+        # Fetch the selected AI message to extract plan and response
+        stmt = select(Message).where(Message.message_id.in_(req.selected_message_ids), Message.role == "ai")
+        res = await db.execute(stmt)
+        ai_msg = res.scalars().first()
+        
+        # Fetch the selected user message to extract prompt
+        stmt = select(Message).where(Message.message_id.in_(req.selected_message_ids), Message.role == "user")
+        res = await db.execute(stmt)
+        user_msg = res.scalars().first()
+
         new_schedule = Schedule(
             schedule_id=str(uuid.uuid4()),
             user_id=user_id,
@@ -198,6 +208,9 @@ class ChatService:
                 "messages": req.selected_message_ids,
                 "tools": req.selected_tool_ids
             }),
+            user_prompt=user_msg.content if user_msg else None,
+            assistant_response=ai_msg.content if ai_msg else None,
+            plan_data=ai_msg.plan_data if ai_msg else None,
             schedule_type=req.schedule_type,
             email_recipient=req.email_recipient,
             status="active",
@@ -207,6 +220,14 @@ class ChatService:
         await db.commit()
         await db.refresh(new_schedule)
         return new_schedule
+
+    @staticmethod
+    async def get_schedule_runs(db: AsyncSession, schedule_id: str) -> List[ScheduleRun]:
+        """Get execution history for a specific schedule."""
+        from src.database.chat_db import ScheduleRun
+        stmt = select(ScheduleRun).where(ScheduleRun.schedule_id == schedule_id).order_by(ScheduleRun.created_at.desc())
+        result = await db.execute(stmt)
+        return result.scalars().all()
 
     @staticmethod
     async def get_user_schedules(db: AsyncSession, user_id: str) -> List[Schedule]:

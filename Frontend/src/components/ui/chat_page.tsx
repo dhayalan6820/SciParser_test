@@ -10,6 +10,7 @@ import { MessageLoading } from "./message-loading";
 import { BrowserPreview } from "./browser-preview";
 import { SchedulesPage } from "./schedules-page";
 import { ProcessingPanel } from "./processing-panel";
+import { PremiumScheduler } from "./premium-scheduler";
 import { 
   Sparkles, User2, Database, RefreshCw, CheckCircle2, 
   BookOpen, MessageSquare, Plus, LogOut, Trash, Pencil, Check, Menu, X, 
@@ -313,88 +314,93 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     const ws = new WebSocket(wsUrl);
 
     ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        const eventType = msg.event || (msg.frame ? 'frame' : null);
-        const rawData = msg.data || msg.frame;
+      // Use requestAnimationFrame to batch state updates and prevent UI lag
+      requestAnimationFrame(() => {
+        try {
+          const msg = JSON.parse(event.data);
+          const eventType = msg.event || (msg.frame ? 'frame' : null);
+          const rawData = msg.data || msg.frame;
 
-        if (eventType === 'frame') {
-          // Parse the inner JSON which contains chat_id and frame
-          let frameData;
-          try {
-            frameData = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
-          } catch (e) {
-            frameData = { frame: rawData };
-          }
-
-          // --- FIX: Route frames by chat_id with fallback ---
-          // If the frame doesn't have a chat_id, or if it matches the active thread,
-          // or if we only have one active session, we should display it.
-          const frameChatId = frameData.chat_id ? String(frameData.chat_id) : null;
-          const activeId = activeThreadId ? String(activeThreadId) : null;
-          
-          if (frameChatId && activeId && frameChatId !== activeId) {
-            // Only ignore if both IDs exist and they explicitly mismatch
-            return;
-          }
-
-          // Extract the actual frame data (handle nested objects or raw strings)
-          let actualFrame = frameData.frame;
-          if (typeof actualFrame === 'object' && actualFrame !== null) {
-            actualFrame = actualFrame.data || actualFrame.text || JSON.stringify(actualFrame);
-          }
-
-          if (!actualFrame && typeof rawData === "string") {
+          if (eventType === 'frame') {
+            // Parse the inner JSON which contains chat_id and frame
+            let frameData;
             try {
-              const parsedRaw = JSON.parse(rawData);
-              actualFrame = parsedRaw.frame || parsedRaw.screenshot || parsedRaw.data || parsedRaw.image;
-            } catch {
-              // ignore parse errors here
+              frameData = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
+            } catch (e) {
+              frameData = { frame: rawData };
             }
-          }
 
-          if (actualFrame) {
-            setBrowserFrame(actualFrame);
+            // --- FIX: Route frames by chat_id with fallback ---
+            // If the frame doesn't have a chat_id, or if it matches the active thread,
+            // or if we only have one active session, we should display it.
+            const frameChatId = frameData.chat_id ? String(frameData.chat_id) : null;
+            const activeId = activeThreadId ? String(activeThreadId) : null;
             
-            // --- NEW: Auto-open on first frame with green blink ---
-            if (isFirstFrame.current && !userInterruptedBrowser) {
-              isFirstFrame.current = false;
-              setBrowserBlink("green");
+            if (frameChatId && activeId && frameChatId !== activeId) {
+              // Only ignore if both IDs exist and they explicitly mismatch
+              return;
+            }
+
+            // Extract the actual frame data (handle nested objects or raw strings)
+            let actualFrame = frameData.frame;
+            if (typeof actualFrame === 'object' && actualFrame !== null) {
+              actualFrame = actualFrame.data || actualFrame.text || JSON.stringify(actualFrame);
+            }
+
+            if (!actualFrame && typeof rawData === "string") {
+              try {
+                const parsedRaw = JSON.parse(rawData);
+                actualFrame = parsedRaw.frame || parsedRaw.screenshot || parsedRaw.data || parsedRaw.image;
+              } catch {
+                // ignore parse errors here
+              }
+            }
+
+            if (actualFrame) {
+              setBrowserFrame(actualFrame);
               
-              // Blink 5 times (approx 2.5s) then open
-              setTimeout(() => {
-                if (!userInterruptedBrowser) {
-                  setBrowserActive(true);
-                  setBrowserBlink(null);
-                }
-              }, 2500);
+              // --- NEW: Auto-open on first frame with green blink ---
+              if (isFirstFrame.current && !userInterruptedBrowser) {
+                isFirstFrame.current = false;
+                setBrowserBlink("green");
+                
+                // Blink 5 times (approx 2.5s) then open
+                setTimeout(() => {
+                  if (!userInterruptedBrowser) {
+                    setBrowserActive(true);
+                    setBrowserBlink(null);
+                  }
+                }, 2500);
+              }
+            }
+          } else if (eventType === 'tool_log') {
+            try {
+              // --- FIX: Handle both stringified and object data ---
+              const toolMsg = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
+              
+              if (toolMsg.type === 'tool_start') {
+                setToolLogs(prev => [...prev, {
+                  id: toolMsg.tool_call_id || uuidv4(),
+                  tool_name: toolMsg.tool,
+                  tool_input: toolMsg.args,
+                  status: 'IN_PROGRESS',
+                  created_at: new Date().toISOString()
+                }]);
+              } else if (toolMsg.type === 'tool_output') {
+                setToolLogs(prev => prev.map(log => 
+                  (log.id === toolMsg.tool_call_id) 
+                    ? { ...log, status: toolMsg.status, tool_output: toolMsg.output, error_message: toolMsg.error } 
+                    : log
+                ));
+              }
+            } catch (e) {
+              console.error("Failed to parse tool log data:", e);
             }
           }
-        } else if (eventType === 'tool_log') {
-          try {
-            const toolMsg = JSON.parse(msg.data);
-            if (toolMsg.type === 'tool_start') {
-              setToolLogs(prev => [...prev, {
-                id: toolMsg.tool_call_id || uuidv4(),
-                tool_name: toolMsg.tool,
-                tool_input: toolMsg.args,
-                status: 'IN_PROGRESS',
-                created_at: new Date().toISOString()
-              }]);
-            } else if (toolMsg.type === 'tool_output') {
-              setToolLogs(prev => prev.map(log => 
-                (log.id === toolMsg.tool_call_id) 
-                  ? { ...log, status: toolMsg.status, tool_output: toolMsg.output, error_message: toolMsg.error } 
-                  : log
-              ));
-            }
-          } catch (e) {
-            console.error("Failed to parse tool log data:", e);
-          }
+        } catch (err) {
+          console.error("Failed to parse browser stream message:", err);
         }
-      } catch (err) {
-        console.error("Failed to parse browser stream message:", err);
-      }
+      });
     };
 
     ws.onopen = () => console.log("Browser stream connected for", activeThreadId);
@@ -405,7 +411,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
   // WebSocket for Live Agent Plan (Analysis -> Strategy -> Execution)
   React.useEffect(() => {
-    if (!isAiTyping || !activeThreadId) {
+    if (!activeThreadId) {
       setCurrentPlan(null);
       return;
     }
@@ -420,6 +426,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         const msg = JSON.parse(event.data);
         if (msg.type === "plan_update") {
           setCurrentPlan(msg.data);
+          // If we receive a plan update, it means a task is active
+          setIsAiTyping(true);
         } else if (msg.type === "thought_update") {
           setAiThinking(msg.data);
         }
@@ -429,7 +437,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     };
 
     return () => ws.close();
-  }, [isAiTyping, activeThreadId]);
+  }, [activeThreadId]);
 
   const adjustHeight = () => {
     if (textareaRef.current) {
@@ -802,7 +810,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
     return (
       <div 
-        key={msg.id} 
+        key={msg.id || `msg-${msg.timestamp}-${Math.random()}`} 
         className={cn(
           "flex flex-col gap-4 transition-all duration-300", 
           isUser ? "items-end" : "items-start",
@@ -1355,127 +1363,17 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         </div>
       )}
 
-      {/* Scheduler Configuration Popup */}
-      {isSchedulerOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 backdrop-blur-md p-4">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="w-full max-w-4xl max-h-[90vh] bg-white dark:bg-[#0f0f12] rounded-[32px] shadow-2xl border border-slate-200 dark:border-white/5 overflow-hidden flex flex-col"
-          >
-            {/* Header with Gradient Accent */}
-            <div className="relative px-8 py-6 overflow-hidden shrink-0">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500" />
-              <div className="flex items-center justify-between relative z-10">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-indigo-500/10 flex items-center justify-center">
-                      <RefreshCw className="w-4 h-4 text-indigo-500 animate-spin-slow" />
-                    </div>
-                    <h3 className="font-black text-slate-900 dark:text-white text-lg tracking-tight">
-                      Configure Automation
-                    </h3>
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium ml-10">
-                    Set up a recurring schedule for your selected tasks.
-                  </p>
-                </div>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  onClick={() => setIsSchedulerOpen(false)} 
-                  className="h-10 w-10 rounded-2xl hover:bg-slate-100 dark:hover:bg-white/5"
-                >
-                  <X className="w-5 h-5 text-slate-400" />
-                </Button>
-              </div>
-            </div>
-
-            <div className="px-8 pb-8 space-y-6 overflow-y-auto hide-scrollbar">
-              {/* Frequency Selection */}
-              <div className="space-y-3">
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] ml-1">Frequency</label>
-                <div className="grid grid-cols-3 gap-3 p-1.5 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5">
-                  {['daily', 'weekly', 'monthly'].map((type) => (
-                    <button
-                      key={type}
-                      onClick={() => setScheduleType(type)}
-                      className={cn(
-                        "py-3 text-[11px] font-black rounded-xl transition-all uppercase tracking-wider",
-                        scheduleType === type 
-                          ? "bg-white dark:bg-[#1a1a1e] text-indigo-600 dark:text-indigo-400 shadow-sm ring-1 ring-slate-200 dark:ring-white/10" 
-                          : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                      )}
-                    >
-                      {type}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Email Input */}
-              <div className="space-y-3">
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] ml-1">Delivery Email</label>
-                <div className="relative group">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 rounded-lg bg-slate-100 dark:bg-white/5 flex items-center justify-center group-focus-within:bg-indigo-500/10 transition-colors">
-                    <Globe className="w-3 h-3 text-slate-400 group-focus-within:text-indigo-500" />
-                  </div>
-                  <input
-                    type="email"
-                    placeholder="example@company.com"
-                    value={emailRecipient}
-                    onChange={(e) => setEmailRecipient(e.target.value)}
-                    className="w-full pl-12 pr-4 py-4 text-sm font-medium rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-400"
-                  />
-                </div>
-              </div>
-
-              {/* Selection Summary Card - Clickable to open Review Popup */}
-              <div 
-                onClick={() => setIsReviewOpen(true)}
-                className="relative group cursor-pointer"
-              >
-                <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500/20 to-purple-500/20 rounded-[24px] blur opacity-0 group-hover:opacity-100 transition duration-500" />
-                <div className="relative p-5 rounded-[24px] bg-indigo-50/50 dark:bg-indigo-500/5 border border-indigo-100 dark:border-indigo-500/10 flex items-center justify-between">
-                  <div className="space-y-1">
-                    <div className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Selection Summary</div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                      Click to review <span className="font-bold text-indigo-500">{selectedMessages.length + selectedTools.length} items</span> in detail.
-                    </p>
-                  </div>
-                  <div className="w-10 h-10 rounded-xl bg-white dark:bg-white/5 flex items-center justify-center shadow-sm border border-indigo-100 dark:border-white/5 group-hover:bg-indigo-500 group-hover:text-white transition-all">
-                    <ChevronDown className="w-5 h-5 -rotate-90" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer with Glass Effect */}
-            <div className="px-8 py-6 border-t border-slate-100 dark:border-white/5 bg-slate-50/30 dark:bg-white/2 flex items-center justify-between gap-4 shrink-0">
-              <button 
-                onClick={() => setIsSchedulerOpen(false)} 
-                className="text-xs font-black text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors uppercase tracking-widest"
-              >
-                Cancel
-              </button>
-              <Button 
-                onClick={handleCreateSchedule}
-                disabled={loading}
-                className="h-14 px-8 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-[0.15em] shadow-xl shadow-indigo-500/20 transition-all active:scale-95 disabled:opacity-70 min-w-[200px]"
-              >
-                {loading ? (
-                  <div className="flex items-center gap-3">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Processing...</span>
-                  </div>
-                ) : (
-                  "Confirm Schedule"
-                )}
-              </Button>
-            </div>
-          </motion.div>
-        </div>
-      )}
+      {/* Premium AI Scheduler Workspace */}
+      <PremiumScheduler 
+        isOpen={isSchedulerOpen}
+        onClose={() => setIsSchedulerOpen(false)}
+        selectedMessages={selectedMessages}
+        selectedTools={selectedTools}
+        chatId={activeThreadId}
+        messages={messages}
+        currentPlan={currentPlan}
+        toolLogs={toolLogs}
+      />
 
       {/* NEW: Detailed Review Popup (Opens over Scheduler) */}
       {isReviewOpen && (

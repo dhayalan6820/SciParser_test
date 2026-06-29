@@ -147,6 +147,54 @@ async def migrate_tables(conn):
             await conn.execute(text("ALTER TABLE schedules ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"))
             logger.info("Successfully added 'updated_at' column.")
         
+        # Check if plan_data column exists in schedules
+        result = await conn.execute(text("""
+            SELECT COUNT(*) 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'schedules' 
+            AND COLUMN_NAME = 'plan_data'
+        """))
+        if result.scalar() == 0:
+            logger.info("Adding missing 'plan_data' column to schedules table...")
+            await conn.execute(text("ALTER TABLE schedules ADD COLUMN plan_data TEXT"))
+
+        # Check if engine column exists in schedule_runs
+        result = await conn.execute(text("""
+            SELECT COUNT(*) 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'schedule_runs' 
+            AND COLUMN_NAME = 'engine'
+        """))
+        if result.scalar() == 0:
+            logger.info("Adding missing 'engine' column to schedule_runs table...")
+            await conn.execute(text("ALTER TABLE schedule_runs ADD COLUMN engine VARCHAR(50)"))
+
+        # Check if attempt column exists in schedule_runs
+        result = await conn.execute(text("""
+            SELECT COUNT(*) 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'schedule_runs' 
+            AND COLUMN_NAME = 'attempt'
+        """))
+        if result.scalar() == 0:
+            logger.info("Adding missing 'attempt' column to schedule_runs table...")
+            await conn.execute(text("ALTER TABLE schedule_runs ADD COLUMN attempt INT DEFAULT 1"))
+
+        # Check if finished_at column exists in schedule_runs
+        result = await conn.execute(text("""
+            SELECT COUNT(*) 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'schedule_runs' 
+            AND COLUMN_NAME = 'finished_at'
+        """))
+        if result.scalar() == 0:
+            logger.info("Adding missing 'finished_at' column to schedule_runs table...")
+            await conn.execute(text("ALTER TABLE schedule_runs ADD COLUMN finished_at TIMESTAMP NULL"))
+        
         # Update tool_output to LONGTEXT to handle large outputs
         logger.info("Ensuring 'tool_output' column in tool_execution_logs is LONGTEXT...")
         await conn.execute(text("ALTER TABLE tool_execution_logs MODIFY COLUMN tool_output LONGTEXT"))

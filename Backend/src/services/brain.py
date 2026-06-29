@@ -28,8 +28,6 @@ from src.utils.logger import logger
 from src.agents.mcp_agent import MCPToolManager
 from src.utils.session_manager import SessionManager
 
-from src.utils.llm_wrapper import LangChainChatModelWrapper
-
 # ATAG Models
 from src.services.ATAG import (
     AgentState, 
@@ -126,6 +124,7 @@ class Brain:
         self.initialized = False
         self.checkpointer = MemorySaver()
         self.active_tasks: Dict[str, asyncio.Task] = {} # Track active tasks for cancellation
+        self.active_plans: Dict[str, List[Dict]] = {} # Track active plans for rehydration
 
     async def initialize(self):
         """Eagerly initializes execution LLMs, search utilities, and subprocess processors."""
@@ -267,7 +266,7 @@ class Brain:
                         )
             except Exception as e:
                 logger.error(f"Error in browser frame stream: {e}")
-            await asyncio.sleep(0.8) # Reverted to 0.8s for live feel as in previous version
+            await asyncio.sleep(1.5) # Increased from 0.8s to 1.5s to reduce frontend load and prevent UI lag
 
     def _calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
         """Calculates the cost of an LLM call based on OpenRouter pricing (approximate)."""
@@ -309,11 +308,12 @@ class Brain:
                 {memory_summary}
 
                 TOOL SELECTION RULES:
-                1. If the user provides a specific URL, your first and only priority is to navigate to that URL. Do NOT perform a search or click anything unless explicitly asked to find information.
+                1. **Navigation:** Navigate to the target URL ONLY if you are not already there or if the page failed to load. If you have already started interacting with the page (typing, clicking), do NOT re-navigate unless the page is completely broken.
                 2. Use general web search only for finding the correct target URL if it is missing.
                 3. Use browser automation tools for ALL page interactions: form filling, clicking, booking, and checking availability.
                 4. Do not hardcode a specific tool name. Choose the browser action that best completes the task.
                 5. **CRITICAL:** Do NOT close the browser or the current page. Keep the session active for further instructions.
+                6. **COMPLETION:** Once you have achieved the goal (e.g., you see the result, confirmation, or requested data on the page), STOP calling tools and provide the final result to the user. Do NOT repeat steps.
 
                 VISUAL SEARCH & DYNAMIC RECOVERY:
                 - **Diagnostic Mode:** If you take an action (like typing) and the UI does not change (e.g., button stays disabled), you MUST stop and diagnose.
@@ -603,6 +603,9 @@ class Brain:
             )
             if self.stream_manager:
                 await self.stream_manager.broadcast_plan(chat_id, current_plan)
+            
+            # Store for rehydration
+            self.active_plans[chat_id] = current_plan
 
         try:
             if not self.initialized: await self.initialize()
@@ -861,6 +864,7 @@ class Brain:
                     pass
             self.session_manager.remove_active_chat(user_id, chat_id)
             self.active_tasks.pop(chat_id, None)
+            self.active_plans.pop(chat_id, None) # Clean up rehydration data
 
     async def _save_session_state(self, chat_id: str, updated_state: dict):
         """Safely commits processed state dictionaries back into short-lived database queries."""

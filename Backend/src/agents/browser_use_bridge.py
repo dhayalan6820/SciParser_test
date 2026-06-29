@@ -34,21 +34,26 @@ async def run_bridge():
         # so that the MCP server has a browser to interact with and take screenshots from.
         print(f"Launching new browser for MCP server on port {port}...", file=sys.stderr)
         try:
-            from browser_use.browser.browser import BrowserConfig
-            
-            # Configure the browser to expose the CDP port
-            config = BrowserConfig(
+            from browser_use import BrowserSession, BrowserProfile
+
+            profile = BrowserProfile(
                 headless=os.getenv("BROWSER_USE_HEADLESS", "false").lower() == "true",
-                extra_chromium_args=[f"--remote-debugging-port={port}", "--remote-allow-origins=*"]
+                chromium_args=[
+                    "--remote-allow-origins=*",
+                    f"--remote-debugging-port={port}",
+                ],
             )
-            
-            browser = Browser(config=config)
+
+            browser = BrowserSession(
+                browser_profile=profile
+            )
+
             await browser.start()
-            
-            # Set the CDP URL for the MCP server and the preview stream
+
             cdp_url = f"http://localhost:{port}"
             os.environ["BROWSER_CDP_URL"] = cdp_url
             os.environ["MCP_BROWSER_CDP_URL"] = cdp_url
+
             print(f"Bridge launched browser at: {cdp_url}", file=sys.stderr)
         except Exception as e:
             print(f"Failed to launch browser in bridge: {e}", file=sys.stderr)

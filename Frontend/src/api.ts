@@ -337,6 +337,18 @@ export const sciparserApi = {
     return res.json();
   },
 
+  getScheduleRuns: async (scheduleId: string) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+
+    const res = await fetch(`${BASE_URL}/sciparser/v1/scheduler/${scheduleId}/runs`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
   // Chat Session Management
   deleteChatSession: async (chatId: string) => {
     const token = localStorage.getItem("access_token");
