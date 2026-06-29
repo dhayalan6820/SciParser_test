@@ -1920,7 +1920,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   ref={scrollRef}
                   className="flex-1 overflow-y-auto flex flex-col"
                 >
-                  {messages.length === 0 ? (
+                  {messages.length === 0 && !isAiTyping ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-center p-6 max-w-md mx-auto w-full space-y-4">
                       <div className="w-12 h-12 rounded-2xl bg-[#1E1E1E] flex items-center justify-center text-[#22D3EE] border border-[#2A2A2A]">
                         <Sparkles className="w-6 h-6" />
