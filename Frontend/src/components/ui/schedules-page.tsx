@@ -240,33 +240,33 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
   return (
     <div className="flex flex-col h-full w-full bg-[#05070A] overflow-hidden text-[#F8FAFC]">
       {/* Header */}
-      <div className="h-20 border-b border-[#1F2937] bg-[#111827]/50 px-8 flex items-center justify-between shrink-0 backdrop-blur-xl z-10">
-        <div className="flex items-center gap-6">
-          <Button variant="ghost" size="icon" onClick={onBack} className="rounded-2xl hover:bg-white/5 text-[#64748B] hover:text-white transition-all">
-            <ChevronLeft className="w-6 h-6" />
+      <div className="min-h-14 border-b border-[#1F2937] bg-[#111827]/50 px-4 sm:px-8 flex flex-wrap items-center justify-between gap-2 py-3 sm:py-0 sm:h-20 shrink-0 backdrop-blur-xl z-10">
+        <div className="flex items-center gap-3 sm:gap-6">
+          <Button variant="ghost" size="icon" onClick={onBack} className="rounded-2xl hover:bg-white/5 text-[#64748B] hover:text-white transition-all shrink-0">
+            <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
           </Button>
-          <div className="h-10 w-px bg-[#1F2937]" />
+          <div className="hidden sm:block h-10 w-px bg-[#1F2937]" />
           <div>
-            <h1 className="text-xl font-black tracking-tight text-white uppercase">Automation Monitoring</h1>
-            <p className="text-[10px] text-[#64748B] uppercase tracking-[0.2em] font-bold">Real-time AI orchestration dashboard</p>
+            <h1 className="text-base sm:text-xl font-black tracking-tight text-white uppercase">Automation Monitoring</h1>
+            <p className="hidden sm:block text-[10px] text-[#64748B] uppercase tracking-[0.2em] font-bold">Real-time AI orchestration dashboard</p>
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+        <div className="flex items-center gap-2 sm:gap-4">
+          <div className="hidden md:flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">System Online</span>
           </div>
-          <Button variant="outline" size="sm" onClick={fetchSchedules} className="h-11 px-6 rounded-xl border-[#1F2937] bg-transparent text-[#CBD5E1] text-[11px] font-black uppercase tracking-[0.15em] hover:bg-white/5 gap-2">
+          <Button variant="outline" size="sm" onClick={fetchSchedules} className="h-9 sm:h-11 px-3 sm:px-6 rounded-xl border-[#1F2937] bg-transparent text-[#CBD5E1] text-[11px] font-black uppercase tracking-[0.15em] hover:bg-white/5 gap-2">
             <RefreshCw className="w-4 h-4" />
-            REFRESH
+            <span className="hidden sm:inline">REFRESH</span>
           </Button>
         </div>
       </div>
 
       <div ref={sidebarContainerRef} className="flex-1 flex overflow-hidden min-h-0">
-        {/* Sidebar - Schedule List */}
+        {/* Sidebar - Schedule List (hidden on mobile) */}
         <div
-          className="border-r border-[#1F2937] bg-[#05070A] flex flex-col shrink-0 relative"
+          className="hidden md:flex border-r border-[#1F2937] bg-[#05070A] flex-col shrink-0 relative"
           style={{ width: sidebarWidth }}
         >
           <div className="p-6 border-b border-[#1F2937] flex items-center justify-between">

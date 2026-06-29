@@ -1499,7 +1499,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           "flex flex-col shrink-0 transition-all duration-300 overflow-hidden border-[#232B36] backdrop-blur-xl bg-[#05070A]/95",
           isMobile
             ? cn(
-                "fixed inset-y-0 left-0 z-50 h-full w-[320px] border-r",
+                "fixed inset-y-0 left-0 z-50 h-full w-[320px] max-w-[85vw] border-r",
                 isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
               )
             : cn(

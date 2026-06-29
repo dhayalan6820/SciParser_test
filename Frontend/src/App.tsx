@@ -101,7 +101,7 @@ export default function App() {
             <ChatPage onLoginStateChange={(status) => setIsLoggedIn(!!status)} />
           </div>
         ) : (
-          <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-2 sm:p-6 font-sans selection:bg-indigo-500 selection:text-white transition-colors duration-300">
+          <div className="h-full overflow-y-auto bg-background text-foreground flex flex-col items-center justify-center p-4 sm:p-6 font-sans selection:bg-indigo-500 selection:text-white transition-colors duration-300">
             <Signup1 
               isLoginMode={isLoginMode}
               onToggleMode={() => setIsLoginMode(!isLoginMode)}

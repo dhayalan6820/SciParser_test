@@ -130,32 +130,32 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
       <motion.div 
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="w-full max-w-[1400px] h-full max-h-[900px] bg-[#05070A] rounded-[24px] shadow-2xl border border-[#1F2937] overflow-hidden flex flex-col"
+        className="w-full max-w-[1400px] h-full max-h-[95vh] bg-[#05070A] rounded-[24px] shadow-2xl border border-[#1F2937] overflow-hidden flex flex-col"
       >
         {/* Header */}
-        <div className="h-20 px-8 border-b border-[#1F2937] flex items-center justify-between bg-[#111827]/50 shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
-              <Calendar className="w-6 h-6 text-indigo-500" />
+        <div className="min-h-14 sm:h-20 px-4 sm:px-8 border-b border-[#1F2937] flex items-center justify-between bg-[#111827]/50 shrink-0 py-3 sm:py-0">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+            <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 shrink-0">
+              <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-500" />
             </div>
-            <div>
-              <h1 className="text-xl font-black tracking-tight text-white uppercase">Schedule Automation Task</h1>
-              <p className="text-xs text-[#64748B] font-bold uppercase tracking-widest">Configure and schedule your automation to run on a recurring basis.</p>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-xl font-black tracking-tight text-white uppercase truncate">Schedule Automation Task</h1>
+              <p className="hidden sm:block text-xs text-[#64748B] font-bold uppercase tracking-widest">Configure and schedule your automation to run on a recurring basis.</p>
             </div>
           </div>
           <Button 
             variant="ghost" 
             size="icon" 
             onClick={onClose} 
-            className="h-12 w-12 rounded-2xl hover:bg-white/5 text-[#64748B] hover:text-white transition-all"
+            className="h-10 w-10 sm:h-12 sm:w-12 rounded-2xl hover:bg-white/5 text-[#64748B] hover:text-white transition-all shrink-0"
           >
-            <X className="w-6 h-6" />
+            <X className="w-5 h-5 sm:w-6 sm:h-6" />
           </Button>
         </div>
 
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
           {/* Left Panel - Configuration */}
-          <div className="w-[38%] border-r border-[#1F2937] bg-[#05070A] flex flex-col overflow-y-auto hide-scrollbar p-8 space-y-10">
+          <div className="w-full md:w-[38%] border-b md:border-b-0 md:border-r border-[#1F2937] bg-[#05070A] flex flex-col overflow-y-auto hide-scrollbar p-5 sm:p-8 space-y-6 sm:space-y-10 shrink-0">
             
             {/* 1. Schedule Configuration */}
             <section className="space-y-6">
