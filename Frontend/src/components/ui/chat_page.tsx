@@ -1709,7 +1709,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-row overflow-hidden h-full relative">
+      <div className="flex-1 flex flex-row overflow-hidden h-full min-h-0 relative">
         {currentView === "schedules" ? (
           <SchedulesPage onBack={() => handleSwitchView("chat")} />
         ) : (

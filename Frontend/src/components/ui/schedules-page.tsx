@@ -75,12 +75,16 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
   // Resizable sidebar
   const [sidebarWidth, setSidebarWidth] = React.useState(280);
   const [isResizingSidebar, setIsResizingSidebar] = React.useState(false);
+  const sidebarContainerRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
       if (!isResizingSidebar) return;
-      const newWidth = e.clientX;
-      if (newWidth >= 200 && newWidth <= 480) setSidebarWidth(newWidth);
+      if (!sidebarContainerRef.current) return;
+      // Container-relative: measure from the flex container's left edge
+      const containerLeft = sidebarContainerRef.current.getBoundingClientRect().left;
+      const newWidth = e.clientX - containerLeft;
+      setSidebarWidth(Math.min(480, Math.max(200, newWidth)));
     };
     const onMouseUp = () => {
       if (isResizingSidebar) {
@@ -259,7 +263,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
         </div>
       </div>
 
-      <div className="flex-1 flex overflow-hidden min-h-0">
+      <div ref={sidebarContainerRef} className="flex-1 flex overflow-hidden min-h-0">
         {/* Sidebar - Schedule List */}
         <div
           className="border-r border-[#1F2937] bg-[#05070A] flex flex-col shrink-0 relative"
