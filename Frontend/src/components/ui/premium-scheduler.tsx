@@ -55,6 +55,8 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
   const [taskName, setTaskName] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [activeTab, setActiveTab] = React.useState("context");
+  const [scheduleError, setScheduleError] = React.useState("");
+  const [scheduleSuccess, setScheduleSuccess] = React.useState(false);
   
   // Advanced Options
   const [retryCount, setRetryCount] = React.useState(3);
@@ -62,6 +64,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
   const [headless, setHeadless] = React.useState(true);
 
   const handleCreateSchedule = async () => {
+    setScheduleError("");
     try {
       setLoading(true);
       const data = {
@@ -78,9 +81,17 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
         }
       };
       await sciparserApi.createSchedule(data);
-      onClose();
-    } catch (err) {
+      setScheduleSuccess(true);
+      setTimeout(() => onClose(), 1500);
+    } catch (err: any) {
       console.error("Failed to create schedule:", err);
+      // Extract readable message from FastAPI error responses
+      let msg = err?.message || "Failed to create schedule.";
+      try {
+        const parsed = JSON.parse(msg);
+        msg = parsed?.detail || parsed?.message || msg;
+      } catch {}
+      setScheduleError(msg);
     } finally {
       setLoading(false);
     }
@@ -102,6 +113,12 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
   
   // Use the plan from the selected AI message
   const displayPlan = selectedAiMsg?.plan || [];
+
+  // Pre-compute filtered tools using the same ID logic as BrowserPreview (log.id || String(idx))
+  const filteredTools = (toolLogs || []).filter((log, idx) => {
+    const logId = log.id || String(idx);
+    return selectedTools.includes(String(logId));
+  });
 
   // --- FIX: Ensure activeTab switches correctly ---
   const handleTabChange = (tabId: string) => {
@@ -324,7 +341,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                 { id: 'context', label: 'AI Context', icon: Brain },
                 { id: 'plan', label: 'AI Plan', icon: Workflow },
                 { id: 'response', label: 'AI Response', icon: MessageSquare },
-                { id: 'tools', label: 'MCP Tools', icon: Cpu, count: selectedTools.length }
+                { id: 'tools', label: 'MCP Tools', icon: Cpu, count: filteredTools.length }
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -397,18 +414,10 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                             </div>
                           ))
                         ) : (
-                          [
-                            "Navigate to the website",
-                            "Verify HTTP response status",
-                            "Validate page content",
-                            "Capture status & response time",
-                            "Send email notification"
-                          ].map((step, i) => (
-                            <div key={i} className="flex items-center gap-3">
-                              <div className="w-5 h-5 rounded-md bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-[9px] font-black text-indigo-500 shrink-0">{i + 1}</div>
-                              <span className="text-xs text-[#CBD5E1] font-medium">{step}</span>
-                            </div>
-                          ))
+                          <div className="py-6 flex flex-col items-center justify-center gap-2">
+                            <Workflow className="w-6 h-6 text-[#374151]" />
+                            <p className="text-[10px] font-black text-[#374151] uppercase tracking-widest">No plan in selected context</p>
+                          </div>
                         )}
                       </div>
                       <button 
@@ -540,7 +549,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                           <Cpu className="w-5 h-5 text-indigo-500" />
                         </div>
                         <div>
-                          <h4 className="text-sm font-black text-white uppercase tracking-widest">MCP Tools ({selectedTools.length})</h4>
+                          <h4 className="text-sm font-black text-white uppercase tracking-widest">MCP Tools ({filteredTools.length})</h4>
                           <p className="text-[10px] text-[#64748B] font-bold uppercase tracking-widest">
                             Tools selected for execution.
                           </p>
@@ -550,8 +559,8 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                     </div>
                     
                     <div className="grid grid-cols-3 gap-4">
-                      {toolLogs && toolLogs.length > 0 && selectedTools.length > 0 ? (
-                        toolLogs.filter(log => selectedTools.includes(String(log.id))).map((log, i) => (
+                      {filteredTools.length > 0 ? (
+                        filteredTools.map((log, i) => (
                           <div key={log.id || i} className="p-5 rounded-2xl bg-[#111827] border border-[#1F2937] hover:border-indigo-500/30 transition-all group cursor-pointer">
                             <div className="flex items-center gap-4">
                               <div className="w-10 h-10 rounded-xl bg-[#05070A] border border-[#1F2937] flex items-center justify-center group-hover:bg-indigo-500/10 transition-colors">
@@ -559,10 +568,14 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                               </div>
                               <div className="min-w-0 flex-1">
                                 <div className="text-xs font-black text-white uppercase tracking-wider truncate">{log.tool_name}</div>
-                                <div className="text-[10px] text-[#64748B] font-bold uppercase tracking-widest truncate">{log.status}</div>
+                                <div className={cn(
+                                  "text-[10px] font-bold uppercase tracking-widest truncate",
+                                  log.status === 'COMPLETED' || log.status === 'SUCCESS' ? "text-emerald-500" :
+                                  log.status === 'FAILED' || log.status === 'ERROR' ? "text-red-400" :
+                                  "text-[#64748B]"
+                                )}>{log.status}</div>
                               </div>
                             </div>
-                            {/* Tool Output Preview */}
                             <div className="mt-3 p-2 rounded-lg bg-black/20 border border-white/5 text-[9px] text-[#64748B] font-mono line-clamp-2 overflow-hidden">
                               {typeof log.tool_output === 'string' ? log.tool_output : JSON.stringify(log.tool_output)}
                             </div>
@@ -728,37 +741,56 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
             </div>
 
             {/* Footer */}
-            <div className="px-8 py-6 border-t border-[#1F2937] bg-[#111827]/50 flex items-center justify-between gap-4 shrink-0">
-              <button 
-                onClick={onClose} 
-                className="text-[11px] font-black text-[#64748B] hover:text-white transition-colors uppercase tracking-[0.2em]"
-              >
-                Cancel
-              </button>
-              <div className="flex items-center gap-4">
-                <Button 
-                  variant="outline"
-                  className="h-14 px-8 rounded-2xl border-[#1F2937] bg-transparent text-[#CBD5E1] text-[11px] font-black uppercase tracking-[0.15em] hover:bg-white/5"
+            <div className="px-8 py-4 border-t border-[#1F2937] bg-[#111827]/50 flex flex-col gap-3 shrink-0">
+              {scheduleError && (
+                <div className="flex items-start gap-3 px-5 py-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px] font-bold text-red-400 leading-relaxed">{scheduleError}</p>
+                </div>
+              )}
+              {scheduleSuccess && (
+                <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <p className="text-[11px] font-bold text-emerald-400 uppercase tracking-widest">Schedule created successfully!</p>
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-4">
+                <button 
+                  onClick={onClose} 
+                  className="text-[11px] font-black text-[#64748B] hover:text-white transition-colors uppercase tracking-[0.2em]"
                 >
-                  Save Draft
-                </Button>
-                <Button 
-                  onClick={handleCreateSchedule}
-                  disabled={loading || !taskName}
-                  className="h-14 px-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-indigo-500/20 transition-all active:scale-95 disabled:opacity-50 min-w-[240px] flex items-center justify-center gap-3"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Processing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Calendar className="w-4 h-4" />
-                      <span>Confirm Schedule</span>
-                    </>
-                  )}
-                </Button>
+                  Cancel
+                </button>
+                <div className="flex items-center gap-4">
+                  <Button 
+                    variant="outline"
+                    className="h-14 px-8 rounded-2xl border-[#1F2937] bg-transparent text-[#CBD5E1] text-[11px] font-black uppercase tracking-[0.15em] hover:bg-white/5"
+                  >
+                    Save Draft
+                  </Button>
+                  <Button 
+                    onClick={handleCreateSchedule}
+                    disabled={loading || !taskName || scheduleSuccess}
+                    className="h-14 px-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-indigo-500/20 transition-all active:scale-95 disabled:opacity-50 min-w-[240px] flex items-center justify-center gap-3"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Generating Script...</span>
+                      </>
+                    ) : scheduleSuccess ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Scheduled!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Calendar className="w-4 h-4" />
+                        <span>Confirm Schedule</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

@@ -717,7 +717,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         ));
 
         // --- NEW: Auto-hide execution plan if task completed successfully ---
-        if (!userInterruptedHide && (aiMsg.content.toLowerCase().includes("successfully") || aiMsg.content.toLowerCase().includes("completed"))) {
+        const contentLower = (aiMsg.content || "").toLowerCase();
+        if (!userInterruptedHide && (contentLower.includes("successfully") || contentLower.includes("completed"))) {
           setTimeout(() => {
             if (!userInterruptedHide) {
               setShowExecutionPlan(false);
@@ -726,7 +727,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         }
 
         // --- NEW: Auto-hide browser if task completed successfully ---
-        if (!userInterruptedBrowser && (aiMsg.content.toLowerCase().includes("successfully") || aiMsg.content.toLowerCase().includes("completed"))) {
+        if (!userInterruptedBrowser && (contentLower.includes("successfully") || contentLower.includes("completed"))) {
           setTimeout(() => {
             // Only auto-hide if the user hasn't manually toggled the browser
             if (!userInterruptedBrowser) {
@@ -757,10 +758,17 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       }
     } catch (e: any) {
       console.error("Message sending failed:", e);
+      // Extract readable message from FastAPI JSON error responses
+      let errText = e?.message || "An unexpected error occurred.";
+      try {
+        const parsed = JSON.parse(errText);
+        errText = parsed?.detail || parsed?.message || errText;
+        if (typeof errText === "object") errText = JSON.stringify(errText);
+      } catch {}
       const errorMsg: ChatMessage = {
         id: uuidv4(),
         role: "assistant",
-        content: `⚠️ Error: ${e.message}`,
+        content: `⚠️ ${errText}`,
         timestamp: new Date().toISOString(),
         form: undefined
       };
