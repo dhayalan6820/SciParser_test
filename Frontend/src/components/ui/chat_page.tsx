@@ -1805,7 +1805,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           <>
             {/* Chat Column */}
             <div 
-              className="flex flex-col h-full min-w-[320px] bg-background transition-all duration-300"
+              className="flex flex-col h-full min-w-0 bg-background transition-all duration-300"
               style={{ flex: `1 1 ${100 - (browserActive ? browserPanelWidth : 0)}%` }}
             >
               
@@ -1918,10 +1918,10 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               <div className="flex-1 flex flex-row overflow-hidden">
                 <div 
                   ref={scrollRef}
-                  className="flex-1 overflow-y-auto p-6 space-y-6"
+                  className="flex-1 overflow-y-auto flex flex-col"
                 >
                   {messages.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto space-y-4">
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-6 max-w-md mx-auto w-full space-y-4">
                       <div className="w-12 h-12 rounded-2xl bg-[#1E1E1E] flex items-center justify-center text-[#22D3EE] border border-[#2A2A2A]">
                         <Sparkles className="w-6 h-6" />
                       </div>
@@ -1945,50 +1945,55 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                       </div>
                     </div>
                   ) : (
-                    messages.map(renderMessage)
-                  )}
+                    <>
+                      <div className="flex-1" />
+                      <div className="p-6 space-y-6">
+                        {messages.map(renderMessage)}
 
-                  {/* Live Plan / Loading State */}
-                  {isAiTyping && (
-                    <div className="mt-4 max-w-2xl space-y-4">
-                      <div className="flex items-center justify-between px-1">
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                            <div className="text-[10px] font-black text-[#9CA3AF] uppercase tracking-[0.2em]">Live Execution</div>
-                          </div>
-                        </div>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={handleStopProcess}
-                          className="h-7 px-2 text-[10px] font-bold text-red-500 hover:text-red-600 hover:bg-red-500/10 gap-1.5"
-                        >
-                          <X className="w-3 h-3" />
-                          STOP PROCESS
-                        </Button>
-                      </div>
-                      
-                      <AnimatePresence>
-                        <motion.div
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: 10 }}
-                          className="overflow-hidden"
-                        >
-                          {currentPlan ? (
-                            <Plan 
-                              tasks={currentPlan} 
-                              thoughts={aiThinking ? [aiThinking] : []} 
-                            />
-                          ) : (
-                            <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl p-5 shadow-sm">
-                              <MessageLoading />
+                        {/* Live Plan / Loading State */}
+                        {isAiTyping && (
+                          <div className="mt-4 max-w-2xl space-y-4">
+                            <div className="flex items-center justify-between px-1">
+                              <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                                  <div className="text-[10px] font-black text-[#9CA3AF] uppercase tracking-[0.2em]">Live Execution</div>
+                                </div>
+                              </div>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={handleStopProcess}
+                                className="h-7 px-2 text-[10px] font-bold text-red-500 hover:text-red-600 hover:bg-red-500/10 gap-1.5"
+                              >
+                                <X className="w-3 h-3" />
+                                STOP PROCESS
+                              </Button>
                             </div>
-                          )}
-                        </motion.div>
-                      </AnimatePresence>
-                    </div>
+                            
+                            <AnimatePresence>
+                              <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: 10 }}
+                                className="overflow-hidden"
+                              >
+                                {currentPlan ? (
+                                  <Plan 
+                                    tasks={currentPlan} 
+                                    thoughts={aiThinking ? [aiThinking] : []} 
+                                  />
+                                ) : (
+                                  <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl p-5 shadow-sm">
+                                    <MessageLoading />
+                                  </div>
+                                )}
+                              </motion.div>
+                            </AnimatePresence>
+                          </div>
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
 
