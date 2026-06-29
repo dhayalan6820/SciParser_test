@@ -1512,8 +1512,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               )
         )}
       >
-        {/* Icon-only rail shown when on Automation page */}
-        {!isSidebarCollapsed && currentView === "schedules" && (
+        {/* Icon-only rail shown when on Automation page (desktop only) */}
+        {!isMobile && !isSidebarCollapsed && currentView === "schedules" && (
           <div className="flex h-full flex-col items-center py-4 gap-3">
             <div className="pointer-events-none absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_28%)]" />
             {/* Logo */}
@@ -1561,7 +1561,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             </div>
           </div>
         )}
-        <div className={cn("relative flex h-full flex-col bg-[#05070A]/95", (!isSidebarCollapsed && currentView === "schedules") && "hidden")}>
+        <div className={cn("relative flex h-full flex-col bg-[#05070A]/95", (!isMobile && !isSidebarCollapsed && currentView === "schedules") && "hidden")}>
           <div className="pointer-events-none absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_28%),radial-gradient(circle_at_bottom,rgba(16,185,129,0.06),transparent_22%)]" />
 
           {/* Sidebar Header */}
