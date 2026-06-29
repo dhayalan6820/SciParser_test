@@ -97,7 +97,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
 
     const token = localStorage.getItem("access_token");
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//localhost:8000/sciparser/v1/ws/schedule/${selectedSchedule.schedule_id}?token=${token}`;
+    const wsUrl = `${protocol}//${window.location.host}/sciparser/v1/ws/schedule/${selectedSchedule.schedule_id}?token=${token}`;
     const ws = new WebSocket(wsUrl);
 
     ws.onmessage = (event) => {

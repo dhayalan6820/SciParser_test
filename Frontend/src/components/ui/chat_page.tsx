@@ -310,7 +310,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
     const token = localStorage.getItem("access_token");
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//localhost:8000/sciparser/v1/browser/stream?chat_id=${activeThreadId}&token=${token}`;
+    const wsUrl = `${protocol}//${window.location.host}/sciparser/v1/browser/stream?chat_id=${activeThreadId}&token=${token}`;
     const ws = new WebSocket(wsUrl);
 
     ws.onmessage = (event) => {
@@ -418,7 +418,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
     const token = localStorage.getItem("access_token");
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//localhost:8000/sciparser/v1/ws/plan/${activeThreadId}?token=${token}`;
+    const wsUrl = `${protocol}//${window.location.host}/sciparser/v1/ws/plan/${activeThreadId}?token=${token}`;
     const ws = new WebSocket(wsUrl);
 
     ws.onmessage = (event) => {

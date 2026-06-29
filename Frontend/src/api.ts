@@ -1,6 +1,6 @@
 // api.ts
 const TOKEN_KEY = "access_token";
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const BASE_URL = "";
 
 export function getStoredToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);

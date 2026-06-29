@@ -34,8 +34,7 @@ export default function App() {
   React.useEffect(() => {
     const checkServerHealth = async () => {
       try {
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-        const response = await fetch(`${baseUrl}/sciparser/v1/health`, { 
+        const response = await fetch(`/sciparser/v1/health`, { 
           method: "GET",
           signal: AbortSignal.timeout(3000)
         });
