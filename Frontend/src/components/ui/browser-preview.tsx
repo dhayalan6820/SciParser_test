@@ -5,7 +5,7 @@ import {
   MousePointer2, Camera, Download, Settings, X, 
   Terminal, Code, Check, Copy, RotateCcw, Search, 
   Filter, Trash2, DownloadCloud, Play, Pause, Square,
-  ZoomIn, ZoomOut, Grid3X3, Moon, Sun, Clock, Zap, Activity,
+  ZoomIn, ZoomOut, Grid3X3, Moon, Sun, Clock, Zap,
   Loader2, AlertCircle, ShieldCheck, Cpu, Wifi, WifiOff, CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -100,6 +100,15 @@ export function BrowserPreview({
   });
 
   const browserStatus = frame ? 'Connected' : 'Connecting';
+
+  const formatLogTime = (isoString?: string): string => {
+    if (!isoString) return '';
+    try {
+      return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    } catch {
+      return '';
+    }
+  };
 
   return (
     <div 
@@ -233,19 +242,8 @@ export function BrowserPreview({
                   <CheckCircle2 className="h-3.5 w-3.5 text-[#10B981]" />
                   <span className="text-[10px] font-bold text-[#10B981] uppercase tracking-wider">Page loaded successfully</span>
                 </div>
-                <div className="h-3 w-px bg-[#232B36]" />
-                <div className="flex items-center gap-3 text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest shrink-0">
-                  <div className="flex items-center gap-1"><span>Load Time</span> <span className="text-[#F8FAFC]">1.42s</span></div>
-                  <div className="flex items-center gap-1"><span>DOM Ready</span> <span className="text-[#F8FAFC]">1.12s</span></div>
-                  <div className="flex items-center gap-1"><span>Resources</span> <span className="text-[#F8FAFC]">34</span></div>
-                  <div className="flex items-center gap-1"><span>Size</span> <span className="text-[#F8FAFC]">1.2 MB</span></div>
-                </div>
               </div>
               <div className="flex items-center gap-3 shrink-0 ml-4">
-                <div className="flex items-center gap-1.5">
-                  <Activity className="h-3 w-3 text-[#22D3EE]" />
-                  <span className="text-[10px] font-black text-[#22D3EE]">60 FPS</span>
-                </div>
                 <div className="flex items-center gap-1.5">
                   <Wifi className="h-3 w-3 text-[#10B981]" />
                   <span className="text-[10px] font-black text-[#10B981]">STABLE</span>
@@ -365,7 +363,9 @@ export function BrowserPreview({
                           )}>
                             {status}
                           </span>
-                          <span className="text-[9px] text-[#64748B] font-bold">10:08:24</span>
+                          {formatLogTime(log.created_at) && (
+                            <span className="text-[9px] text-[#64748B] font-bold">{formatLogTime(log.created_at)}</span>
+                          )}
                         </div>
                       </div>
 
