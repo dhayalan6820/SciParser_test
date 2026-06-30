@@ -162,9 +162,11 @@ class Brain:
 
     async def _stream_browser_frames(self, user_id: str, chat_id: str, tools: List[BaseTool], stop_event: asyncio.Event):
         """Background task to poll for browser screenshots during execution for a specific chat."""
-        state_tool = next((t for t in tools if t.name == "browser_get_state"), None)
+        # Prefer browser_screenshot (direct, no DOM overhead) then fall back to browser_get_state
+        tool_map = {t.name: t for t in tools}
+        state_tool = tool_map.get("browser_screenshot") or tool_map.get("browser_get_state")
         if not state_tool:
-            logger.warning("browser_get_state tool not found, live preview disabled.")
+            logger.warning("No browser screenshot tool found (browser_screenshot / browser_get_state), live preview disabled.")
             return
 
         def extract_screenshot(payload: Any) -> Optional[str]:
@@ -234,12 +236,15 @@ class Brain:
 
             return None
             
-        logger.info(f"Starting live preview stream for user {user_id}, chat {chat_id}")
+        # Build correct args per tool: browser_screenshot uses full_page; browser_get_state uses include_screenshot
+        is_screenshot_tool = state_tool.name == "browser_screenshot"
+        screenshot_args = {"full_page": False} if is_screenshot_tool else {"include_screenshot": True}
+
+        logger.info(f"Starting live preview stream for user {user_id}, chat {chat_id} (tool={state_tool.name})")
         while not stop_event.is_set():
             try:
                 # Get screenshot via MCP tool
-                # We pass chat_id to the tool so the MCP server knows which tab to capture
-                res = await state_tool.ainvoke({"include_screenshot": True, "chat_id": chat_id})
+                res = await state_tool.ainvoke(screenshot_args)
 
                 screenshot_data = extract_screenshot(res)
 

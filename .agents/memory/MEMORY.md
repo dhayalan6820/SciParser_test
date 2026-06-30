@@ -1,1 +1,2 @@
 - [Chrome Nix libs for Playwright](chrome-nix-libs.md) — pip-installed Playwright's chrome-headless-shell needs 16 Nix store lib paths in LD_LIBRARY_PATH; dbus needs the `.lib` output, not the default output; libgbm comes from `mesa-libgbm` not `mesa`.
+- [Chrome CDP subprocess pattern](chrome-cdp-subprocess.md) — use create_subprocess_exec not playwright.launch() for TCP-accessible CDP; binary is in workspace/.cache/ms-playwright not ~/.cache; BrowserProfile config.json needs "id" field.
