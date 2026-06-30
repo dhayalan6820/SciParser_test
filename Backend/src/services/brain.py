@@ -437,9 +437,9 @@ class Brain:
                     observation = f"Error: Tool {tool_call['name']} not found."
                 else:
                     try:
-                        # --- NEW: Inject chat_id into tool arguments for isolation ---
-                        # This ensures the MCP server acts on the correct tab/context
-                        tool_args = {**tool_call["args"], "chat_id": chat_id}
+                        # Use tool args as-is — injecting chat_id breaks MCP browser tools
+                        # that have strict schemas (browser_get_state, browser_screenshot, etc.)
+                        tool_args = tool_call["args"]
                         
                         # 2. Execute the actual tool (Playwright or Tavily) SEQUENTIALLY
                         observation = await tool.ainvoke(tool_args)

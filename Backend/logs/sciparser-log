@@ -1603,3 +1603,282 @@ RuntimeError: Attempted to exit cancel scope in a different task than it was ent
 2026-06-30 09:08:15 | INFO     | sciparser | Initializing multi-agent orchestrator system...
 2026-06-30 09:08:16 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
 2026-06-30 09:08:16 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-30 09:11:36 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:11:37 | INFO     | sciparser | Preparing MCP manager for user bb3a2f06-dfad-441d-888e-856c5c8f0423...
+2026-06-30 09:11:37 | INFO     | sciparser | Preparing MCP manager for user bb3a2f06-dfad-441d-888e-856c5c8f0423...
+2026-06-30 09:11:37 | INFO     | src.agents.mcp_agent | MCPToolManager created — port=57225  cdp=http://localhost:57225  user_data=/home/runner/workspace/Backend/temp/user_57225
+2026-06-30 09:11:37 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server — port=57225  cdp=http://localhost:57225
+2026-06-30 09:11:47 | INFO     | src.agents.mcp_agent | >>> MCP Session Ready — 16 tools active.
+2026-06-30 09:11:47 | INFO     | sciparser | Discovered 17 tools for execution.
+2026-06-30 09:11:47 | INFO     | sciparser | Discovered 17 tools for execution.
+2026-06-30 09:11:47 | INFO     | sciparser | Starting live preview stream for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f (tool=browser_screenshot)
+2026-06-30 09:11:47 | INFO     | sciparser | Starting live preview stream for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f (tool=browser_screenshot)
+2026-06-30 09:11:47 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-06-30 09:11:47 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-06-30 09:11:47 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=6312
+2026-06-30 09:11:47 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=6312
+2026-06-30 09:11:49 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:11:49 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=22780
+2026-06-30 09:11:49 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=22780
+2026-06-30 09:11:51 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=22700
+2026-06-30 09:11:51 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=22700
+2026-06-30 09:11:52 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=22824
+2026-06-30 09:11:52 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=22824
+2026-06-30 09:11:54 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=22672
+2026-06-30 09:11:54 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=22672
+2026-06-30 09:11:55 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=22748
+2026-06-30 09:11:55 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=22748
+2026-06-30 09:11:56 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:12:04 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:04 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:06 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:06 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:06 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:12:08 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:08 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:09 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:12:09 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:09 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:11 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:11 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:12 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:12 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:14 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:12:14 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:14 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:16 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:16 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:16 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:12:17 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:17 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:19 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:12:19 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:19 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:23 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:23 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:24 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:24 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:26 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:26 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:28 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:28 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:31 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:31 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:32 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:32 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:34 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:34 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:35 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:35 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:37 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:37 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:40 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:40 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:41 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:41 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:43 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:43 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:45 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:45 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:46 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:46 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:48 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:48 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:50 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:50 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:51 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:51 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:53 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:53 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:55 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:55 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:56 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:56 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:58 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:58 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:59 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:12:59 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:01 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:01 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:03 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:03 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:04 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:04 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:06 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:06 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:07 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:07 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:09 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:09 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:11 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:11 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:12 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:12 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:14 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:14 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:15 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:15 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:17 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:17 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:19 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:19 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:22 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:22 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:23 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:23 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:25 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:25 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:27 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:27 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:28 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:28 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:30 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:30 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:32 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:32 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:34 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:34 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:35 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:35 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:37 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:37 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:39 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:39 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:40 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:40 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:42 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:42 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:43 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:43 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:45 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:45 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:47 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:47 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:48 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:48 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:50 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:50 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:51 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:51 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:53 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:53 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:55 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:55 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:56 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:56 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:58 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:58 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:59 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:13:59 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:01 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:01 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:03 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:03 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:04 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:04 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:06 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:06 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:07 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:07 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:09 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:09 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:11 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:11 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:12 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:12 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:14 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:14 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:16 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:16 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:17 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:17 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:19 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:19 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:20 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:20 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:22 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:22 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:24 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:24 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:25 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:25 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:27 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:27 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:28 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:28 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:30 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:30 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:32 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:32 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:33 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:33 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:35 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:35 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:36 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:36 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:38 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:38 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:40 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:40 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:41 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:41 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:43 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:43 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:44 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:44 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:46 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:46 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:48 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:48 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:49 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:49 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:51 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:51 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:52 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:52 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:54 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:54 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:56 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:56 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:58 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:58 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:59 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:14:59 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:01 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:01 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:03 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:03 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:04 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:04 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:06 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:06 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:07 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:07 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:09 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:09 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:11 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:11 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:12 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:12 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:14 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:14 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:15 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:15 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:17 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:17 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:19 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:15:19 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:15:19 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:29:00 | INFO     | src.agents.mcp_agent | >>> Closing MCP Session — port=57225
+2026-06-30 09:29:02 | ERROR    | sciparser | [User bb3a2f06-dfad-441d-888e-856c5c8f0423] Error closing MCP manager: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-30 09:29:02 | ERROR    | sciparser | [User bb3a2f06-dfad-441d-888e-856c5c8f0423] Error closing MCP manager: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-30 09:29:02 | INFO     | sciparser | Session for user bb3a2f06-dfad-441d-888e-856c5c8f0423 fully cleaned up.
+2026-06-30 09:29:02 | INFO     | sciparser | Session for user bb3a2f06-dfad-441d-888e-856c5c8f0423 fully cleaned up.
+2026-06-30 09:29:07 | INFO     | sciparser | Creating/verifying database tables...
+2026-06-30 09:29:07 | INFO     | sciparser | Creating/verifying database tables...
+2026-06-30 09:29:07 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-30 09:29:07 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-30 09:29:07 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-30 09:29:07 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-30 09:29:08 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-30 09:29:08 | INFO     | sciparser | Multi-agent orchestrator initialization complete.

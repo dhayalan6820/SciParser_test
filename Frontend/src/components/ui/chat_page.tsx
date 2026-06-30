@@ -314,6 +314,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     // We want to listen for frames even if browserActive is false to support auto-open
     if (!userProfile?.user_id) return;
     if (!activeThreadId) return;
+    // Reset first-frame flag so auto-open fires on every new thread connection
+    isFirstFrame.current = true;
 
     const token = localStorage.getItem("access_token");
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -735,7 +737,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         }
 
         // --- NEW: Auto-hide browser if task completed successfully ---
-        if (!userInterruptedBrowser && (contentLower.includes("successfully") || contentLower.includes("completed"))) {
+        // Use word-boundary check: "unsuccessful" must NOT trigger this
+        const isActualSuccess = /\bsuccessfully\b/.test(contentLower) && !contentLower.includes("unsuccessful");
+        if (!userInterruptedBrowser && (isActualSuccess || /\btask completed\b/.test(contentLower))) {
           setTimeout(() => {
             // Only auto-hide if the user hasn't manually toggled the browser
             if (!userInterruptedBrowser) {
