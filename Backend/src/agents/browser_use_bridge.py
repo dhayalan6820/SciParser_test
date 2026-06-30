@@ -365,41 +365,83 @@ async def run_bridge() -> None:
         print("Bridge: BROWSER_USE_XVFB=true — skipping to Option 2", file=sys.stderr)
         headless = False
 
-    # ── Option 1: Start Chrome (headless or headless=new) ────────────────────────
-    if headless or not _find_xvfb():
-        print(f"Bridge: [Option 1] launching Chrome with stealth flags", file=sys.stderr)
+    def _safe_terminate(proc):
+        """Terminate a process, ignoring errors if it already exited."""
+        if proc is None:
+            return
+        try:
+            proc.terminate()
+        except (ProcessLookupError, OSError):
+            pass
+
+    # ── Option 1: Full Chromium + --headless=new + stealth ───────────────────────
+    # Best stealth — renders identically to a real browser.
+    # May fail in restricted environments (needs more system libs than headless-shell).
+    full_binary = _find_full_chrome_binary()
+    if full_binary and headless and not force_xvfb:
+        print(
+            f"Bridge: [Option 1] full Chromium + headless=new + stealth",
+            file=sys.stderr,
+        )
         chrome_process = await _launch_chrome(
-            chrome_binary, port, user_data_dir, headless=True
+            full_binary, port, user_data_dir, headless=True
+        )
+        print(
+            f"Bridge: Chrome pid={chrome_process.pid} started, waiting for CDP...",
+            file=sys.stderr,
+        )
+        cdp_ready = await _wait_for_cdp(port, timeout_secs=20)
+        if not cdp_ready:
+            print(
+                "Bridge: [Option 1] full Chromium failed (likely missing libs) "
+                "— falling back to headless-shell",
+                file=sys.stderr,
+            )
+            _safe_terminate(chrome_process)
+            chrome_process = None
+            # fall through to headless-shell below
+
+    # ── Option 1b: headless-shell + stealth (reliable fallback) ─────────────────
+    # Always works in this environment; stealth flags still applied.
+    if chrome_process is None and headless and not force_xvfb:
+        shell_binary = _find_headless_shell_binary() or chrome_binary
+        print(
+            f"Bridge: [Option 1b] headless-shell + stealth flags → {shell_binary}",
+            file=sys.stderr,
+        )
+        chrome_process = await _launch_chrome(
+            shell_binary, port, user_data_dir, headless=True
         )
         print(
             f"Bridge: Chrome pid={chrome_process.pid} started, waiting for CDP...",
             file=sys.stderr,
         )
         cdp_ready = await _wait_for_cdp(port, timeout_secs=25)
-
         if not cdp_ready:
             print(
-                f"Bridge: [Option 1] Chrome failed to expose CDP — trying Option 2 (Xvfb headed mode)",
+                "Bridge: [Option 1b] headless-shell also failed — trying Option 2 (Xvfb)",
                 file=sys.stderr,
             )
-            chrome_process.terminate()
+            _safe_terminate(chrome_process)
             chrome_process = None
-            headless = False  # fall through to Option 2
+            headless = False  # fall through to Xvfb
 
-    # ── Option 2: Xvfb + headed Chrome ───────────────────────────────────────────
-    if not headless and chrome_process is None:
+    # ── Option 2: Xvfb + headed full Chrome ─────────────────────────────────────
+    # Triggered by: BROWSER_USE_XVFB=true, or both headless options failed.
+    if chrome_process is None:
         xvfb_bin = _find_xvfb()
+        use_binary = _find_full_chrome_binary() or chrome_binary
         if xvfb_bin:
-            display_num = _find_free_port() % 200 + 10  # pick a free display number
+            display_num = _find_free_port() % 200 + 10
             print(
-                f"Bridge: [Option 2] starting Xvfb on :{display_num}",
+                f"Bridge: [Option 2] Xvfb :{display_num} + headed Chrome → {use_binary}",
                 file=sys.stderr,
             )
             xvfb_process = await _start_xvfb(display_num)
             if xvfb_process:
                 display = f":{display_num}"
                 chrome_process = await _launch_chrome(
-                    chrome_binary, port, user_data_dir,
+                    use_binary, port, user_data_dir,
                     headless=False, display=display,
                 )
                 print(
@@ -410,31 +452,23 @@ async def run_bridge() -> None:
                 cdp_ready = await _wait_for_cdp(port, timeout_secs=25)
                 if not cdp_ready:
                     print(
-                        "Bridge: [Option 2] Xvfb Chrome also failed to expose CDP — aborting",
+                        "Bridge: [Option 2] Xvfb Chrome also failed — aborting",
                         file=sys.stderr,
                     )
-                    chrome_process.terminate()
-                    xvfb_process.terminate()
+                    _safe_terminate(chrome_process)
+                    _safe_terminate(xvfb_process)
                     return
                 effective_headless = False
             else:
-                print("Bridge: Xvfb unavailable, aborting (no display)", file=sys.stderr)
+                print("Bridge: Xvfb start failed — aborting", file=sys.stderr)
                 return
         else:
-            # Xvfb not installed — fall back to Option 1 anyway
+            # Xvfb not available — nothing left to try
             print(
-                "Bridge: Xvfb binary not found — retrying Option 1 (headless=new)",
+                "Bridge: Xvfb not found and all headless options failed — aborting",
                 file=sys.stderr,
             )
-            chrome_process = await _launch_chrome(
-                chrome_binary, port, user_data_dir, headless=True
-            )
-            cdp_ready = await _wait_for_cdp(port, timeout_secs=25)
-            if not cdp_ready:
-                print("Bridge: Chrome failed to start — aborting", file=sys.stderr)
-                chrome_process.terminate()
-                return
-            effective_headless = True
+            return
 
     print(f"Bridge: CDP ready at {cdp_url}", file=sys.stderr)
     os.environ["BROWSER_CDP_URL"] = cdp_url
