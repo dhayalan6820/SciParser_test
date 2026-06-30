@@ -242,7 +242,12 @@ class Brain:
                 except Exception as e:
                     logger.error(f"Error capturing direct CDP frame for user {user_id}: {e}")
 
-                await asyncio.sleep(1.5)
+                # Sleep for up to 1.5 s, but wake immediately when stop_event fires
+                try:
+                    await asyncio.wait_for(stop_event.wait(), timeout=1.5)
+                    break  # stop_event set — exit loop right away
+                except asyncio.TimeoutError:
+                    pass  # normal inter-frame interval; keep looping
 
             # --- Send one final frame so the panel shows the last browser state ---
             try:
