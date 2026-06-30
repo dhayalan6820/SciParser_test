@@ -15,8 +15,17 @@ import asyncio
 import inspect
 import json
 import os
+import socket
 import sys
 import tempfile
+
+
+def _find_free_port() -> int:
+    """Ask the OS for an unused TCP port (fallback when env var is not set)."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        return s.getsockname()[1]
+
 
 # ── Sandbox args required for headless Chrome in Replit / sandboxed Linux ─────
 _SANDBOX_ARGS = [
@@ -54,7 +63,7 @@ async def run_bridge() -> None:
 
     # ── Read env ────────────────────────────────────────────────────────────────
     port_env = os.getenv("BROWSER_USE_CDP_PORT")
-    port = int(port_env) if port_env and port_env != "0" else 9222
+    port = int(port_env) if port_env and port_env not in ("", "0") else _find_free_port()
     headless = os.getenv("BROWSER_USE_HEADLESS", "true").lower() != "false"
     user_data_dir = os.getenv("BROWSER_USER_DATA_DIR")
 
