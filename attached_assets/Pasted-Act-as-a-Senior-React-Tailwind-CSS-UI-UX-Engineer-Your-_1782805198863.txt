@@ -1,0 +1,161 @@
+Act as a **Senior React + Tailwind CSS UI/UX Engineer**. Your responsibility is to redesign and optimize the entire application for a production-ready experience across **all screen sizes and resolutions**.
+
+Your primary focus is **design quality, content alignment, responsiveness, usability, and consistency**, not just fixing CSS issues.
+
+## Objective
+
+Make the application visually balanced, space-efficient, and fully responsive while preserving all existing functionality.
+
+The UI should automatically adapt to every screen size with **minimal but consistent whitespace**, excellent content density, and a premium user experience.
+
+## Responsive Requirements
+
+Optimize the application for:
+
+* Mobile (320px+)
+* Tablet
+* Laptop
+* Desktop
+* Ultrawide Displays
+* 2K
+* 4K
+
+Every breakpoint should have an optimized layout instead of simply shrinking or stretching components.
+
+## Component Review
+
+Review **every page and every component**.
+
+This includes:
+
+* Sidebar
+* Header
+* Navigation
+* Cards
+* Buttons
+* Icons
+* Forms
+* Tables
+* Modals
+* Dialogs
+* Workflow Tree
+* Browser Viewer
+* Execution Logs
+* Schedule Pages
+* AI Response
+* Agent Plans
+* MCP Tool Panels
+* Chat Interface
+* Dashboard
+* Settings
+
+Nothing should be skipped.
+
+## Icons
+
+Ensure icons:
+
+* Scale correctly at every breakpoint.
+* Stay aligned with text.
+* Never overlap.
+* Maintain consistent spacing.
+* Collapse or hide secondary icons when necessary.
+* Preserve visual hierarchy.
+
+## Buttons
+
+Ensure buttons:
+
+* Resize automatically.
+* Never overflow.
+* Never wrap unexpectedly.
+* Maintain accessible touch targets.
+* Collapse into overflow menus on smaller screens when appropriate.
+* Keep primary actions always visible.
+
+## Layout
+
+Review every screen for:
+
+* Proper alignment.
+* Consistent spacing.
+* Equal padding.
+* Equal margins.
+* Responsive grids.
+* Responsive Flex layouts.
+* No clipped content.
+* No overlapping elements.
+* No unnecessary whitespace.
+* No unnecessary scrolling.
+* Balanced content density.
+
+Use available screen space efficiently while maintaining readability.
+
+## Tailwind Best Practices
+
+Refactor the UI using modern Tailwind practices.
+
+* Mobile-first design.
+* Proper breakpoint utilities.
+* Responsive Grid/Flex.
+* `min/max/clamp` where appropriate.
+* Reusable utility classes.
+* Consistent spacing scale.
+* Consistent typography scale.
+
+Avoid hardcoded widths and heights unless absolutely necessary.
+
+## Automated UI Validation
+
+Use Playwright to validate every page after changes.
+
+For each iteration:
+
+1. Launch the application.
+2. Navigate through every page.
+3. Test every breakpoint.
+4. Capture screenshots.
+5. Compare layouts.
+6. Detect alignment issues.
+7. Detect overflow.
+8. Detect clipped text.
+9. Detect overlapping elements.
+10. Fix all issues.
+11. Repeat testing.
+
+Continue this cycle until the UI is visually consistent across all supported resolutions.
+
+## Design Quality
+
+Improve the interface wherever possible.
+
+If you find:
+
+* Better spacing
+* Better typography
+* Better alignment
+* Better component sizing
+* Better content organization
+* Better responsive behavior
+
+Implement the improvements while preserving functionality.
+
+## Decision Process
+
+If a design decision is unclear, stop and ask specific questions before implementing changes. Never make assumptions that could affect usability or functionality.
+
+## Completion Criteria
+
+The task is complete only when:
+
+* Every page has been reviewed.
+* Every breakpoint has been tested.
+* Every component is responsive.
+* Icons and buttons are perfectly aligned.
+* Content is displayed efficiently with minimal whitespace.
+* No overflow, clipping, or overlapping exists.
+* No horizontal scrolling exists.
+* All layouts remain visually balanced from 320px mobile to 4K displays.
+* The application feels polished, modern, and production-ready.
+
+Do not stop after the first implementation. Continue refining, testing, and improving the UI until you are confident that the application delivers a consistent, high-quality experience on every supported device and resolution.
