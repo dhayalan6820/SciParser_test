@@ -352,7 +352,7 @@ def _patch_mcp_server_session_retry(chrome_ready: asyncio.Event) -> None:
 
     original = BrowserUseServer._init_browser_session
 
-    async def _patched_init(self, *args, **kwargs):
+    async def _patched_init(self, allowed_domains: "list[str] | None" = None, **kwargs):
         # Guard 1 — wait for Chrome
         if not chrome_ready.is_set():
             print(
@@ -373,7 +373,7 @@ def _patch_mcp_server_session_retry(chrome_ready: asyncio.Event) -> None:
 
         # Guard 2 — reset on failure
         try:
-            await original(self, *args, **kwargs)
+            await original(self, allowed_domains=allowed_domains, **kwargs)
         except Exception as exc:
             self.browser_session = None      # allow clean retry
             print(
