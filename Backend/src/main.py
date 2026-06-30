@@ -3,6 +3,7 @@ import sys
 import uuid
 import json
 import asyncio
+import traceback
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 
@@ -232,9 +233,26 @@ async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db), current_use
             "chat_id": chat_id,
             "plan": []
         }
-    except Exception as e:
-        logger.error(f"Chat endpoint error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    except BaseException as e:
+        # Print the full traceback so the real root cause is always visible in logs.
+        tb = traceback.format_exc()
+        logger.error(f"Chat endpoint error — full traceback:\n{tb}")
+
+        # Unwrap ExceptionGroup / BaseExceptionGroup to find the leaf cause(s).
+        detail = str(e)
+        if isinstance(e, BaseExceptionGroup):
+            leaves = []
+            def _collect(exc):
+                if isinstance(exc, BaseExceptionGroup):
+                    for sub in exc.exceptions:
+                        _collect(sub)
+                else:
+                    leaves.append(f"{type(exc).__name__}: {exc}")
+            _collect(e)
+            if leaves:
+                detail = " | ".join(leaves)
+
+        raise HTTPException(status_code=500, detail=detail)
     finally:
         brain.active_tasks.pop(chat_id, None)
 

@@ -620,3 +620,15 @@ Traceback (most recent call last):
   File "/home/runner/workspace/Backend/src/main.py", line 202, in chat
     raise HTTPException(status_code=500, detail=error_msg)
 fastapi.exceptions.HTTPException: 500: An unexpected error occurred: MCP Server failed to start: unhandled errors in a TaskGroup (1 sub-exception) (Sub-errors: unhandled errors in a TaskGroup (1 sub-exception))
+2026-06-30 08:12:13 | INFO     | sciparser | [User bb3a2f06-dfad-441d-888e-856c5c8f0423] MCP manager closed.
+2026-06-30 08:12:13 | INFO     | sciparser | [User bb3a2f06-dfad-441d-888e-856c5c8f0423] MCP manager closed.
+2026-06-30 08:12:13 | INFO     | sciparser | Session for user bb3a2f06-dfad-441d-888e-856c5c8f0423 fully cleaned up.
+2026-06-30 08:12:13 | INFO     | sciparser | Session for user bb3a2f06-dfad-441d-888e-856c5c8f0423 fully cleaned up.
+2026-06-30 08:13:07 | INFO     | sciparser | Creating/verifying database tables...
+2026-06-30 08:13:07 | INFO     | sciparser | Creating/verifying database tables...
+2026-06-30 08:13:07 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-30 08:13:07 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-30 08:13:07 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-30 08:13:07 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-30 08:13:07 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-30 08:13:07 | INFO     | sciparser | Multi-agent orchestrator initialization complete.

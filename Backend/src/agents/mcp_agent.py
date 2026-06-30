@@ -2,6 +2,7 @@ import os
 import asyncio
 import logging
 import socket
+import traceback
 from typing import List, Dict, Any, Optional
 from contextlib import AsyncExitStack
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -9,6 +10,39 @@ from langchain_mcp_adapters.tools import load_mcp_tools
 from langchain_core.tools import BaseTool
 
 logger = logging.getLogger(__name__)
+
+
+def _unwrap_exception_group(exc: BaseException) -> list[BaseException]:
+    """
+    Recursively flatten an ExceptionGroup / BaseExceptionGroup into a list of
+    the actual leaf exceptions so we can log and report the real root causes.
+    """
+    if isinstance(exc, BaseExceptionGroup):
+        leaves = []
+        for sub in exc.exceptions:
+            leaves.extend(_unwrap_exception_group(sub))
+        return leaves
+    return [exc]
+
+
+def _root_cause_message(exc: BaseException) -> str:
+    """
+    Return a human-readable string describing the deepest root cause(s).
+    Walks ExceptionGroup hierarchies and __cause__ / __context__ chains.
+    """
+    leaves = _unwrap_exception_group(exc)
+    parts = []
+    for leaf in leaves:
+        # walk __cause__ / __context__ to the bottom
+        seen = set()
+        current = leaf
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            current = current.__cause__ or (
+                current.__context__ if not current.__suppress_context__ else None
+            )
+        parts.append(f"{type(leaf).__name__}: {leaf}")
+    return " | ".join(parts) if parts else str(exc)
 
 
 def _find_free_port() -> int:
@@ -127,17 +161,19 @@ class MCPToolManager:
             self._tools = all_tools
             self._initialized = True
             logger.info(f">>> MCP Session Ready — {len(self._tools)} tools active.")
-        except Exception as e:
-            logger.error(f">>> MCP Initialization Failed: {e}", exc_info=True)
-            error_msg = str(e)
-            if hasattr(e, "exceptions") and e.exceptions:
-                error_msg = (
-                    f"{error_msg} "
-                    f"(Sub-errors: {', '.join([str(ex) for ex in e.exceptions])})"
-                )
+        except BaseException as e:
+            # Print the complete traceback to server logs so the real root cause
+            # (e.g. libnspr4.so, PermissionError, ModuleNotFoundError) is visible.
+            logger.error(">>> MCP Initialization Failed — full traceback below:")
+            logger.error(traceback.format_exc())
+
+            # Unwrap ExceptionGroup hierarchies to find the actual leaf error(s).
+            root_msg = _root_cause_message(e)
+            logger.error(f">>> Root cause(s): {root_msg}")
+
             await self.stack.aclose()
             self._initialized = False
-            raise Exception(f"MCP Server failed to start: {error_msg}")
+            raise Exception(f"MCP Server failed to start: {root_msg}") from e
 
     async def get_tools(self) -> List[BaseTool]:
         if not self._initialized:
