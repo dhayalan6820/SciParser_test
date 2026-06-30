@@ -113,11 +113,25 @@ code {
   min-width: 0;
 }
 
-/* Viewport-relative container cap for very wide displays */
+/* Viewport-relative container caps for wide/ultrawide displays */
 .content-cap {
   max-width: min(100%, 2400px);
   margin-left: auto;
   margin-right: auto;
+}
+
+/* Chat message column — comfortable reading width even on 4K */
+.chat-content-cap {
+  max-width: min(100%, 860px);
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+}
+
+/* Touch-friendly min size for interactive targets */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
 }
 
 /* Smooth horizontal scrolling for pill-rows on mobile */

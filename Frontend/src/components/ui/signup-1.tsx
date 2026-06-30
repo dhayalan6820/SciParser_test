@@ -86,8 +86,8 @@ const Signup1 = ({
   };
 
   return (
-    <main className="bg-background flex flex-col items-center justify-center py-6 px-4">
-      <div className="w-full max-w-[360px] space-y-6">
+    <main className="bg-background flex flex-col items-center justify-center min-h-screen py-8 px-4">
+      <div className="w-full max-w-[400px] space-y-6">
         
         {/* Logo and Greeting Section */}
         <div className="space-y-2 text-center mb-6">

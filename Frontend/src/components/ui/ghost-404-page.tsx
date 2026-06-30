@@ -111,7 +111,7 @@ interface NotFoundProps {
 
 export function NotFound({ onGoBack }: NotFoundProps) {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-slate-950 px-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-slate-950 px-4 py-12 text-center">
       <AnimatePresence mode="wait">
         <motion.div
           className="text-center"

@@ -153,17 +153,17 @@ export function BrowserPreview({
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 ml-4 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 ml-2 sm:ml-4 shrink-0">
             <Button 
               variant="ghost" 
               size="sm" 
               onClick={() => setIsFullSize(!isFullSize)}
-              className="h-9 px-3 rounded-xl hover:bg-white/5 text-[#9CA3AF] gap-2"
+              className="h-9 px-2 sm:px-3 rounded-xl hover:bg-white/5 text-[#9CA3AF] gap-2"
             >
               {isFullSize ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-              <span className="text-[11px] font-bold uppercase tracking-wider hidden md:block">{isFullSize ? 'Exit Full Size' : 'View Full Size'}</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider hidden lg:block">{isFullSize ? 'Exit Full Size' : 'Full Size'}</span>
             </Button>
-            <div className="h-6 w-px bg-[#232B36] mx-1" />
+            <div className="h-6 w-px bg-[#232B36] mx-0.5 sm:mx-1 hidden sm:block" />
             <Button 
               variant="ghost" 
               size="icon" 
@@ -289,7 +289,7 @@ export function BrowserPreview({
             </div>
 
             {/* Log Filters & Search */}
-            <div className="px-3 py-2 border-b border-[#232B36] flex items-center gap-2 shrink-0">
+            <div className="px-3 py-2 border-b border-[#232B36] flex items-center gap-2 shrink-0 overflow-x-auto scroll-x-smooth">
               <div className="flex-1 relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#64748B]" />
                 <input 

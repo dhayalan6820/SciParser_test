@@ -1921,7 +1921,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   className="flex-1 overflow-y-auto flex flex-col"
                 >
                   {messages.length === 0 && !isAiTyping ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-center p-6 max-w-md mx-auto w-full space-y-4">
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-4 sm:p-6 chat-content-cap space-y-4">
                       <div className="w-12 h-12 rounded-2xl bg-[#1E1E1E] flex items-center justify-center text-[#22D3EE] border border-[#2A2A2A]">
                         <Sparkles className="w-6 h-6" />
                       </div>
@@ -1929,16 +1929,16 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                       <p className="text-sm text-[#9CA3AF]">
                         SciParser can browse the web, analyze documents, and run complex multi-agent workflows.
                       </p>
-                      <div className="grid grid-cols-2 gap-2 w-full pt-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full pt-4">
                         <button 
                           onClick={() => sendQuickPrompt("Go to Hacker News and extract top stories")}
-                          className="p-3 text-xs font-medium text-left rounded-xl border border-[#2A2A2A] text-[#E5E7EB] hover:bg-[#232323] transition-colors"
+                          className="p-3 text-xs font-medium text-left rounded-xl border border-[#2A2A2A] text-[#E5E7EB] hover:bg-[#232323] transition-colors min-h-[44px]"
                         >
                           📰 Extract Hacker News
                         </button>
                         <button 
                           onClick={() => sendQuickPrompt("Search for latest AI research papers")}
-                          className="p-3 text-xs font-medium text-left rounded-xl border border-[#2A2A2A] text-[#E5E7EB] hover:bg-[#232323] transition-colors"
+                          className="p-3 text-xs font-medium text-left rounded-xl border border-[#2A2A2A] text-[#E5E7EB] hover:bg-[#232323] transition-colors min-h-[44px]"
                         >
                           🔬 Search AI Papers
                         </button>
@@ -1947,7 +1947,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   ) : (
                     <>
                       <div className="flex-1" />
-                      <div className="p-6 space-y-6">
+                      <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 chat-content-cap">
                         {messages.map(renderMessage)}
 
                         {/* Live Plan / Loading State */}
@@ -2041,8 +2041,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               </div>
 
               {/* Chat Input Area */}
-              <div className="p-4 bg-[#1A1A1A] border-t border-[#2A2A2A]">
-                <div className="max-w-3xl mx-auto relative flex items-end gap-2 bg-[#111111] border border-[#2A2A2A] rounded-xl p-2">
+              <div className="px-3 py-3 sm:px-4 sm:py-4 bg-[#1A1A1A] border-t border-[#2A2A2A]">
+                <div className="chat-content-cap relative flex items-end gap-2 bg-[#111111] border border-[#2A2A2A] rounded-xl p-2">
                   <input 
                     type="file" 
                     ref={fileInputRef} 

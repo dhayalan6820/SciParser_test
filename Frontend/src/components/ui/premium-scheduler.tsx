@@ -180,9 +180,9 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
           </Button>
         </div>
 
-        <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
           {/* Left Panel - Configuration */}
-          <div className="w-full md:w-[38%] border-b md:border-b-0 md:border-r border-[#1F2937] bg-[#05070A] flex flex-col overflow-y-auto hide-scrollbar p-5 sm:p-8 space-y-6 sm:space-y-10 shrink-0">
+          <div className="w-full md:w-[38%] lg:w-[35%] border-b md:border-b-0 md:border-r border-[#1F2937] bg-[#05070A] flex flex-col overflow-y-auto hide-scrollbar p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 shrink-0 max-h-[45vh] md:max-h-none">
             
             {/* 1. Schedule Configuration */}
             <section className="space-y-6">
@@ -730,7 +730,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                 </div>
 
                 {/* Execution Config Summary */}
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                   {[
                     { label: 'Retry Attempts', val: 'Max 3 attempts', icon: RefreshCw },
                     { label: 'Timeout', val: '120 seconds', icon: Clock },
@@ -758,7 +758,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                   </div>
                   <p className="text-[11px] text-[#64748B] font-bold uppercase tracking-wider">Review your schedule configuration.</p>
                   
-                  <div className="grid grid-cols-2 gap-x-12 gap-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 sm:gap-x-12 gap-y-4 sm:gap-y-6">
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-[10px] font-bold text-[#64748B] uppercase tracking-widest">
@@ -814,17 +814,17 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
             </div>
 
             {/* Footer */}
-            <div className="px-8 py-4 border-t border-[#1F2937] bg-[#111827]/50 flex flex-col gap-3 shrink-0">
+            <div className="px-4 sm:px-8 py-3 sm:py-4 border-t border-[#1F2937] bg-[#111827]/50 flex flex-col gap-3 shrink-0">
               {showEmptyToolsWarning && (
-                <div className="flex items-start gap-3 px-5 py-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                <div className="flex flex-col sm:flex-row items-start gap-3 px-4 sm:px-5 py-3 sm:py-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
                   <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] font-black text-amber-400 uppercase tracking-widest mb-1">No Tool Activity Recorded</p>
                     <p className="text-[11px] text-amber-400/80 font-bold leading-relaxed">
-                      No MCP tool runs were found for this session. The generated script may be generic and low quality without tool context. Run an automation first for best results.
+                      No MCP tool runs were found. The generated script may be generic without tool context.
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={() => handleCreateSchedule(true)}
                       className="text-[10px] font-black text-amber-400 border border-amber-500/40 hover:bg-amber-500/20 transition-colors px-3 py-1.5 rounded-lg uppercase tracking-widest whitespace-nowrap"
@@ -841,40 +841,40 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                 </div>
               )}
               {scheduleError && (
-                <div className="flex items-start gap-3 px-5 py-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                <div className="flex items-start gap-3 px-4 sm:px-5 py-3 rounded-xl bg-red-500/10 border border-red-500/20">
                   <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
                   <p className="text-[11px] font-bold text-red-400 leading-relaxed">{scheduleError}</p>
                 </div>
               )}
               {scheduleSuccess && (
-                <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <div className="flex items-center gap-3 px-4 sm:px-5 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                   <p className="text-[11px] font-bold text-emerald-400 uppercase tracking-widest">Schedule created successfully!</p>
                 </div>
               )}
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
                 <button 
                   onClick={onClose} 
-                  className="text-[11px] font-black text-[#64748B] hover:text-white transition-colors uppercase tracking-[0.2em]"
+                  className="text-[11px] font-black text-[#64748B] hover:text-white transition-colors uppercase tracking-[0.2em] self-start sm:self-auto"
                 >
                   Cancel
                 </button>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto">
                   <Button 
                     variant="outline"
-                    className="h-14 px-8 rounded-2xl border-[#1F2937] bg-transparent text-[#CBD5E1] text-[11px] font-black uppercase tracking-[0.15em] hover:bg-white/5"
+                    className="h-11 sm:h-14 flex-1 sm:flex-none sm:px-8 rounded-2xl border-[#1F2937] bg-transparent text-[#CBD5E1] text-[11px] font-black uppercase tracking-[0.15em] hover:bg-white/5"
                   >
                     Save Draft
                   </Button>
                   <Button 
                     onClick={handleCreateSchedule}
                     disabled={loading || !taskName || scheduleSuccess}
-                    className="h-14 px-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-indigo-500/20 transition-all active:scale-95 disabled:opacity-50 min-w-[240px] flex items-center justify-center gap-3"
+                    className="h-11 sm:h-14 flex-1 sm:flex-none sm:px-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-indigo-500/20 transition-all active:scale-95 disabled:opacity-50 sm:min-w-[200px] flex items-center justify-center gap-2 sm:gap-3"
                   >
                     {loading ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Generating Script...</span>
+                        <span>Generating...</span>
                       </>
                     ) : scheduleSuccess ? (
                       <>
