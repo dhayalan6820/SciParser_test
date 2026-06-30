@@ -155,7 +155,7 @@ class Brain:
 
         self.search_tool = TavilySearch(max_results=3)
         self.atag_processor = ATAGProcessor(self.llm)
-        self.code_processor = ATAGProcessor(self.code_llm) # Use code LLM for script generation
+        self.code_processor = ATAGProcessor(self.code_llm, tavily_api_key=os.getenv("TAVILY_API_KEY"))
         
         self.initialized = True
         logger.info("Multi-agent orchestrator initialization complete.")

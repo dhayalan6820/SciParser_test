@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from typing import Any, Dict, List, Optional, Annotated, Sequence, TypedDict
 from langchain_core.messages import (
@@ -8,9 +9,13 @@ from langchain_core.messages import (
     messages_to_dict,
     messages_from_dict
 )
-# Assuming logger is available or will be provided
 import logging
 logger = logging.getLogger(__name__)
+
+try:
+    from tavily import TavilyClient as _TavilyClient
+except ImportError:
+    _TavilyClient = None
 
 # ============================================================
 # SERIALIZATION HELPERS
@@ -326,8 +331,9 @@ class ATAGProcessor:
     Step 3: Page Analysis (Thinking).
     Step 4: Critic (Self-healing).
     """
-    def __init__(self, llm):
+    def __init__(self, llm, tavily_api_key: Optional[str] = None):
         self.llm = llm
+        self.tavily_api_key = tavily_api_key or os.getenv("TAVILY_API_KEY")
 
     def _parse_json_safely(self, text: str) -> Dict[str, Any]:
         """Robust JSON extraction from LLM responses with fallback strategies."""
@@ -431,107 +437,182 @@ class ATAGProcessor:
         except Exception as e:
             return False, str(e)
 
-    async def run_script_generation(self, task_summary: str, execution_history: List[Dict[str, Any]], framework: str = "playwright", tool_context: Optional[List[Dict[str, Any]]] = None) -> str:
-        """Generates a production-ready script based on the execution history using the specified framework."""
-        
+    async def _tavily_enrich(self, task_summary: str) -> str:
+        """
+        Runs a targeted Tavily web search on the task summary and returns a
+        formatted block of real-world context (URLs, selectors, current data)
+        that the code-generation LLM can reference directly.
+
+        Returns an empty string when Tavily is unavailable or the search fails
+        so callers never need to guard against exceptions here.
+        """
+        if not self.tavily_api_key or _TavilyClient is None:
+            return ""
+        try:
+            client = _TavilyClient(api_key=self.tavily_api_key)
+            result = client.search(
+                query=task_summary,
+                search_depth="basic",
+                max_results=3,
+                include_answer=True,
+            )
+            lines = []
+            if result.get("answer"):
+                lines.append(f"  SUMMARY: {result['answer']}")
+            for i, r in enumerate(result.get("results", []), 1):
+                title = r.get("title", "")
+                url   = r.get("url", "")
+                snip  = (r.get("content") or "")[:300].replace("\n", " ")
+                lines.append(f"  [{i}] {title}\n      URL: {url}\n      {snip}")
+            if not lines:
+                return ""
+            header = (
+                "\nWEB RESEARCH (live Tavily results — use these real URLs, page titles, "
+                "and content snippets as ground-truth when writing the script):\n"
+            )
+            return header + "\n".join(lines) + "\n"
+        except Exception as e:
+            logger.warning(f"Tavily pre-generation search failed (non-fatal): {e}")
+            return ""
+
+    async def run_script_generation(
+        self,
+        task_summary: str,
+        execution_history: List[Dict[str, Any]],
+        framework: str = "playwright",
+        tool_context: Optional[List[Dict[str, Any]]] = None,
+    ) -> str:
+        """
+        Generates a production-ready automation script from the execution history.
+
+        Two-layer enrichment:
+          1. Pre-generation Tavily search  → real URLs / current page structure
+             injected into the LLM prompt so the script targets live endpoints.
+          2. Tool-context log              → verified output from successful tool
+             runs (supplied by frontend) so the LLM can replicate real values.
+
+        The system prompt also instructs the LLM that it MAY embed a Tavily
+        search step inside the generated script itself for tasks that require
+        dynamic URL discovery at runtime.
+        """
+
+        TAVILY_RUNTIME_BLOCK = """
+OPTIONAL TAVILY RUNTIME SEARCH (use ONLY when the task requires discovering a URL or live data at runtime):
+* import os; from tavily import TavilyClient
+* client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
+* results = client.search(query="...", search_depth="basic", max_results=3)
+* Use the first result URL as the navigation target when the target URL is not already known.
+* Always fall back gracefully if results are empty.
+"""
+
         if framework == "playwright":
-            SYSTEM_PROMPT = """
-            You are a Senior Python Automation Engineer specializing in Playwright.
+            SYSTEM_PROMPT = f"""
+You are a Senior Python Automation Engineer specialising in Playwright.
 
-            TASK:
-            Convert browser execution traces into a COMPLETE, EXECUTABLE, PRODUCTION-READY Python Playwright script.
+TASK:
+Convert browser execution traces into a COMPLETE, EXECUTABLE, PRODUCTION-READY
+Python Playwright script.  You have been given real-world web research and tool
+outputs — use them to write a script that targets the exact live URLs, selectors,
+and data values observed, rather than making generic guesses.
 
-            OUTPUT RULES (ABSOLUTE)
-            * Return ONLY raw Python code.
-            * Do NOT use markdown.
-            * Do NOT use ```python blocks.
-            * Do NOT provide explanations or notes.
-            * Script must be directly runnable.
+OUTPUT RULES (ABSOLUTE)
+* Return ONLY raw Python code — no markdown, no ``` blocks, no explanations.
+* Script must be directly runnable with: python script.py
 
-            PARALLEL EXECUTION REQUIREMENTS:
-            * Use a UNIQUE temporary user_data_dir for every run to avoid profile locks.
-            * Use a random available port for remote debugging if needed.
-            * Ensure the script is HEADLESS by default for server-side parallel runs.
+PARALLEL EXECUTION REQUIREMENTS
+* Use a UNIQUE temporary user_data_dir per run (tempfile.mkdtemp()) to avoid profile locks.
+* Script must run HEADLESS by default (headless=True) for server-side execution.
 
-            SCRIPT REQUIREMENTS:
-            * All imports (asyncio, json, playwright, pathlib, tempfile).
-            * Helper functions (e.g., get_downloads_dir).
-            * main() function returning the final result.
-            * asyncio.run(main()) at the end.
-            * Robust error handling (try/except/finally).
-            * Data extraction logic returning structured JSON.
-
-            PLAYWRIGHT CONFIGURATION:
-            * browser = await p.chromium.launch(headless=False, args=["--no-sandbox", "--start-maximized"])
-            * context = await browser.new_context()
-            * page = await context.new_page()
-            """
+REQUIRED SCRIPT STRUCTURE
+* All imports: asyncio, json, os, pathlib, tempfile, playwright.async_api.
+* A main() async function that returns a structured JSON result dict.
+* asyncio.run(main()) at the bottom.
+* Robust try/except/finally with browser.close() in finally.
+* Data extraction returns structured JSON — never plain print statements.
+{TAVILY_RUNTIME_BLOCK}
+PLAYWRIGHT BROWSER CONFIGURATION
+* async with async_playwright() as p:
+*     browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
+*     context = await browser.new_context(user_data_dir=tempfile.mkdtemp())
+*     page    = await context.new_page()
+"""
         else:
-            SYSTEM_PROMPT = """
-            You are a Senior Python Automation Engineer specializing in the 'browser-use' library.
+            SYSTEM_PROMPT = f"""
+You are a Senior Python Automation Engineer specialising in the 'browser-use' library.
 
-            TASK:
-            Convert browser execution traces into a COMPLETE, EXECUTABLE Python script using 'browser-use'.
+TASK:
+Convert browser execution traces into a COMPLETE, EXECUTABLE Python script using
+'browser-use'.  Use the real-world web research and tool outputs provided to
+target exact live URLs and replicate actual observed values.
 
-            OUTPUT RULES (ABSOLUTE)
-            * Return ONLY raw Python code.
-            * Do NOT use markdown.
-            * Do NOT use ```python blocks.
-            * Do NOT provide explanations or notes.
+OUTPUT RULES (ABSOLUTE)
+* Return ONLY raw Python code — no markdown, no ``` blocks, no explanations.
 
-            SCRIPT REQUIREMENTS:
-            * All imports (asyncio, browser_use).
-            * Use Agent from browser_use.
-            * Use Controller if needed for custom actions.
-            * main() function returning the final result.
-            * asyncio.run(main()) at the end.
+REQUIRED SCRIPT STRUCTURE
+* All imports: asyncio, os, browser_use.
+* Use Agent from browser_use; use Controller only for custom actions.
+* A main() async function returning the final result.
+* asyncio.run(main()) at the bottom.
+{TAVILY_RUNTIME_BLOCK}
+BROWSER-USE CONFIGURATION
+* Use the standard Agent(task=..., llm=...) pattern.
+* Derive the task string from the user intent + execution trace.
+"""
 
-            BROWSER-USE CONFIGURATION:
-            * Use the standard Agent(task=..., llm=...) pattern.
-            * The task should be derived from the user intent and execution trace.
-            """
+        # ── 1. Pre-generation Tavily enrichment ──────────────────────────────
+        web_research_section = await self._tavily_enrich(task_summary)
+        if web_research_section:
+            logger.info(f"Tavily pre-generation enrichment applied ({len(web_research_section)} chars)")
 
-        history_str = json.dumps(execution_history, indent=2)
-
+        # ── 2. Tool-context block (success-only, truncated by frontend) ───────
         tool_context_section = ""
         if tool_context:
             tool_context_lines = []
             for i, item in enumerate(tool_context, 1):
                 tool_name = item.get("tool_name", "unknown_tool")
-                output = item.get("output") or "(no output)"
+                output    = item.get("output") or "(no output)"
                 tool_context_lines.append(f"  [{i}] {tool_name}:\n      {output}")
-            tool_context_section = "\nTOOL EXECUTION LOG (real outputs from successful tools — use these URL patterns, selectors, and data values directly in the script):\n" + "\n".join(tool_context_lines) + "\n"
+            tool_context_section = (
+                "\nTOOL EXECUTION LOG (real outputs from successful tools — "
+                "use these URL patterns, selectors, and data values directly in the script):\n"
+                + "\n".join(tool_context_lines) + "\n"
+            )
 
+        # ── 3. Assemble prompt ────────────────────────────────────────────────
+        history_str = json.dumps(execution_history, indent=2)
         USER_PROMPT = f"""
-        USER INTENT: {task_summary}
-        {tool_context_section}
-        EXECUTION TRACE (Tool Calls):
-        {history_str}
+USER INTENT: {task_summary}
+{web_research_section}{tool_context_section}
+EXECUTION TRACE (Tool Calls):
+{history_str}
 
-        Generate the {framework} script. Ensure every quote is paired, indentation is 4 spaces, and the browser lifecycle is correctly managed.
-        """
+Generate the complete {framework} script.
+Rules: every quote paired, 4-space indentation, correct browser lifecycle management.
+If the web research above provides a direct URL for the target service, use it — do NOT
+hardcode placeholder URLs like "https://example.com".
+"""
 
-        # Initial generation
+        # ── 4. Initial LLM generation ─────────────────────────────────────────
         response = await self.llm.ainvoke([
             SystemMessage(content=SYSTEM_PROMPT),
-            HumanMessage(content=USER_PROMPT)
+            HumanMessage(content=USER_PROMPT),
         ])
-
         content = response.content.strip()
-        # Remove markdown code blocks if the LLM ignored the rule
         content = re.sub(r"```(?:python)?\n?(.*?)\n?```", r"\1", content, flags=re.DOTALL)
 
-        # Self-validation loop
-        max_retries = 2
-        for i in range(max_retries):
+        # ── 5. Self-validation loop (up to 2 fix passes) ─────────────────────
+        for _ in range(2):
             is_valid, error_msg = self._self_check_code(content)
             if is_valid:
                 break
-            
-            fix_prompt = f"The previous code had a syntax error: {error_msg}\n\nPrevious code:\n{content}\n\nPlease fix and return the complete corrected code."
+            fix_prompt = (
+                f"The previous code had a syntax error: {error_msg}\n\n"
+                f"Previous code:\n{content}\n\n"
+                "Please fix it and return the complete corrected code only."
+            )
             response = await self.llm.ainvoke([
                 SystemMessage(content=SYSTEM_PROMPT),
-                HumanMessage(content=fix_prompt)
+                HumanMessage(content=fix_prompt),
             ])
             content = response.content.strip()
             content = re.sub(r"```(?:python)?\n?(.*?)\n?```", r"\1", content, flags=re.DOTALL)
