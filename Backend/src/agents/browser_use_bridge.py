@@ -32,6 +32,7 @@ import tempfile
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _find_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("", 0))
@@ -51,7 +52,11 @@ def _find_chrome_binary() -> str:
     search_roots = [r for r in [pw_env, workspace_pw, home_pw] if r]
 
     sub_patterns = [
-        os.path.join("chromium_headless_shell-*", "chrome-headless-shell-linux64", "chrome-headless-shell"),
+        os.path.join(
+            "chromium_headless_shell-*",
+            "chrome-headless-shell-linux64",
+            "chrome-headless-shell",
+        ),
         os.path.join("chromium-*", "chrome-linux", "chrome"),
         os.path.join("chromium_headless_shell-*", "chrome-headless-shell"),
     ]
@@ -89,7 +94,9 @@ async def _wait_for_cdp(port: int, timeout_secs: int = 25) -> bool:
     for _ in range(timeout_secs):
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=1)) as resp:
+                async with session.get(
+                    url, timeout=aiohttp.ClientTimeout(total=1)
+                ) as resp:
                     if resp.status == 200:
                         return True
         except Exception:
@@ -110,9 +117,11 @@ def _write_browser_use_config(config_dir: str, cdp_url: str, headless: bool) -> 
     which means our cdp_url is lost and MCP launches its own browser instead.
     """
     import uuid
+
     os.makedirs(config_dir, exist_ok=True)
 
     from datetime import datetime, timezone
+
     now_iso = datetime.now(timezone.utc).isoformat()
 
     profile_id = str(uuid.uuid4())
@@ -151,12 +160,15 @@ def _write_browser_use_config(config_dir: str, cdp_url: str, headless: bool) -> 
     config_path = os.path.join(config_dir, "config.json")
     with open(config_path, "w") as f:
         json.dump(config, f, indent=2)
-    print(f"Bridge: wrote browser-use config (DB-style) → {config_path}", file=sys.stderr)
+    print(
+        f"Bridge: wrote browser-use config (DB-style) → {config_path}", file=sys.stderr
+    )
 
 
 # ---------------------------------------------------------------------------
 # Main bridge coroutine
 # ---------------------------------------------------------------------------
+
 
 async def run_bridge() -> None:
     import inspect
@@ -164,9 +176,13 @@ async def run_bridge() -> None:
 
     # ── Read env ────────────────────────────────────────────────────────────────
     port_env = os.getenv("BROWSER_USE_CDP_PORT")
-    port = int(port_env) if port_env and port_env not in ("", "0") else _find_free_port()
+    port = (
+        int(port_env) if port_env and port_env not in ("", "0") else _find_free_port()
+    )
     headless = os.getenv("BROWSER_USE_HEADLESS", "true").lower() != "false"
-    user_data_dir = os.getenv("BROWSER_USER_DATA_DIR") or tempfile.mkdtemp(prefix="chrome_cdp_")
+    user_data_dir = os.getenv("BROWSER_USER_DATA_DIR") or tempfile.mkdtemp(
+        prefix="chrome_cdp_"
+    )
     os.makedirs(user_data_dir, exist_ok=True)
 
     config_dir = os.path.join(tempfile.gettempdir(), f"browser_use_cfg_{port}")
@@ -201,12 +217,18 @@ async def run_bridge() -> None:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    print(f"Bridge: Chrome pid={chrome_process.pid} started, waiting for CDP...", file=sys.stderr)
+    print(
+        f"Bridge: Chrome pid={chrome_process.pid} started, waiting for CDP...",
+        file=sys.stderr,
+    )
 
     # ── Step 3: Wait for CDP TCP port to be ready ────────────────────────────────
     cdp_ready = await _wait_for_cdp(port, timeout_secs=25)
     if not cdp_ready:
-        print(f"Bridge: Chrome failed to expose CDP on port {port} within 25 s", file=sys.stderr)
+        print(
+            f"Bridge: Chrome failed to expose CDP on port {port} within 25 s",
+            file=sys.stderr,
+        )
         chrome_process.terminate()
         return
 
@@ -219,6 +241,7 @@ async def run_bridge() -> None:
     pw_browser = None
     try:
         from playwright.async_api import async_playwright
+
         pw = await async_playwright().start()
         pw_browser = await pw.chromium.connect_over_cdp(cdp_url)
 
@@ -230,9 +253,15 @@ async def run_bridge() -> None:
             ctx = await pw_browser.new_context()
             page = await ctx.new_page()
 
-        print(f"Bridge: Playwright connected via CDP, page url={page.url}", file=sys.stderr)
+        print(
+            f"Bridge: Playwright connected via CDP, page url={page.url}",
+            file=sys.stderr,
+        )
     except Exception as exc:
-        print(f"Bridge: Playwright CDP connect warning — {exc} (non-fatal)", file=sys.stderr)
+        print(
+            f"Bridge: Playwright CDP connect warning — {exc} (non-fatal)",
+            file=sys.stderr,
+        )
         # Non-fatal — browser-use will connect to Chrome directly via the cdp_url
 
     # ── Step 5: Write browser-use config pointing at cdp_url ────────────────────
@@ -246,7 +275,7 @@ async def run_bridge() -> None:
             await mcp_main()
         else:
             loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, mcp_main)
+            loop.run_in_executor(None, mcp_main)
     except Exception as exc:
         print(f"Bridge: MCP server error — {exc}", file=sys.stderr)
     finally:

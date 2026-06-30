@@ -1882,3 +1882,143 @@ RuntimeError: Attempted to exit cancel scope in a different task than it was ent
 2026-06-30 09:29:07 | INFO     | sciparser | Initializing multi-agent orchestrator system...
 2026-06-30 09:29:08 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
 2026-06-30 09:29:08 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-30 09:30:57 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:30:58 | INFO     | sciparser | Preparing MCP manager for user bb3a2f06-dfad-441d-888e-856c5c8f0423...
+2026-06-30 09:30:58 | INFO     | sciparser | Preparing MCP manager for user bb3a2f06-dfad-441d-888e-856c5c8f0423...
+2026-06-30 09:30:58 | INFO     | src.agents.mcp_agent | MCPToolManager created — port=53603  cdp=http://localhost:53603  user_data=/home/runner/workspace/Backend/temp/user_53603
+2026-06-30 09:30:58 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server — port=53603  cdp=http://localhost:53603
+2026-06-30 09:31:02 | INFO     | src.agents.mcp_agent | >>> MCP Session Ready — 16 tools active.
+2026-06-30 09:31:02 | INFO     | sciparser | Discovered 17 tools for execution.
+2026-06-30 09:31:02 | INFO     | sciparser | Discovered 17 tools for execution.
+2026-06-30 09:31:02 | INFO     | sciparser | Starting live preview stream for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f (tool=browser_screenshot)
+2026-06-30 09:31:02 | INFO     | sciparser | Starting live preview stream for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f (tool=browser_screenshot)
+2026-06-30 09:31:02 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-06-30 09:31:02 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-06-30 09:31:02 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=6312
+2026-06-30 09:31:02 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=6312
+2026-06-30 09:31:03 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:31:04 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=22736
+2026-06-30 09:31:04 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=22736
+2026-06-30 09:31:06 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=22708
+2026-06-30 09:31:06 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=22708
+2026-06-30 09:31:07 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=22580
+2026-06-30 09:31:07 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=22580
+2026-06-30 09:31:09 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=22676
+2026-06-30 09:31:09 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=22676
+2026-06-30 09:31:10 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:31:19 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:19 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:20 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:20 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:21 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:31:22 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:22 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:23 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:31:24 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:24 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:25 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:31:25 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:25 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:27 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:31:27 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:27 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:31 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:31 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:32 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:32 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:32 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:31:34 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:34 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:35 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:31:35 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:35 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:37 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:31:37 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:37 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:38 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:31:39 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:39 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:42 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:42 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:44 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:44 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:44 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:31:46 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:46 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:46 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:31:50 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:50 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:52 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:52 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:52 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:31:53 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:53 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:54 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:31:58 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:58 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:59 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:31:59 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:32:01 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:32:01 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:32:01 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:32:03 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:32:03 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:32:03 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:32:06 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:32:06 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:32:08 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:32:08 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:32:09 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:32:09 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:32:09 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:32:11 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:32:11 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:32:12 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:32:16 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:32:16 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:32:17 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:32:17 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:32:18 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:32:19 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:32:19 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:32:20 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:32:21 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:32:21 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:40:32 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:40:33 | INFO     | sciparser | Discovered 17 tools for execution.
+2026-06-30 09:40:33 | INFO     | sciparser | Discovered 17 tools for execution.
+2026-06-30 09:40:33 | INFO     | sciparser | Starting live preview stream for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f (tool=browser_screenshot)
+2026-06-30 09:40:33 | INFO     | sciparser | Starting live preview stream for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f (tool=browser_screenshot)
+2026-06-30 09:40:33 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-06-30 09:40:33 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-06-30 09:40:33 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:40:33 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:40:34 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:40:34 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:40:34 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:40:36 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:40:36 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:40:38 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:40:38 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:40:39 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:40:39 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:40:40 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 09:40:41 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:40:41 | INFO     | sciparser | Broadcasting browser frame for user bb3a2f06-dfad-441d-888e-856c5c8f0423, chat thread-1b213ced-15fd-4c43-8955-15d992de9c3f, length=15836
+2026-06-30 09:40:42 | INFO     | sciparser | Cancellation signal sent to task for chat_id thread-1b213ced-15fd-4c43-8955-15d992de9c3f
+2026-06-30 09:40:42 | INFO     | sciparser | Cancellation signal sent to task for chat_id thread-1b213ced-15fd-4c43-8955-15d992de9c3f
+2026-06-30 09:40:42 | INFO     | src.agents.mcp_agent | >>> Closing MCP Session — port=53603
+2026-06-30 09:40:43 | ERROR    | sciparser | [User bb3a2f06-dfad-441d-888e-856c5c8f0423] Error closing MCP manager: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-30 09:40:43 | ERROR    | sciparser | [User bb3a2f06-dfad-441d-888e-856c5c8f0423] Error closing MCP manager: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-30 09:40:43 | INFO     | sciparser | Session for user bb3a2f06-dfad-441d-888e-856c5c8f0423 fully cleaned up.
+2026-06-30 09:40:43 | INFO     | sciparser | Session for user bb3a2f06-dfad-441d-888e-856c5c8f0423 fully cleaned up.
+2026-06-30 09:40:43 | INFO     | sciparser | Browser session for user bb3a2f06-dfad-441d-888e-856c5c8f0423 closed via stop_process.
+2026-06-30 09:40:43 | INFO     | sciparser | Browser session for user bb3a2f06-dfad-441d-888e-856c5c8f0423 closed via stop_process.
+2026-06-30 09:43:25 | INFO     | sciparser | Creating/verifying database tables...
+2026-06-30 09:43:25 | INFO     | sciparser | Creating/verifying database tables...
+2026-06-30 09:43:26 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-30 09:43:26 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-30 09:43:26 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-30 09:43:26 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-30 09:43:26 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-30 09:43:26 | INFO     | sciparser | Multi-agent orchestrator initialization complete.

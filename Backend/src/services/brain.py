@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import os
 import json
 import re
@@ -123,8 +124,24 @@ class Brain:
         self.search_tool = None
         self.initialized = False
         self.checkpointer = MemorySaver()
-        self.active_tasks: Dict[str, asyncio.Task] = {} # Track active tasks for cancellation
-        self.active_plans: Dict[str, List[Dict]] = {} # Track active plans for rehydration
+        self.active_tasks: Dict[str, asyncio.Task] = {}
+        self.active_plans: Dict[str, List[Dict]] = {}
+        # In-memory tool log buffer: chat_id → list of tool events (capped at 200)
+        self.tool_log_buffer: Dict[str, List[Dict]] = {}
+
+    def buffer_tool_event(self, chat_id: str, event: Dict[str, Any]):
+        """Append a tool event to the in-memory buffer (max 200 per chat)."""
+        if chat_id not in self.tool_log_buffer:
+            self.tool_log_buffer[chat_id] = []
+        self.tool_log_buffer[chat_id].append(event)
+        if len(self.tool_log_buffer[chat_id]) > 200:
+            self.tool_log_buffer[chat_id] = self.tool_log_buffer[chat_id][-200:]
+
+    def get_live_tool_logs(self, chat_id: str) -> List[Dict]:
+        return list(self.tool_log_buffer.get(chat_id, []))
+
+    def clear_live_tool_logs(self, chat_id: str):
+        self.tool_log_buffer.pop(chat_id, None)
 
     async def initialize(self):
         """Eagerly initializes execution LLMs, search utilities, and subprocess processors."""
@@ -160,118 +177,71 @@ class Brain:
         self.initialized = True
         logger.info("Multi-agent orchestrator initialization complete.")
 
-    async def _stream_browser_frames(self, user_id: str, chat_id: str, tools: List[BaseTool], stop_event: asyncio.Event):
-        """Background task to poll for browser screenshots during execution for a specific chat."""
-        # Prefer browser_screenshot (direct, no DOM overhead) then fall back to browser_get_state
-        tool_map = {t.name: t for t in tools}
-        state_tool = tool_map.get("browser_screenshot") or tool_map.get("browser_get_state")
-        if not state_tool:
-            logger.warning("No browser screenshot tool found (browser_screenshot / browser_get_state), live preview disabled.")
+    async def _stream_browser_frames(self, user_id: str, chat_id: str, stop_event: asyncio.Event):
+        """
+        Capture screenshots directly from Chrome via Playwright CDP — no MCP overhead.
+        This always screenshots the real active page, not a stale blank tab.
+        """
+        from playwright.async_api import async_playwright
+
+        session_obj = self.session_manager.get_session(user_id)
+        mcp_manager = session_obj.get("mcp_manager")
+        if not mcp_manager:
+            logger.warning(f"No MCP manager for user {user_id}, live preview disabled.")
             return
 
-        def extract_screenshot(payload: Any) -> Optional[str]:
-            """Best-effort extraction of a screenshot payload from MCP/browser tool responses."""
-            if payload is None:
-                return None
+        cdp_url = getattr(mcp_manager, "cdp_url", None)
+        if not cdp_url:
+            logger.warning(f"No CDP URL for user {user_id}, live preview disabled.")
+            return
 
-            if isinstance(payload, str):
-                text = payload.strip()
-                if not text:
-                    return None
-                # MCP browser state responses are usually JSON strings with a 'screenshot' field.
-                if text[:1] in "{[":
-                    try:
-                        parsed = json.loads(text)
-                    except Exception:
-                        parsed = None
-                    if parsed is not None:
-                        extracted = extract_screenshot(parsed)
-                        if extracted:
-                            return extracted
-                if text.startswith("data:image/"):
-                    return text
-                if "[SCREENSHOT]" in text:
-                    match = re.search(r'\[SCREENSHOT\](.*?)\s*\[/SCREENSHOT\]', text, re.DOTALL)
-                    if match:
-                        return match.group(1).strip()
-                if len(text) > 1000 and re.match(r'^[A-Za-z0-9+/=]+$', text[:100]):
-                    return text
-                return None
+        logger.info(f"Starting direct CDP screenshot stream: user={user_id} chat={chat_id} cdp={cdp_url}")
 
-            if isinstance(payload, dict):
-                # Common response shapes from browser/MCP tools.
-                for key in ("frame", "data", "image", "screenshot", "base64", "content", "text", "output", "result"):
-                    value = payload.get(key)
-                    if isinstance(value, str):
-                        extracted = extract_screenshot(value)
-                        if extracted:
-                            return extracted
-                    elif isinstance(value, (dict, list)):
-                        extracted = extract_screenshot(value)
-                        if extracted:
-                            return extracted
+        pw = None
+        browser = None
+        try:
+            pw = await async_playwright().start()
+            browser = await pw.chromium.connect_over_cdp(cdp_url)
 
-                # Search nested values as a fallback.
-                for value in payload.values():
-                    if isinstance(value, (dict, list, str)):
-                        extracted = extract_screenshot(value)
-                        if extracted:
-                            return extracted
-                return None
+            while not stop_event.is_set():
+                try:
+                    # Find the most recently active page across all contexts
+                    page = None
+                    for ctx in browser.contexts:
+                        if ctx.pages:
+                            page = ctx.pages[-1]
 
-            if isinstance(payload, list):
-                for item in payload:
-                    if isinstance(item, dict):
-                        item_type = item.get("type")
-                        if item_type == "image" and item.get("data"):
-                            return extract_screenshot(item.get("data"))
-                        if item_type == "text" and item.get("text"):
-                            extracted = extract_screenshot(item.get("text"))
-                            if extracted:
-                                return extracted
-                    extracted = extract_screenshot(item)
-                    if extracted:
-                        return extracted
-                return None
-
-            return None
-            
-        # Build correct args per tool: browser_screenshot uses full_page; browser_get_state uses include_screenshot
-        is_screenshot_tool = state_tool.name == "browser_screenshot"
-        screenshot_args = {"full_page": False} if is_screenshot_tool else {"include_screenshot": True}
-
-        logger.info(f"Starting live preview stream for user {user_id}, chat {chat_id} (tool={state_tool.name})")
-        while not stop_event.is_set():
-            try:
-                # Get screenshot via MCP tool
-                res = await state_tool.ainvoke(screenshot_args)
-
-                screenshot_data = extract_screenshot(res)
-
-                if screenshot_data and self.stream_manager:
-                    # Broadcast with chat_id so frontend can route correctly
-                    # Pass as dict to avoid double-encoding in main.py
-                    logger.info(
-                        f"Broadcasting browser frame for user {user_id}, chat {chat_id}, "
-                        f"length={len(screenshot_data)}"
-                    )
-                    await self.stream_manager.broadcast_frame(
-                        {"chat_id": chat_id, "frame": screenshot_data}, 
-                        user_id
-                    )
-                else:
-                    # Log if we failed to find a screenshot but got a response
-                    if res:
-                        preview = str(res)
-                        if len(preview) > 500:
-                            preview = preview[:500] + "..."
+                    if page:
+                        png_bytes = await page.screenshot(type="png", full_page=False)
+                        b64 = base64.b64encode(png_bytes).decode("utf-8")
                         logger.info(
-                            f"No screenshot found in MCP response for chat {chat_id}. "
-                            f"Response type: {type(res)} preview: {preview}"
+                            f"Broadcasting browser frame for user {user_id}, "
+                            f"chat {chat_id}, length={len(b64)}"
                         )
-            except Exception as e:
-                logger.error(f"Error in browser frame stream: {e}")
-            await asyncio.sleep(1.5) # Increased from 0.8s to 1.5s to reduce frontend load and prevent UI lag
+                        if self.stream_manager:
+                            await self.stream_manager.broadcast_frame(
+                                {"chat_id": chat_id, "frame": b64}, user_id
+                            )
+                    else:
+                        logger.debug(f"No active page found for user {user_id}")
+                except Exception as e:
+                    logger.error(f"Error capturing direct CDP frame for user {user_id}: {e}")
+
+                await asyncio.sleep(1.5)
+
+        except Exception as e:
+            logger.error(f"Failed to start direct CDP Playwright for user {user_id}: {e}")
+        finally:
+            if browser:
+                try:
+                    await browser.close()
+                except Exception:
+                    pass
+            if pw:
+                try:
+                    await pw.stop()
+                except Exception:
+                    pass
 
     def _calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
         """Calculates the cost of an LLM call based on OpenRouter pricing (approximate)."""
@@ -420,15 +390,17 @@ class Brain:
             for tool_call in last_message.tool_calls:
                 tool = tool_map.get(tool_call["name"])
                 
-                # 1. Broadcast tool START to UI (using user_id for browser stream)
+                # 1. Buffer + broadcast tool START to UI
+                _tool_start_event = {
+                    "type": "tool_start",
+                    "tool": tool_call["name"],
+                    "args": tool_call["args"],
+                    "tool_call_id": tool_call["id"],
+                }
+                self.buffer_tool_event(chat_id, _tool_start_event)
                 if self.stream_manager:
                     await self.stream_manager.broadcast_frame(
-                        json.dumps({
-                            "type": "tool_start", 
-                            "tool": tool_call["name"], 
-                            "args": tool_call["args"],
-                            "tool_call_id": tool_call["id"]
-                        }), 
+                        json.dumps(_tool_start_event),
                         user_id,
                         is_tool=True
                     )
@@ -475,16 +447,18 @@ class Brain:
                         # but mark it as None so it's not reused.
                         session_obj["mcp_manager"] = None
                 
-                # 4. Broadcast tool OUTPUT to UI (using user_id for browser stream)
+                # 4. Buffer + broadcast tool OUTPUT to UI
+                _tool_out_event = {
+                    "type": "tool_output",
+                    "tool": tool_call["name"],
+                    "output": clean_obs[:500],
+                    "tool_call_id": tool_call["id"],
+                    "status": status,
+                }
+                self.buffer_tool_event(chat_id, _tool_out_event)
                 if self.stream_manager:
                     await self.stream_manager.broadcast_frame(
-                        json.dumps({
-                            "type": "tool_output", 
-                            "tool": tool_call["name"], 
-                            "output": clean_obs[:500],
-                            "tool_call_id": tool_call["id"],
-                            "status": status
-                        }), 
+                        json.dumps(_tool_out_event),
                         user_id,
                         is_tool=True
                     )
@@ -712,9 +686,10 @@ class Brain:
             
             logger.info(f"Discovered {len(all_tools)} tools for execution.")
 
-            # --- NEW: Start isolated frame stream for this chat ---
+            # Start direct-CDP screenshot stream (no MCP tools needed)
+            self.clear_live_tool_logs(chat_id)  # fresh slate for this execution
             stop_stream = asyncio.Event()
-            stream_task = asyncio.create_task(self._stream_browser_frames(user_id, chat_id, all_tools, stop_stream))
+            stream_task = asyncio.create_task(self._stream_browser_frames(user_id, chat_id, stop_stream))
 
             while retry_count < max_retries:
                 try:

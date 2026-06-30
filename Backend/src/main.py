@@ -687,6 +687,11 @@ async def check_browser_session(current_user: User = Depends(ChatService.get_cur
     is_active = session.get("mcp_manager") is not None
     return {"status": "success", "is_active": is_active}
 
+@app.get("/sciparser/v1/chat/sessions/{chat_id}/tool-logs-live")
+async def get_live_tool_logs(chat_id: str, current_user: User = Depends(ChatService.get_current_user)):
+    """Return the in-memory tool event buffer for an active execution."""
+    return {"tool_logs": brain.get_live_tool_logs(chat_id)}
+
 @app.get("/sciparser/v1/scheduler/{schedule_id}/runs")
 async def get_schedule_runs(schedule_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_user)):
     """Get execution history for a specific schedule."""
