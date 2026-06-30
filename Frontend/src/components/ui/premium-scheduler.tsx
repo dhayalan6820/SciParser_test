@@ -363,18 +363,18 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
           {/* Right Panel - AI Context & Preview */}
           <div className="flex-1 bg-[#05070A] flex flex-col overflow-hidden">
             {/* Tabs */}
-            <div className="px-8 pt-6 flex items-center gap-8 border-b border-[#1F2937] shrink-0">
+            <div className="px-4 sm:px-8 pt-4 sm:pt-6 flex items-center gap-4 sm:gap-8 border-b border-[#1F2937] shrink-0 overflow-x-auto scroll-x-smooth">
               {[
                 { id: 'context', label: 'AI Context', icon: Brain },
                 { id: 'plan', label: 'AI Plan', icon: Workflow },
-                { id: 'response', label: 'AI Response', icon: MessageSquare },
-                { id: 'tools', label: 'MCP Tools', icon: Cpu, count: successTools.length }
+                { id: 'response', label: 'Response', icon: MessageSquare },
+                { id: 'tools', label: 'Tools', icon: Cpu, count: successTools.length }
               ].map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => handleTabChange(tab.id)}
                   className={cn(
-                    "flex items-center gap-2.5 pb-4 text-[11px] font-black uppercase tracking-[0.15em] transition-all relative",
+                    "flex shrink-0 items-center gap-2 pb-4 text-[11px] font-black uppercase tracking-[0.15em] transition-all relative",
                     activeTab === tab.id ? "text-indigo-500" : "text-[#64748B] hover:text-[#CBD5E1]"
                   )}
                 >
@@ -393,7 +393,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
             </div>
 
             {/* Tab Content */}
-            <div className="flex-1 overflow-y-auto p-8 hide-scrollbar space-y-8">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8 hide-scrollbar space-y-6 sm:space-y-8">
               <AnimatePresence mode="wait">
                 {activeTab === 'context' && (
                   <motion.div
@@ -401,7 +401,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -20 }}
-                    className="grid grid-cols-2 gap-6"
+                    className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6"
                   >
                     {/* User Inputs */}
                     <div className="p-6 rounded-2xl bg-[#111827] border border-[#1F2937] space-y-4">

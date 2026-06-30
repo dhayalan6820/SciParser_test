@@ -89,6 +89,47 @@ body,
   overflow: hidden;
 }
 
+/* Responsive: prevent code blocks from breaking layout */
+pre {
+  overflow-x: auto;
+  max-width: 100%;
+  white-space: pre;
+}
+
+code {
+  word-break: break-word;
+}
+
+/* Responsive: tables scroll horizontally inside containers */
+.table-wrapper {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+/* Message text wraps safely */
+.message-body {
+  word-break: break-word;
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+/* Viewport-relative container cap for very wide displays */
+.content-cap {
+  max-width: min(100%, 2400px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Smooth horizontal scrolling for pill-rows on mobile */
+.scroll-x-smooth {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.scroll-x-smooth::-webkit-scrollbar {
+  display: none;
+}
+
 /* Hide scrollbar for Chrome, Safari and Opera */
 ::-webkit-scrollbar {
   display: none;

@@ -1829,18 +1829,18 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   <div className="font-semibold text-sm text-[#F8FAFC]">{activeModel}</div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto scroll-x-smooth shrink-0">
                   <Button
                     variant={showHistory ? "default" : "outline"}
                     size="sm"
                     onClick={() => setShowHistory(!showHistory)}
                     className={cn(
-                      "gap-1.5 text-xs font-semibold",
+                      "gap-1.5 text-xs font-semibold shrink-0",
                       showHistory && "bg-indigo-600 hover:bg-indigo-700 text-white border-none"
                     )}
                   >
                     <Clock className="w-4 h-4" />
-                    <span>History</span>
+                    <span className="hidden md:inline">History</span>
                   </Button>
 
                   <Button
@@ -1848,12 +1848,12 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     size="sm"
                     onClick={toggleSelectionMode}
                     className={cn(
-                      "gap-1.5 text-xs font-semibold",
+                      "gap-1.5 text-xs font-semibold shrink-0",
                       isSelectionMode && "bg-indigo-600 hover:bg-indigo-700 text-white border-none"
                     )}
                   >
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>{isSelectionMode ? "Cancel Selection" : "Schedule Task"}</span>
+                    <span className="hidden md:inline">{isSelectionMode ? "Cancel Selection" : "Schedule Task"}</span>
                   </Button>
 
                   {isSelectionMode && (
@@ -1861,10 +1861,10 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                       variant="outline"
                       size="sm"
                       onClick={handleClearSelection}
-                      className="gap-1.5 text-xs font-semibold text-slate-500 border-slate-200 hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5"
+                      className="gap-1.5 text-xs font-semibold shrink-0 text-slate-500 border-slate-200 hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5"
                     >
                       <Trash className="w-4 h-4" />
-                      <span>Clear All</span>
+                      <span className="hidden md:inline">Clear All</span>
                     </Button>
                   )}
 
@@ -1873,10 +1873,11 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                       variant="default"
                       size="sm"
                       onClick={() => setIsSchedulerOpen(true)}
-                      className="gap-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white border-none"
+                      className="gap-1.5 text-xs font-semibold shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white border-none"
                     >
                       <RefreshCw className="w-4 h-4" />
-                      <span>Configure Schedule ({selectedMessages.length + selectedTools.length})</span>
+                      <span className="hidden md:inline">Configure Schedule </span>
+                      <span>({selectedMessages.length + selectedTools.length})</span>
                     </Button>
                   )}
 
@@ -1886,29 +1887,28 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     onClick={() => {
                       const nextState = !browserActive;
                       handleToggleLiveBrowser(nextState);
-                      setUserInterruptedBrowser(!nextState); // Only suppress auto-open when manually closing
+                      setUserInterruptedBrowser(!nextState);
                     }}
                     className={cn(
-                      "gap-1.5 text-xs font-semibold transition-all duration-500",
+                      "gap-1.5 text-xs font-semibold shrink-0 transition-all duration-500",
                       browserActive && "bg-emerald-600 hover:bg-emerald-700 text-white border-none",
                       browserBlink === "green" && "ring-4 ring-emerald-500 animate-pulse border-emerald-500",
                       browserBlink === "red" && "ring-4 ring-red-500 animate-pulse border-red-500"
                     )}
                   >
                     <Globe className="w-4 h-4" />
-                    <span>Live Browser</span>
+                    <span className="hidden md:inline">Live Browser</span>
                   </Button>
 
-                  {/* NEW: Close Browser Button - Only visible when browser is active */}
                   {browserActive && (
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={handleCloseBrowser}
-                      className="gap-1.5 text-xs font-semibold text-red-500 border-red-200 hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-900/10"
+                      className="gap-1.5 text-xs font-semibold shrink-0 text-red-500 border-red-200 hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-900/10"
                     >
                       <XIcon className="w-4 h-4" />
-                      <span>Close Browser</span>
+                      <span className="hidden md:inline">Close Browser</span>
                     </Button>
                   )}
                 </div>
@@ -2015,7 +2015,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                         initial={{ width: 0, opacity: 0 }}
                         animate={{ width: historyPanelWidth, opacity: 1 }}
                         exit={{ width: 0, opacity: 0 }}
-                        className="border-l border-[#2A2A2A] bg-[#0D0D0F] overflow-hidden flex flex-col shrink-0"
+                        className="border-l border-[#2A2A2A] bg-[#0D0D0F] overflow-hidden flex flex-col shrink-0 max-w-[50vw] sm:max-w-xs md:max-w-sm"
                       >
                         <div className="p-4 border-b border-[#2A2A2A] flex items-center justify-between bg-[#1A1A1A]">
                           <div className="flex items-center gap-2">

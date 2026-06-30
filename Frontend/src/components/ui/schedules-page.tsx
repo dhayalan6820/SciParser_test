@@ -328,7 +328,28 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
         </div>
 
         {/* Main Content - Premium Dashboard */}
-        <div className="flex-1 overflow-y-auto bg-[#05070A] p-6 hide-scrollbar min-w-0">
+        <div className="flex-1 overflow-y-auto bg-[#05070A] p-4 sm:p-6 hide-scrollbar min-w-0">
+
+          {/* Mobile schedule switcher — visible only below md breakpoint */}
+          {schedules.length > 0 && (
+            <div className="flex md:hidden gap-2 pb-4 scroll-x-smooth -mx-4 px-4">
+              {schedules.map((s) => (
+                <button
+                  key={s.schedule_id}
+                  onClick={() => setSelectedSchedule(s)}
+                  className={cn(
+                    "shrink-0 px-3 py-2 rounded-xl border text-[11px] font-black uppercase tracking-wider transition-all",
+                    selectedSchedule?.schedule_id === s.schedule_id
+                      ? "border-indigo-500/60 bg-indigo-500/15 text-white"
+                      : "border-[#1F2937] bg-[#111827]/60 text-[#64748B] hover:border-[#374151] hover:text-[#CBD5E1]"
+                  )}
+                >
+                  {s.title.length > 18 ? s.title.slice(0, 18) + "…" : s.title}
+                </button>
+              ))}
+            </div>
+          )}
+
           {selectedSchedule ? (
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
@@ -346,8 +367,8 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                       <Zap className="w-7 h-7 text-indigo-500" />
                     </div>
                     <div>
-                      <h2 className="text-2xl font-black tracking-tight text-white uppercase">{selectedSchedule.title}</h2>
-                      <div className="flex items-center gap-6 mt-2">
+                      <h2 className="text-lg sm:text-2xl font-black tracking-tight text-white uppercase break-words">{selectedSchedule.title}</h2>
+                      <div className="flex flex-wrap items-center gap-3 sm:gap-6 mt-2">
                         <div className="flex items-center gap-2 text-[11px] font-bold text-[#64748B] uppercase tracking-widest">
                           <Mail className="w-3.5 h-3.5 text-indigo-500" />
                           <span>{selectedSchedule.email_recipient}</span>
@@ -421,7 +442,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                 <div className="col-span-1 xl:col-span-8 space-y-6 min-w-0">
                   
                   {/* Current Run Progress */}
-                  <div className="bg-[#111827]/40 rounded-[32px] border border-[#1F2937] p-8 flex items-center gap-10">
+                  <div className="bg-[#111827]/40 rounded-[32px] border border-[#1F2937] p-4 sm:p-8 flex flex-col sm:flex-row items-center gap-6 sm:gap-10">
                     <div className="relative w-32 h-32 shrink-0">
                       <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
                         <circle className="text-[#1F2937]" strokeWidth="8" stroke="currentColor" fill="transparent" r="42" cx="50" cy="50" />
@@ -469,7 +490,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                   </div>
 
                   {/* Execution Pipeline */}
-                  <div className="bg-[#111827]/40 rounded-[32px] border border-[#1F2937] p-8 space-y-8">
+                  <div className="bg-[#111827]/40 rounded-[32px] border border-[#1F2937] p-4 sm:p-8 space-y-6 sm:space-y-8">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <Workflow className="w-5 h-5 text-indigo-500" />
@@ -481,7 +502,8 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                       </div>
                     </div>
 
-                    <div className="relative flex items-center justify-between px-4">
+                    <div className="overflow-x-auto scroll-x-smooth -mx-4 px-4">
+                      <div className="relative flex items-center justify-between px-4 min-w-[480px]">
                       {/* Connector Line */}
                       <div className="absolute top-6 left-10 right-10 h-0.5 bg-[#1F2937] z-0" />
                       
@@ -509,23 +531,24 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                           </div>
                         </div>
                       ))}
+                      </div>
                     </div>
                   </div>
 
                   {/* Tabs for AI Context & Logs */}
-                  <div className="bg-[#111827]/40 rounded-[32px] border border-[#1F2937] overflow-hidden flex flex-col min-h-[500px]">
-                    <div className="px-8 pt-6 flex items-center gap-8 border-b border-[#1F2937] shrink-0">
+                  <div className="bg-[#111827]/40 rounded-[32px] border border-[#1F2937] overflow-hidden flex flex-col min-h-[400px] sm:min-h-[500px]">
+                    <div className="px-4 sm:px-8 pt-4 sm:pt-6 flex items-center gap-4 sm:gap-8 border-b border-[#1F2937] shrink-0 overflow-x-auto scroll-x-smooth">
                       {[
                         { id: 'pipeline', label: 'Live Logs', icon: Terminal },
                         { id: 'ai', label: 'AI Planning', icon: Brain },
-                        { id: 'script', label: 'Generated Script', icon: Code },
-                        { id: 'history', label: 'Run History', icon: History }
+                        { id: 'script', label: 'Script', icon: Code },
+                        { id: 'history', label: 'History', icon: History }
                       ].map((tab) => (
                         <button
                           key={tab.id}
                           onClick={() => setActiveTab(tab.id)}
                           className={cn(
-                            "flex items-center gap-2.5 pb-4 text-[11px] font-black uppercase tracking-[0.15em] transition-all relative",
+                            "flex shrink-0 items-center gap-2 pb-4 text-[11px] font-black uppercase tracking-[0.15em] transition-all relative",
                             activeTab === tab.id ? "text-indigo-500" : "text-[#64748B] hover:text-[#CBD5E1]"
                           )}
                         >
@@ -658,7 +681,8 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                             exit={{ opacity: 0 }}
                             className="space-y-4"
                           >
-                            <table className="w-full text-left text-[11px]">
+                            <div className="overflow-x-auto scroll-x-smooth">
+                            <table className="w-full text-left text-[11px] min-w-[480px]">
                               <thead>
                                 <tr className="text-[#64748B] font-black uppercase tracking-widest border-b border-[#1F2937]">
                                   <th className="pb-4 px-2">Run ID</th>
@@ -672,11 +696,11 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                               <tbody className="divide-y divide-[#1F2937]">
                                 {runs.map((run) => (
                                   <tr key={run.run_id} className="group hover:bg-white/5 transition-colors">
-                                    <td className="py-4 px-2 font-mono text-indigo-400">{run.run_id}</td>
-                                    <td className="py-4 px-2 text-[#CBD5E1]">{formatDate(run.created_at).split(',')[0]}</td>
+                                    <td className="py-4 px-2 font-mono text-indigo-400 truncate max-w-[100px]">{run.run_id}</td>
+                                    <td className="py-4 px-2 text-[#CBD5E1] whitespace-nowrap">{formatDate(run.created_at).split(',')[0]}</td>
                                     <td className="py-4 px-2">
                                       <span className={cn(
-                                        "px-2 py-0.5 rounded-md text-[9px] font-black uppercase",
+                                        "px-2 py-0.5 rounded-md text-[9px] font-black uppercase whitespace-nowrap",
                                         run.status === 'completed' ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-500"
                                       )}>{run.status}</span>
                                     </td>
@@ -691,6 +715,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                                 ))}
                               </tbody>
                             </table>
+                            </div>
                           </motion.div>
                         )}
                       </AnimatePresence>
