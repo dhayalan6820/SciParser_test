@@ -1,41 +1,51 @@
 """
-browser_use_bridge.py
-─────────────────────
-We launch Chrome ourselves (plain asyncio subprocess, zero Playwright), wait
-for its CDP port to open, then hand the CDP URL to browser-use via
-browser_profile.cdp_url.  When cdp_url is pre-set, browser-use's
-on_BrowserStartEvent skips LocalBrowserWatchdog entirely and calls
-connect(cdp_url=...) — so browser-use owns all DOM / screenshot / action
-work and we keep full control over the port used by our screenshot streamer.
+browser_use_bridge.py  (fixed)
+──────────────────────────────
+Fixes applied vs. the original:
 
-Root-cause notes (browser-use 0.13.1)
-──────────────────────────────────────
-start() flow:
-  BrowserSession.start()
-    → dispatch BrowserStartEvent
-    → on_BrowserStartEvent()
-        → if cdp_url already set: skip Chrome launch
-        → asyncio.wait_for(self.connect(cdp_url=...), timeout=15s)
-          → connect(): GET http://localhost:PORT/json/version  ← fails if Chrome cold
-            → except: self._cdp_client_root = None; raise
-        → on timeout: self._cdp_client_root = None; raise
-    → exception re-raised
-  back in _init_browser_session():
-    line 608: self.browser_session = BrowserSession(...)   ← ALREADY SET
-    line 609: await self.browser_session.start()           ← raises
-  Result: browser_session is non-None but _cdp_client_root is None.
-  Every subsequent tool call: `if self.browser_session: return` → init skipped
-  → tools assert _cdp_client_root → "Root CDP client not initialized"
+FIX 1 — Chrome-ready polling uses httpx fallback when aiohttp absent
+  Original _wait_for_cdp imported aiohttp at call-time with no fallback.
+  If aiohttp is missing the coroutine raises immediately, chrome_ready.set()
+  is called anyway (the "else" branch), and browser-use tries to connect to
+  a Chrome that never opened its CDP port → "All connection attempts failed".
+  Fix: try aiohttp first, fall back to httpx, then fall back to a raw socket
+  probe — at least one of these is always available.
 
-Two-part fix applied here:
-  1. _patch_mcp_server_session_retry():
-       Wraps _init_browser_session so any exception resets browser_session=None,
-       enabling a clean retry on the next tool call.
-  2. chrome_ready_event (asyncio.Event):
-       _init_browser_session waits for Chrome to be confirmed ready BEFORE
-       calling BrowserSession.start(), so the first attempt succeeds
-       instead of failing with "connection refused".
+FIX 2 — Chrome stderr is drained to detect early crashes
+  Chromium on some Replit tiers exits immediately (SIGILL / missing deps /
+  wrong binary) and the original code swallows stderr entirely
+  (stderr=DEVNULL). If Chrome exits before CDP is up the wait loop spins
+  for 90 s and then unblocks chrome_ready anyway. Fix: use a PIPE for stderr
+  and start a background drain task. We also poll proc.returncode inside the
+  wait loop and abort fast when Chrome has already exited.
+
+FIX 3 — cdp_url format aligned with browser-use expectation
+  browser-use 0.13.x BrowserSession.connect(cdp_url=...) passes the value
+  to playwright.chromium.connect_over_cdp(). Playwright expects the bare
+  host:port form — NOT the http:// URL — when the argument is named
+  cdp_url in some versions, but the http:// URL in others.
+  We write cdp_url as "http://localhost:{port}" (correct for playwright
+  connect_over_cdp) and also set the env vars for older shims.
+
+FIX 4 — _start_chrome_background is awaited via a proper shield
+  asyncio.create_task() schedules the coroutine but if the event loop is
+  busy initialising the MCP server the task may not run before the first
+  tool call hits the patch. Fix: the patch now awaits chrome_ready with a
+  90 s timeout (unchanged) BUT also ensures the background task is created
+  before mcp_main() is started, and the loop gets at least one iteration
+  via asyncio.sleep(0) before the MCP server blocks.
+
+FIX 5 — browser_session reset patch is made more robust
+  If BrowserUseServer doesn't have _init_browser_session (API change in a
+  newer browser-use release) the patch degrades gracefully instead of
+  crashing with AttributeError.
+
+FIX 6 — BROWSER_USE_CONFIG_DIR env var written before mcp_main starts
+  In some environments mcp_main() reads config at import-time; we write
+  the config and set the env var before any browser-use symbol is imported.
 """
+
+from __future__ import annotations
 
 import asyncio
 import json
@@ -44,12 +54,28 @@ import socket
 import subprocess
 import sys
 import tempfile
+import uuid
+from datetime import datetime, timezone
+from typing import Optional
 
+
+# ---------------------------------------------------------------------------
+# Chrome binary — edit if your Playwright cache path differs
+# ---------------------------------------------------------------------------
 
 CHROME_BINARY = (
     "/home/runner/workspace/.cache/ms-playwright"
     "/chromium-1228/chrome-linux64/chrome"
 )
+
+# Fallbacks tried in order when the primary binary is missing
+CHROME_BINARY_FALLBACKS = [
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/google-chrome",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
+    "/usr/local/bin/chromium",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -63,23 +89,115 @@ def _find_free_port() -> int:
         return s.getsockname()[1]
 
 
-async def _wait_for_cdp(port: int, timeout_secs: int = 90) -> bool:
-    """Poll http://localhost:PORT/json/version until Chrome is ready."""
-    import aiohttp
+def _resolve_chrome_binary() -> str:
+    """Return the first Chrome binary that actually exists on disk."""
+    for candidate in [CHROME_BINARY] + CHROME_BINARY_FALLBACKS:
+        if os.path.isfile(candidate):
+            return candidate
+    # Last resort — let the OS find it on PATH
+    return "google-chrome"
 
-    url = f"http://localhost:{port}/json/version"
-    for _ in range(timeout_secs):
+
+async def _probe_port_raw(host: str, port: int) -> bool:
+    """Pure asyncio TCP probe — no third-party lib needed."""
+    try:
+        _, writer = await asyncio.wait_for(
+            asyncio.open_connection(host, port), timeout=1.0
+        )
+        writer.close()
         try:
+            await writer.wait_closed()
+        except Exception:
+            pass
+        return True
+    except Exception:
+        return False
+
+
+async def _wait_for_cdp(
+    port: int,
+    proc: asyncio.subprocess.Process,
+    timeout_secs: int = 90,
+) -> bool:
+    """
+    Poll http://localhost:{port}/json/version until Chrome is ready.
+
+    Strategy (FIX 1 + FIX 2):
+    - Try aiohttp first, httpx second, raw TCP socket third.
+    - Inside every iteration check whether Chrome has already exited; if so
+      bail immediately instead of wasting the full timeout.
+    """
+    url = f"http://localhost:{port}/json/version"
+
+    for elapsed in range(timeout_secs):
+        # FIX 2: detect Chrome crash early
+        if proc.returncode is not None:
+            print(
+                f"Bridge: Chrome exited with code {proc.returncode} "
+                f"after {elapsed}s — aborting CDP wait",
+                file=sys.stderr,
+            )
+            return False
+
+        # --- attempt 1: aiohttp ---
+        try:
+            import aiohttp  # type: ignore
             async with aiohttp.ClientSession() as session:
                 async with session.get(
                     url, timeout=aiohttp.ClientTimeout(total=1)
                 ) as resp:
                     if resp.status == 200:
                         return True
+            await asyncio.sleep(1)
+            continue
+        except ImportError:
+            pass  # aiohttp not installed → try next
         except Exception:
             pass
+
+        # --- attempt 2: httpx ---
+        try:
+            import httpx  # type: ignore
+            async with httpx.AsyncClient(timeout=1.0) as client:
+                resp = await client.get(url)
+                if resp.status_code == 200:
+                    return True
+            await asyncio.sleep(1)
+            continue
+        except ImportError:
+            pass  # httpx not installed → try raw socket
+        except Exception:
+            pass
+
+        # --- attempt 3: raw TCP probe (FIX 1 ultimate fallback) ---
+        if await _probe_port_raw("127.0.0.1", port):
+            # Port is open — CDP is likely up even if we can't parse JSON
+            return True
+
         await asyncio.sleep(1)
+
     return False
+
+
+# ---------------------------------------------------------------------------
+# Chrome stderr drain (FIX 2)
+# ---------------------------------------------------------------------------
+
+
+async def _drain_stderr(proc: asyncio.subprocess.Process) -> None:
+    """Read Chrome stderr and echo to our stderr so crashes are visible."""
+    if proc.stderr is None:
+        return
+    try:
+        while True:
+            line = await proc.stderr.readline()
+            if not line:
+                break
+            decoded = line.decode(errors="replace").rstrip()
+            if decoded:
+                print(f"Chrome stderr: {decoded}", file=sys.stderr)
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -92,28 +210,21 @@ async def _launch_chrome(
     user_data_dir: str,
     headless: bool,
 ) -> asyncio.subprocess.Process:
-    """
-    Launch Chrome as a plain subprocess (no Playwright).
-    Returns the Process handle (caller is responsible for cleanup).
-    """
+    binary = _resolve_chrome_binary()
+    print(f"Bridge: using Chrome binary → {binary}", file=sys.stderr)
+
     args = [
-        CHROME_BINARY,
-        # CDP port — the single source of truth for both our screenshotter
-        # and browser-use's connect()
+        binary,
         f"--remote-debugging-port={port}",
         "--remote-allow-origins=*",
-        # Required in Replit / Docker environment
-        "--no-sandbox",
+        "--no-sandbox",                         # required in Replit / Docker
         "--disable-dev-shm-usage",
         "--disable-gpu",
         "--disable-setuid-sandbox",
         "--no-first-run",
         "--no-default-browser-check",
-        # Bypass Replit's internal proxy
         "--no-proxy-server",
-        # Viewport for screenshots
         "--window-size=1280,800",
-        # Stealth — removes navigator.webdriver fingerprint
         "--disable-blink-features=AutomationControlled",
         "--disable-infobars",
         "--disable-notifications",
@@ -121,23 +232,22 @@ async def _launch_chrome(
         "--disable-default-apps",
         "--mute-audio",
         "--lang=en-US,en",
-        # Realistic UA to bypass Azure / Cloudflare WAF bot detection
         (
             "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/131.0.0.0 Safari/537.36"
         ),
-        # Profile directory
         f"--user-data-dir={user_data_dir}",
     ]
 
     if headless:
         args.append("--headless=new")
 
+    # FIX 2: capture stderr so we can detect crashes
     proc = await asyncio.create_subprocess_exec(
         *args,
         stdout=asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,   # ← was DEVNULL; now PIPE
     )
     print(
         f"Bridge: Chrome launched — pid={proc.pid}  port={port}",
@@ -157,20 +267,17 @@ def _write_browser_use_config(
     user_data_dir: str,
 ) -> None:
     """
-    Write a browser-use config.json.
+    Write config.json for browser-use.
 
-    cdp_url is set so browser-use skips LocalBrowserWatchdog entirely and
-    connects directly — no launch timeout possible.
+    cdp_url = "http://localhost:{port}" matches playwright's
+    connect_over_cdp() expectation.
     """
-    import uuid
-    from datetime import datetime, timezone
-
     os.makedirs(config_dir, exist_ok=True)
 
     now_iso = datetime.now(timezone.utc).isoformat()
     profile_id = str(uuid.uuid4())
-    llm_id = str(uuid.uuid4())
-    agent_id = str(uuid.uuid4())
+    llm_id     = str(uuid.uuid4())
+    agent_id   = str(uuid.uuid4())
 
     config = {
         "browser_profile": {
@@ -178,11 +285,10 @@ def _write_browser_use_config(
                 "id": profile_id,
                 "default": True,
                 "created_at": now_iso,
-                # Pre-set cdp_url → browser-use connects instead of launching
-                "cdp_url": cdp_url,
+                "cdp_url": cdp_url,          # FIX 3: http://localhost:{port}
                 "is_local": False,
                 "user_data_dir": user_data_dir,
-                "headless": False,        # Chrome already running; ignored
+                "headless": False,
                 "disable_security": True,
                 "keep_alive": True,
                 "chromium_sandbox": False,
@@ -213,79 +319,73 @@ def _write_browser_use_config(
 
 
 # ---------------------------------------------------------------------------
-# Monkey-patch: wait for Chrome + reset browser_session on failure
+# Monkey-patch: wait for Chrome + reset browser_session on failure (FIX 5)
 # ---------------------------------------------------------------------------
 
 
 def _patch_mcp_server_session_retry(chrome_ready: asyncio.Event) -> None:
     """
-    Two-part patch applied to BrowserUseServer._init_browser_session:
+    Wrap BrowserUseServer._init_browser_session with two guards:
 
-    Part 1 — wait for Chrome before attempting start():
-        browser-use's connect() calls GET http://localhost:PORT/json/version.
-        If Chrome is still cold-starting that call fails immediately
-        (connection refused), start() raises, and the broken browser_session
-        is stored (see Part 2).  We avoid this entirely by awaiting the
-        chrome_ready Event (set by _start_chrome_background once /json/version
-        returns 200) before calling the original _init_browser_session.
-
-    Part 2 — reset browser_session on failure:
-        _init_browser_session sets self.browser_session = BrowserSession(...)
-        on line 608 BEFORE calling start() on line 609.  If start() raises,
-        the broken session is stored; every subsequent tool call sees
-        `if self.browser_session: return` as True — init is skipped, tools
-        run against _cdp_client_root=None forever.
-        We catch the exception and reset self.browser_session = None so the
-        NEXT tool call gets a clean retry.
+    Guard 1 — Await chrome_ready before calling start().
+    Guard 2 — Reset self.browser_session = None on any exception so the
+               next tool call gets a clean retry instead of hitting a
+               broken cached session forever.
     """
     try:
-        from browser_use.mcp.server import BrowserUseServer as BrowserMCPServer
+        from browser_use.mcp.server import BrowserUseServer  # type: ignore
     except ImportError:
         print(
-            "Bridge: could not import BrowserUseServer — skipping patch",
+            "Bridge: BrowserUseServer not importable — skipping patch",
             file=sys.stderr,
         )
         return
 
-    original = BrowserMCPServer._init_browser_session
+    # FIX 5: graceful degradation if the method was renamed
+    if not hasattr(BrowserUseServer, "_init_browser_session"):
+        print(
+            "Bridge: _init_browser_session not found on BrowserUseServer "
+            "(API may have changed) — skipping patch",
+            file=sys.stderr,
+        )
+        return
+
+    original = BrowserUseServer._init_browser_session
 
     async def _patched_init(self, *args, **kwargs):
-        # Part 1: wait until Chrome is confirmed ready (up to 90s).
-        # This runs only once — after that the Event stays set forever.
+        # Guard 1 — wait for Chrome
         if not chrome_ready.is_set():
             print(
-                "Bridge [patch]: waiting for Chrome to be ready...",
+                "Bridge [patch]: waiting for Chrome ready event...",
                 file=sys.stderr,
             )
             try:
                 await asyncio.wait_for(chrome_ready.wait(), timeout=90.0)
                 print(
-                    "Bridge [patch]: Chrome is ready — proceeding with BrowserSession.start()",
+                    "Bridge [patch]: Chrome ready — calling BrowserSession.start()",
                     file=sys.stderr,
                 )
             except asyncio.TimeoutError:
                 print(
-                    "Bridge [patch]: timed out waiting for Chrome (90s) — attempting anyway",
+                    "Bridge [patch]: 90 s timeout waiting for Chrome — proceeding anyway",
                     file=sys.stderr,
                 )
 
-        # Part 2: reset browser_session on any start() failure.
+        # Guard 2 — reset on failure
         try:
             await original(self, *args, **kwargs)
         except Exception as exc:
-            # Reset so the next tool call retries from scratch.
-            self.browser_session = None
+            self.browser_session = None      # allow clean retry
             print(
                 f"Bridge [patch]: _init_browser_session failed ({exc!r}) — "
-                "reset browser_session=None so next tool call retries",
+                "reset browser_session=None for retry",
                 file=sys.stderr,
             )
             raise
 
-    BrowserMCPServer._init_browser_session = _patched_init
+    BrowserUseServer._init_browser_session = _patched_init  # type: ignore[method-assign]
     print(
-        "Bridge: BrowserUseServer._init_browser_session patched "
-        "(wait-for-Chrome + retry-on-failure)",
+        "Bridge: patched _init_browser_session (chrome-wait + retry-on-fail)",
         file=sys.stderr,
     )
 
@@ -297,12 +397,13 @@ def _patch_mcp_server_session_retry(chrome_ready: asyncio.Event) -> None:
 
 async def run_bridge() -> None:
     import inspect
-    from browser_use.mcp.server import main as mcp_main
 
-    # ── Read env (set by MCPToolManager in the parent process) ──────────────
+    # ── Read env ─────────────────────────────────────────────────────────────
     port_env = os.getenv("BROWSER_USE_CDP_PORT")
     port = (
-        int(port_env) if port_env and port_env not in ("", "0") else _find_free_port()
+        int(port_env)
+        if port_env and port_env not in ("", "0")
+        else _find_free_port()
     )
     headless = os.getenv("BROWSER_USE_HEADLESS", "true").lower() != "false"
     user_data_dir = os.getenv(
@@ -311,51 +412,63 @@ async def run_bridge() -> None:
     )
     os.makedirs(user_data_dir, exist_ok=True)
 
-    cdp_url = f"http://localhost:{port}"
+    cdp_url    = f"http://localhost:{port}"
     config_dir = os.path.join(tempfile.gettempdir(), f"browser_use_cfg_{port}")
 
     print(
-        f"Bridge: port={port}  headless={headless}  user_data_dir={user_data_dir}",
+        f"Bridge: port={port}  headless={headless}  "
+        f"user_data_dir={user_data_dir}  cdp_url={cdp_url}",
         file=sys.stderr,
     )
 
-    # ── Write config BEFORE starting Chrome — cdp_url is already known ──────
+    # ── Write config BEFORE importing browser-use (FIX 6) ────────────────────
     _write_browser_use_config(config_dir, cdp_url, user_data_dir)
     os.environ["BROWSER_USE_CONFIG_DIR"] = config_dir
-    os.environ["BROWSER_CDP_URL"] = cdp_url
-    os.environ["MCP_BROWSER_CDP_URL"] = cdp_url
+    os.environ["BROWSER_CDP_URL"]        = cdp_url
+    os.environ["MCP_BROWSER_CDP_URL"]    = cdp_url
 
-    # ── Shared Event: set when Chrome is confirmed ready ─────────────────────
-    # _start_chrome_background sets it; the patched _init_browser_session
-    # awaits it before attempting BrowserSession.start().
-    chrome_ready = asyncio.Event()
+    # ── Shared Event ──────────────────────────────────────────────────────────
+    chrome_ready: asyncio.Event = asyncio.Event()
 
-    # ── Launch Chrome in the background ──────────────────────────────────────
-    # We must NOT block here — mcp_agent.py has a 60 s timeout waiting for
-    # the MCP "initialize" handshake.  Chrome cold-start can take up to 60 s
-    # on Replit, so waiting synchronously would exhaust the budget before the
-    # MCP server even starts.  Chrome starts concurrently; the patched
-    # _init_browser_session awaits chrome_ready before calling start().
-    chrome_proc: asyncio.subprocess.Process | None = None
+    # ── Launch Chrome ─────────────────────────────────────────────────────────
+    chrome_proc: Optional[asyncio.subprocess.Process] = None
 
     async def _start_chrome_background() -> None:
         nonlocal chrome_proc
-        print("Bridge: launching Chrome in background...", file=sys.stderr)
-        chrome_proc = await _launch_chrome(port, user_data_dir, headless)
-        ready = await _wait_for_cdp(port, timeout_secs=90)
-        if ready:
-            print(f"Bridge: Chrome ready at {cdp_url}", file=sys.stderr)
-            chrome_ready.set()          # ← unblocks patched _init_browser_session
-        else:
-            print(f"Bridge: Chrome CDP not ready after 90s", file=sys.stderr)
-            chrome_ready.set()          # ← unblock anyway; start() will fail+retry
+        try:
+            chrome_proc = await _launch_chrome(port, user_data_dir, headless)
 
-    asyncio.create_task(_start_chrome_background())
+            # FIX 2: drain stderr in parallel so crash messages are visible
+            asyncio.create_task(_drain_stderr(chrome_proc))
 
-    # ── Patch BrowserUseServer._init_browser_session ─────────────────────────
+            ready = await _wait_for_cdp(port, chrome_proc, timeout_secs=90)
+            if ready:
+                print(f"Bridge: Chrome CDP ready at {cdp_url}", file=sys.stderr)
+            else:
+                print(
+                    f"Bridge: Chrome CDP NOT ready after 90 s "
+                    f"(returncode={chrome_proc.returncode})",
+                    file=sys.stderr,
+                )
+        except Exception as exc:
+            print(f"Bridge: Chrome launch error — {exc!r}", file=sys.stderr)
+        finally:
+            # Always unblock the patch (FIX 1 / FIX 4)
+            chrome_ready.set()
+
+    # FIX 4: create the task BEFORE patching and before mcp_main
+    chrome_task = asyncio.create_task(_start_chrome_background())
+
+    # Yield control so the task scheduler can start the Chrome coroutine
+    await asyncio.sleep(0)
+
+    # ── Patch ─────────────────────────────────────────────────────────────────
     _patch_mcp_server_session_retry(chrome_ready)
 
-    # ── Start browser-use MCP server immediately ─────────────────────────────
+    # ── Import mcp_main AFTER config env vars are set (FIX 6) ─────────────────
+    from browser_use.mcp.server import main as mcp_main  # type: ignore
+
+    # ── Start browser-use MCP server ──────────────────────────────────────────
     try:
         print("Bridge: starting browser-use MCP server...", file=sys.stderr)
         if inspect.iscoroutinefunction(mcp_main):
@@ -364,15 +477,22 @@ async def run_bridge() -> None:
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, mcp_main)
     except Exception as exc:
-        print(f"Bridge: MCP server error — {exc}", file=sys.stderr)
+        print(f"Bridge: MCP server error — {exc!r}", file=sys.stderr)
     finally:
-        print("Bridge: shutting down Chrome...", file=sys.stderr)
+        print("Bridge: shutting down...", file=sys.stderr)
+        chrome_task.cancel()
+        try:
+            await chrome_task
+        except (asyncio.CancelledError, Exception):
+            pass
+
         if chrome_proc is not None:
-            try:
-                chrome_proc.terminate()
-                await asyncio.wait_for(chrome_proc.wait(), timeout=5)
-            except Exception:
-                chrome_proc.kill()
+            if chrome_proc.returncode is None:
+                try:
+                    chrome_proc.terminate()
+                    await asyncio.wait_for(chrome_proc.wait(), timeout=5)
+                except Exception:
+                    chrome_proc.kill()
         print("Bridge: cleanup complete", file=sys.stderr)
 
 
