@@ -47,11 +47,13 @@ class MCPToolManager:
                     "OPENAI_API_BASE": "https://openrouter.ai/api/v1",
                     "BROWSER_USE_MODEL": "google/gemini-3-flash-preview",
                     "MCP_BROWSER_CDP_URL": self.cdp_url,
-                    "BROWSER_CDP_URL": self.cdp_url, # Standard env var for some MCP servers
+                    "BROWSER_CDP_URL": self.cdp_url,
                     "BROWSER_USE_CDP_PORT": str(port) if port else "9222",
-                    "BROWSER_USER_DATA_DIR": user_data_dir, # Pass unique profile dir
-                    "MCP_BROWSER_USE_OWN_BROWSER": "true",
-                    "BROWSER_USE_HEADLESS": os.getenv("BROWSER_USE_HEADLESS", "false"),
+                    "BROWSER_USER_DATA_DIR": user_data_dir,
+                    # Do NOT set MCP_BROWSER_USE_OWN_BROWSER — let the bridge
+                    # always launch its own fresh browser so there is a real
+                    # Chrome process for the MCP server to connect to.
+                    "BROWSER_USE_HEADLESS": "true",
                     "BROWSER_USE_DISABLE_SECURITY": "true"
                 },
                 "transport": "stdio",

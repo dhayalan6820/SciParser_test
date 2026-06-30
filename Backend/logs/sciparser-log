@@ -448,3 +448,16 @@ These errors indicate that the browser automation system is unable to establish 
 These errors indicate that the browser automation system is unable to establish a connection with the page content or capture its state. As a result, I cannot see the address input field, type the address, select from the autocomplete dropdown, or extract any plan data. I have attempted to navigate to both the homepage and the direct plans page, but the environment remains unresponsive to interaction commands.
 2026-06-30 06:43:06 | ERROR    | sciparser | All 3 attempts failed.
 2026-06-30 06:43:06 | ERROR    | sciparser | All 3 attempts failed.
+2026-06-30 06:58:30 | INFO     | src.agents.mcp_agent | >>> Closing MCP Session for http://localhost:53691...
+2026-06-30 06:58:32 | ERROR    | sciparser | [User bb3a2f06-dfad-441d-888e-856c5c8f0423] Error closing MCP manager: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-30 06:58:32 | ERROR    | sciparser | [User bb3a2f06-dfad-441d-888e-856c5c8f0423] Error closing MCP manager: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-30 06:58:32 | INFO     | sciparser | Session for user bb3a2f06-dfad-441d-888e-856c5c8f0423 fully cleaned up.
+2026-06-30 06:58:32 | INFO     | sciparser | Session for user bb3a2f06-dfad-441d-888e-856c5c8f0423 fully cleaned up.
+2026-06-30 06:58:38 | INFO     | sciparser | Creating/verifying database tables...
+2026-06-30 06:58:38 | INFO     | sciparser | Creating/verifying database tables...
+2026-06-30 06:58:38 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-30 06:58:38 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-30 06:58:38 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-30 06:58:38 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-30 06:58:38 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-30 06:58:38 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
