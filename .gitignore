@@ -8,4 +8,4 @@ wheels/
 
 # Virtual environments
 .venv
-.env
+.envBackend/logs/sciparser-log
