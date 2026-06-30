@@ -63,10 +63,26 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
   const [timeout, setTimeoutVal] = React.useState(120);
   const [headless, setHeadless] = React.useState(true);
 
+  // Truncate tool output to keep token cost low
+  const summarizeOutput = (raw: unknown, maxChars = 500): string => {
+    const str = typeof raw === 'string' ? raw : JSON.stringify(raw ?? '');
+    if (str.length <= maxChars) return str;
+    return str.slice(0, maxChars) + `… [+${str.length - maxChars} chars truncated]`;
+  };
+
   const handleCreateSchedule = async () => {
     setScheduleError("");
     try {
       setLoading(true);
+
+      // Build compact tool context — only SUCCESS/COMPLETED tools, output truncated
+      const tool_context = (toolLogs || [])
+        .filter(log => log.status === 'SUCCESS' || log.status === 'COMPLETED')
+        .map(log => ({
+          tool_name: log.tool_name,
+          output: summarizeOutput(log.tool_output)
+        }));
+
       const data = {
         chat_id: chatId,
         title: taskName || "New Automation Task",
@@ -74,6 +90,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
         email_recipient: emailRecipient,
         selected_message_ids: selectedMessages,
         selected_tool_ids: selectedTools,
+        tool_context,
         advanced_options: {
           retry_count: retryCount,
           timeout: timeout,
@@ -85,7 +102,6 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
       setTimeout(() => onClose(), 1500);
     } catch (err: any) {
       console.error("Failed to create schedule:", err);
-      // Extract readable message from FastAPI error responses
       let msg = err?.message || "Failed to create schedule.";
       try {
         const parsed = JSON.parse(msg);
@@ -114,11 +130,11 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
   // Use the plan from the selected AI message
   const displayPlan = selectedAiMsg?.plan || [];
 
-  // Pre-compute filtered tools using the same ID logic as BrowserPreview (log.id || String(idx))
-  const filteredTools = (toolLogs || []).filter((log, idx) => {
-    const logId = log.id || String(idx);
-    return selectedTools.includes(String(logId));
-  });
+  // All tool logs for display; success-only count drives the badge
+  const allTools = toolLogs || [];
+  const successTools = allTools.filter(
+    log => log.status === 'SUCCESS' || log.status === 'COMPLETED'
+  );
 
   // --- FIX: Ensure activeTab switches correctly ---
   const handleTabChange = (tabId: string) => {
@@ -341,7 +357,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                 { id: 'context', label: 'AI Context', icon: Brain },
                 { id: 'plan', label: 'AI Plan', icon: Workflow },
                 { id: 'response', label: 'AI Response', icon: MessageSquare },
-                { id: 'tools', label: 'MCP Tools', icon: Cpu, count: filteredTools.length }
+                { id: 'tools', label: 'MCP Tools', icon: Cpu, count: successTools.length }
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -549,46 +565,86 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                           <Cpu className="w-5 h-5 text-indigo-500" />
                         </div>
                         <div>
-                          <h4 className="text-sm font-black text-white uppercase tracking-widest">MCP Tools ({filteredTools.length})</h4>
+                          <h4 className="text-sm font-black text-white uppercase tracking-widest">
+                            MCP Tools ({successTools.length} / {allTools.length})
+                          </h4>
                           <p className="text-[10px] text-[#64748B] font-bold uppercase tracking-widest">
-                            Tools selected for execution.
+                            Success tools included in script generation
                           </p>
                         </div>
                       </div>
-                      <button className="text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:underline">View Full Tools →</button>
+                      {/* Info pill: how many will be sent */}
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">
+                          {successTools.length} will be sent
+                        </span>
+                      </div>
                     </div>
-                    
-                    <div className="grid grid-cols-3 gap-4">
-                      {filteredTools.length > 0 ? (
-                        filteredTools.map((log, i) => (
-                          <div key={log.id || i} className="p-5 rounded-2xl bg-[#111827] border border-[#1F2937] hover:border-indigo-500/30 transition-all group cursor-pointer">
-                            <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 rounded-xl bg-[#05070A] border border-[#1F2937] flex items-center justify-center group-hover:bg-indigo-500/10 transition-colors">
-                                <Terminal className={cn("w-5 h-5 text-indigo-500")} />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="text-xs font-black text-white uppercase tracking-wider truncate">{log.tool_name}</div>
+
+                    {allTools.length === 0 ? (
+                      <div className="py-20 flex flex-col items-center justify-center bg-[#111827] border border-[#1F2937] rounded-[32px] border-dashed">
+                        <Cpu className="w-10 h-10 text-[#374151] mb-4" />
+                        <p className="text-xs font-black text-[#64748B] uppercase tracking-widest">No tool activity recorded</p>
+                        <p className="text-[10px] text-[#374151] mt-2 uppercase font-bold">Run an automation first to populate the tool log.</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {allTools.map((log, i) => {
+                          const isSuccess = log.status === 'SUCCESS' || log.status === 'COMPLETED';
+                          const isFailed  = log.status === 'FAILED'  || log.status === 'ERROR';
+                          return (
+                            <div
+                              key={log.id || i}
+                              className={cn(
+                                "p-5 rounded-2xl border transition-all",
+                                isSuccess
+                                  ? "bg-[#111827] border-emerald-500/30"
+                                  : isFailed
+                                  ? "bg-[#111827]/50 border-[#1F2937] opacity-50"
+                                  : "bg-[#111827] border-[#1F2937]"
+                              )}
+                            >
+                              <div className="flex items-center gap-3">
                                 <div className={cn(
-                                  "text-[10px] font-bold uppercase tracking-widest truncate",
-                                  log.status === 'COMPLETED' || log.status === 'SUCCESS' ? "text-emerald-500" :
-                                  log.status === 'FAILED' || log.status === 'ERROR' ? "text-red-400" :
-                                  "text-[#64748B]"
-                                )}>{log.status}</div>
+                                  "w-9 h-9 rounded-xl border flex items-center justify-center shrink-0",
+                                  isSuccess
+                                    ? "bg-emerald-500/10 border-emerald-500/20"
+                                    : "bg-[#05070A] border-[#1F2937]"
+                                )}>
+                                  <Terminal className={cn(
+                                    "w-4 h-4",
+                                    isSuccess ? "text-emerald-500" : "text-[#64748B]"
+                                  )} />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-xs font-black text-white uppercase tracking-wider truncate">
+                                    {log.tool_name}
+                                  </div>
+                                  <div className={cn(
+                                    "text-[10px] font-bold uppercase tracking-widest",
+                                    isSuccess ? "text-emerald-500" :
+                                    isFailed  ? "text-red-400" :
+                                    "text-[#64748B]"
+                                  )}>
+                                    {log.status}
+                                    {isSuccess && (
+                                      <span className="ml-2 text-[9px] text-emerald-600">✓ included</span>
+                                    )}
+                                    {isFailed && (
+                                      <span className="ml-2 text-[9px] text-red-700">✗ excluded</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="mt-3 p-2 rounded-lg bg-black/20 border border-white/5 text-[9px] text-[#64748B] font-mono line-clamp-3 overflow-hidden">
+                                {summarizeOutput(log.tool_output, 200)}
                               </div>
                             </div>
-                            <div className="mt-3 p-2 rounded-lg bg-black/20 border border-white/5 text-[9px] text-[#64748B] font-mono line-clamp-2 overflow-hidden">
-                              {typeof log.tool_output === 'string' ? log.tool_output : JSON.stringify(log.tool_output)}
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="col-span-3 py-20 flex flex-col items-center justify-center bg-[#111827] border border-[#1F2937] rounded-[32px] border-dashed">
-                          <Cpu className="w-10 h-10 text-[#374151] mb-4" />
-                          <p className="text-xs font-black text-[#64748B] uppercase tracking-widest">No tools selected from history</p>
-                          <p className="text-[10px] text-[#374151] mt-2 uppercase font-bold">Please select tools in the chat history to include them.</p>
-                        </div>
-                      )}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
