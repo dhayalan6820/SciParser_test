@@ -324,8 +324,33 @@ async def create_schedule(req: ScheduleRequest, db: AsyncSession = Depends(get_d
         for item in (req.tool_context or [])
     ]
 
-    # 3. Generate the Python script using the specialized code model
-    generated_script = await brain.code_processor.run_script_generation(req.title, execution_history, tool_context=tool_context)
+    # 3. Auto-detect the best script framework from the tools that were actually used.
+    #    Tavily-only sessions → generate a Tavily search script (no browser needed).
+    #    Any browser tool present → use Playwright (default).
+    _TAVILY_TOOLS = {"tavily_search_results_json", "ai_parser_dynamic_search"}
+    _BROWSER_PREFIXES = ("browser_", "navigate", "click", "type", "scroll", "fill", "select", "playwright")
+
+    all_tool_names = {(item.get("tool_name") or item.get("tool") or "").lower()
+                      for item in (tool_context or []) + execution_history}
+    all_tool_names.discard("")
+
+    has_browser = any(
+        name.startswith(prefix) for name in all_tool_names for prefix in _BROWSER_PREFIXES
+    )
+    has_tavily  = any(name in _TAVILY_TOOLS for name in all_tool_names)
+
+    if has_tavily and not has_browser:
+        framework = "tavily"
+    else:
+        framework = "playwright"
+
+    logger.info(f"Script generation framework selected: {framework} "
+                f"(tools: {all_tool_names or 'none from context'})")
+
+    # 4. Generate the Python script using the specialized code model
+    generated_script = await brain.code_processor.run_script_generation(
+        req.title, execution_history, framework=framework, tool_context=tool_context
+    )
     
     # 3. Create the schedule with the generated script
     schedule = await ChatService.create_schedule(db, current_user.user_id, req)

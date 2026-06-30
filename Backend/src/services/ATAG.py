@@ -554,6 +554,72 @@ PLAYWRIGHT BROWSER CONFIGURATION — copy this pattern exactly:
         finally:
             await context.close()
 """
+        elif framework == "tavily":
+            SYSTEM_PROMPT = """
+You are a Senior Python Engineer specialising in web research automation using the Tavily API.
+
+TASK:
+Generate a COMPLETE, EXECUTABLE, PRODUCTION-READY Python script that reproduces a
+Tavily web-search workflow.  The script must replicate the exact search intent that
+was used in the original chat session, using the tool execution log and web research
+provided.  Do NOT use Playwright, browser-use, or any browser automation library.
+
+OUTPUT RULES (ABSOLUTE)
+* Return ONLY raw Python code — no markdown, no ``` blocks, no explanations.
+* Script must be directly runnable with: python script.py
+
+REQUIRED SCRIPT STRUCTURE
+* Imports: os, json, tavily (TavilyClient).
+* Read TAVILY_API_KEY from os.getenv("TAVILY_API_KEY").
+* A synchronous main() function that:
+    1. Builds the search query from the task intent (use the user intent literally
+       or refine it based on the tool execution log).
+    2. Calls client.search(query=..., search_depth="basic", max_results=5,
+       include_answer=True).
+    3. Extracts and structures the result into a dict with keys:
+       "query", "answer", "results" (list of {title, url, content}).
+    4. Prints json.dumps(output, indent=2, ensure_ascii=False) to stdout.
+    5. Returns the output dict.
+* if __name__ == "__main__": main() at the bottom — no asyncio needed.
+
+ERROR HANDLING
+* Wrap the Tavily call in try/except.
+* On error print {"error": str(e)} and exit with code 1.
+
+EXAMPLE STRUCTURE (adapt query and fields to the actual task):
+    import os, json, sys
+    from tavily import TavilyClient
+
+    def main():
+        api_key = os.getenv("TAVILY_API_KEY", "")
+        if not api_key:
+            print(json.dumps({"error": "TAVILY_API_KEY not set"}))
+            sys.exit(1)
+        client = TavilyClient(api_key=api_key)
+        try:
+            result = client.search(
+                query="<derived from task intent>",
+                search_depth="basic",
+                max_results=5,
+                include_answer=True,
+            )
+            output = {
+                "query": "<same query>",
+                "answer": result.get("answer"),
+                "results": [
+                    {"title": r.get("title"), "url": r.get("url"), "content": r.get("content", "")[:500]}
+                    for r in result.get("results", [])
+                ],
+            }
+            print(json.dumps(output, indent=2, ensure_ascii=False))
+            return output
+        except Exception as e:
+            print(json.dumps({"error": str(e)}))
+            sys.exit(1)
+
+    if __name__ == "__main__":
+        main()
+"""
         else:
             SYSTEM_PROMPT = f"""
 You are a Senior Python Automation Engineer specialising in the 'browser-use' library.
@@ -598,7 +664,19 @@ BROWSER-USE CONFIGURATION
 
         # ── 3. Assemble prompt ────────────────────────────────────────────────
         history_str = json.dumps(execution_history, indent=2)
-        USER_PROMPT = f"""
+        if framework == "tavily":
+            USER_PROMPT = f"""
+USER INTENT: {task_summary}
+{tool_context_section}
+SEARCH EXECUTION LOG (original Tavily tool calls):
+{history_str}
+
+Generate the complete Tavily search script that reproduces this workflow.
+Rules: every quote paired, 4-space indentation, no browser imports.
+Derive the search query directly from the USER INTENT and the tool execution log above.
+"""
+        else:
+            USER_PROMPT = f"""
 USER INTENT: {task_summary}
 {web_research_section}{tool_context_section}
 EXECUTION TRACE (Tool Calls):
