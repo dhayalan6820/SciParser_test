@@ -1,27 +1,24 @@
+"""
+browser_use_bridge.py
+─────────────────────
+Launches Chromium via Playwright (proven to work in Replit), then points
+browser-use's MCP server at the SAME browser via CDP URL.
+
+Architecture
+  1. async_playwright launches Chrome with --remote-debugging-port=PORT
+  2. We write a browser-use config.json with  cdp_url = http://localhost:PORT
+  3. browser-use MCP server reads that config and connects — no new browser launched
+  4. Playwright tools (in ATAG / scripts) and browser-use MCP tools share one Chrome
+"""
+
+import asyncio
+import inspect
+import json
 import os
 import sys
-import asyncio
-import glob as _glob
-from browser_use.mcp.server import main
+import tempfile
 
-# ── Chromium binary resolution ────────────────────────────────────────────────
-# Prefer an explicit override, then fall back to the Playwright-installed build.
-def _find_chromium() -> str | None:
-    override = os.getenv("BROWSER_EXECUTABLE_PATH")
-    if override and os.path.isfile(override):
-        return override
-    # Look for the Playwright-downloaded full Chrome (not headless-shell)
-    patterns = [
-        os.path.expanduser("~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome"),
-        "/home/runner/workspace/.cache/ms-playwright/chromium-*/chrome-linux64/chrome",
-    ]
-    for pattern in patterns:
-        matches = sorted(_glob.glob(pattern))
-        if matches:
-            return matches[-1]  # newest version
-    return None  # let browser-use find its own default
-
-# Required args for headless Chromium in a sandboxed Linux environment (Replit/CI)
+# ── Sandbox args required for headless Chrome in Replit / sandboxed Linux ─────
 _SANDBOX_ARGS = [
     "--no-sandbox",
     "--disable-dev-shm-usage",
@@ -30,64 +27,116 @@ _SANDBOX_ARGS = [
     "--remote-allow-origins=*",
 ]
 
-async def run_bridge():
+
+def _write_browser_use_config(config_dir: str, cdp_url: str, headless: bool) -> None:
+    """Write a minimal browser-use config.json that points MCP server at cdp_url."""
+    os.makedirs(config_dir, exist_ok=True)
+    config = {
+        "browser_profile": {
+            "default": {
+                "default": True,
+                "cdp_url": cdp_url,
+                "headless": headless,
+                "disable_security": True,
+                "keep_alive": True,
+            }
+        }
+    }
+    config_path = os.path.join(config_dir, "config.json")
+    with open(config_path, "w") as f:
+        json.dump(config, f, indent=2)
+    print(f"Bridge: wrote browser-use config → {config_path}", file=sys.stderr)
+
+
+async def run_bridge() -> None:
+    from playwright.async_api import async_playwright
+    from browser_use.mcp.server import main as mcp_main
+
+    # ── Read env ────────────────────────────────────────────────────────────────
     port_env = os.getenv("BROWSER_USE_CDP_PORT")
     port = int(port_env) if port_env and port_env != "0" else 9222
-    user_data_dir = os.getenv("BROWSER_USER_DATA_DIR")
     headless = os.getenv("BROWSER_USE_HEADLESS", "true").lower() != "false"
-    chromium_path = _find_chromium()
+    user_data_dir = os.getenv("BROWSER_USER_DATA_DIR")
+
+    # Isolated config dir per session so concurrent sessions don't collide
+    config_dir = os.path.join(
+        tempfile.gettempdir(), f"browser_use_cfg_{port}"
+    )
 
     print(
-        f"Bridge starting — port={port}, headless={headless}, "
-        f"user_data_dir={user_data_dir}, chromium={chromium_path}",
+        f"Bridge: port={port}  headless={headless}  user_data_dir={user_data_dir}",
         file=sys.stderr,
     )
 
+    # ── Step 1: Launch Chrome via Playwright ────────────────────────────────────
+    pw = await async_playwright().start()
     browser = None
+    context = None
+
     try:
-        from browser_use import BrowserSession, BrowserProfile
+        launch_args = _SANDBOX_ARGS + [f"--remote-debugging-port={port}"]
 
-        profile_kwargs = dict(
-            headless=headless,
-            args=_SANDBOX_ARGS + [f"--remote-debugging-port={port}"],
-            disable_security=True,
-        )
-        if chromium_path:
-            profile_kwargs["executable_path"] = chromium_path
         if user_data_dir:
-            profile_kwargs["user_data_dir"] = user_data_dir
-
-        profile = BrowserProfile(**profile_kwargs)
-        browser = BrowserSession(browser_profile=profile)
-        await browser.start()
+            os.makedirs(user_data_dir, exist_ok=True)
+            # launch_persistent_context returns a BrowserContext directly
+            context = await pw.chromium.launch_persistent_context(
+                user_data_dir,
+                headless=headless,
+                args=launch_args,
+            )
+        else:
+            browser = await pw.chromium.launch(
+                headless=headless,
+                args=launch_args,
+            )
 
         cdp_url = f"http://localhost:{port}"
+        print(f"Bridge: Playwright launched Chrome at {cdp_url}", file=sys.stderr)
+
+        # Expose to any other code that checks these env vars
         os.environ["BROWSER_CDP_URL"] = cdp_url
         os.environ["MCP_BROWSER_CDP_URL"] = cdp_url
-        print(f"Bridge launched browser at: {cdp_url}", file=sys.stderr)
 
-    except Exception as e:
-        print(f"Bridge: failed to launch browser — {e}", file=sys.stderr)
-        # Continue anyway: the MCP server may still work if a browser is already up
+    except Exception as exc:
+        print(f"Bridge: Chrome launch failed — {exc}", file=sys.stderr)
+        # Attempt cleanup and exit — MCP server can't work without a browser
+        try:
+            await pw.stop()
+        except Exception:
+            pass
+        return
 
+    # ── Step 2: Write browser-use config that points MCP at the same Chrome ────
+    _write_browser_use_config(config_dir, cdp_url, headless)
+    os.environ["BROWSER_USE_CONFIG_DIR"] = config_dir
+
+    # ── Step 3: Start the browser-use MCP server ────────────────────────────────
     try:
-        print("Bridge: starting MCP server...", file=sys.stderr)
-        import inspect
-        if inspect.iscoroutinefunction(main):
-            await main()
+        print("Bridge: starting browser-use MCP server...", file=sys.stderr)
+        if inspect.iscoroutinefunction(mcp_main):
+            await mcp_main()
         else:
             loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, main)
-    except Exception as e:
-        print(f"Bridge: MCP server error — {e}", file=sys.stderr)
+            await loop.run_in_executor(None, mcp_main)
+    except Exception as exc:
+        print(f"Bridge: MCP server error — {exc}", file=sys.stderr)
     finally:
+        # ── Cleanup ──────────────────────────────────────────────────────────────
+        if context:
+            try:
+                await context.close()
+            except Exception:
+                pass
         if browser:
             try:
                 await browser.close()
             except Exception:
                 pass
+        try:
+            await pw.stop()
+        except Exception:
+            pass
+
 
 if __name__ == "__main__":
     asyncio.run(run_bridge())
-            
-
