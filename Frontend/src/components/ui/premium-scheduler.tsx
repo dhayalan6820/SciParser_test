@@ -63,6 +63,9 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
   const [timeout, setTimeoutVal] = React.useState(120);
   const [headless, setHeadless] = React.useState(true);
 
+  // Empty tool log warning state
+  const [showEmptyToolsWarning, setShowEmptyToolsWarning] = React.useState(false);
+
   // Truncate tool output to keep token cost low
   const summarizeOutput = (raw: unknown, maxChars = 500): string => {
     const str = typeof raw === 'string' ? raw : JSON.stringify(raw ?? '');
@@ -70,8 +73,16 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
     return str.slice(0, maxChars) + `… [+${str.length - maxChars} chars truncated]`;
   };
 
-  const handleCreateSchedule = async () => {
+  const handleCreateSchedule = async (skipWarning = false) => {
     setScheduleError("");
+
+    // If no tool activity has been recorded, warn the user first
+    if (!skipWarning && (toolLogs || []).length === 0) {
+      setShowEmptyToolsWarning(true);
+      return;
+    }
+
+    setShowEmptyToolsWarning(false);
     try {
       setLoading(true);
 
@@ -583,10 +594,16 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                     </div>
 
                     {allTools.length === 0 ? (
-                      <div className="py-20 flex flex-col items-center justify-center bg-[#111827] border border-[#1F2937] rounded-[32px] border-dashed">
-                        <Cpu className="w-10 h-10 text-[#374151] mb-4" />
-                        <p className="text-xs font-black text-[#64748B] uppercase tracking-widest">No tool activity recorded</p>
-                        <p className="text-[10px] text-[#374151] mt-2 uppercase font-bold">Run an automation first to populate the tool log.</p>
+                      <div className="py-14 flex flex-col items-center justify-center bg-amber-500/5 border border-amber-500/20 rounded-[32px] border-dashed gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                          <AlertCircle className="w-6 h-6 text-amber-400" />
+                        </div>
+                        <div className="text-center px-6">
+                          <p className="text-xs font-black text-amber-400 uppercase tracking-widest mb-1">No Tool Activity Recorded</p>
+                          <p className="text-[10px] text-amber-400/60 font-bold uppercase tracking-wider leading-relaxed">
+                            Run an automation first to populate the tool log.<br />Without tool context, the generated script may be low quality.
+                          </p>
+                        </div>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -798,6 +815,31 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
 
             {/* Footer */}
             <div className="px-8 py-4 border-t border-[#1F2937] bg-[#111827]/50 flex flex-col gap-3 shrink-0">
+              {showEmptyToolsWarning && (
+                <div className="flex items-start gap-3 px-5 py-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-black text-amber-400 uppercase tracking-widest mb-1">No Tool Activity Recorded</p>
+                    <p className="text-[11px] text-amber-400/80 font-bold leading-relaxed">
+                      No MCP tool runs were found for this session. The generated script may be generic and low quality without tool context. Run an automation first for best results.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                    <button
+                      onClick={() => handleCreateSchedule(true)}
+                      className="text-[10px] font-black text-amber-400 border border-amber-500/40 hover:bg-amber-500/20 transition-colors px-3 py-1.5 rounded-lg uppercase tracking-widest whitespace-nowrap"
+                    >
+                      Continue Anyway
+                    </button>
+                    <button
+                      onClick={() => setShowEmptyToolsWarning(false)}
+                      className="text-[#64748B] hover:text-white transition-colors p-1 rounded"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
               {scheduleError && (
                 <div className="flex items-start gap-3 px-5 py-3 rounded-xl bg-red-500/10 border border-red-500/20">
                   <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
