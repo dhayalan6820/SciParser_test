@@ -519,22 +519,40 @@ OUTPUT RULES (ABSOLUTE)
 * Return ONLY raw Python code — no markdown, no ``` blocks, no explanations.
 * Script must be directly runnable with: python script.py
 
-PARALLEL EXECUTION REQUIREMENTS
-* Use a UNIQUE temporary user_data_dir per run (tempfile.mkdtemp()) to avoid profile locks.
-* Script must run HEADLESS by default (headless=True) for server-side execution.
+EXECUTION ENVIRONMENT
+* The script runs on a Linux server (Replit / CI) with NO display and NO GPU.
+* Playwright Chromium is pre-installed — do NOT run `playwright install` inside the script.
+* MUST pass these args every time: --no-sandbox, --disable-dev-shm-usage,
+  --disable-gpu, --disable-setuid-sandbox
 
 REQUIRED SCRIPT STRUCTURE
-* All imports: asyncio, json, os, pathlib, tempfile, playwright.async_api.
+* All imports: asyncio, json, os, tempfile, playwright.async_api.
 * A main() async function that returns a structured JSON result dict.
 * asyncio.run(main()) at the bottom.
-* Robust try/except/finally with browser.close() in finally.
-* Data extraction returns structured JSON — never plain print statements.
+* Robust try/except/finally — always close browser/context in finally.
+* Data extraction returns structured JSON — never bare print statements.
 {TAVILY_RUNTIME_BLOCK}
-PLAYWRIGHT BROWSER CONFIGURATION
-* async with async_playwright() as p:
-*     browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
-*     context = await browser.new_context(user_data_dir=tempfile.mkdtemp())
-*     page    = await context.new_page()
+PLAYWRIGHT BROWSER CONFIGURATION — copy this pattern exactly:
+    CHROMIUM_ARGS = [
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-setuid-sandbox",
+    ]
+    async with async_playwright() as p:
+        # Use launch_persistent_context so profile isolation is handled correctly
+        user_data_dir = tempfile.mkdtemp()
+        context = await p.chromium.launch_persistent_context(
+            user_data_dir,
+            headless=True,
+            args=CHROMIUM_ARGS,
+        )
+        page = await context.new_page()
+        try:
+            # --- task steps here ---
+            pass
+        finally:
+            await context.close()
 """
         else:
             SYSTEM_PROMPT = f"""
