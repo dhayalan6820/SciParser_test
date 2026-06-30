@@ -786,6 +786,8 @@ class Brain:
                         final_response = f"I attempted the task {max_retries} times but encountered persistent errors. Last error: {last_error}"
 
             ai_msg_id = str(uuid.uuid4())
+            # Ensure chat session row exists before inserting a message (FK guard)
+            await self.db_manager.get_or_create_chat_session(user_id, chat_id)
             async with AsyncSessionLocal() as db:
                 ai_msg = Message(
                     message_id=ai_msg_id,

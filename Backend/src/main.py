@@ -639,8 +639,11 @@ async def websocket_plan_endpoint(
 
     try:
         while True:
-            await websocket.receive_text()
+            await websocket.receive()
     except WebSocketDisconnect:
+        plan_stream_manager.disconnect(chat_id, websocket)
+    except Exception as e:
+        logger.error(f"Plan stream error: {e}")
         plan_stream_manager.disconnect(chat_id, websocket)
 
 @app.websocket("/sciparser/v1/browser/stream")
@@ -663,12 +666,13 @@ async def browser_stream(
     await plan_stream_manager.connect(user.user_id, websocket, is_browser=True)
     try:
         while True:
-            # Keep connection alive, frames are pushed via broadcast_frame
-            await websocket.receive_text()
+            # Keep connection alive — receive() handles text, binary, and ping/pong
+            await websocket.receive()
     except WebSocketDisconnect:
         plan_stream_manager.disconnect(user.user_id, websocket, is_browser=True)
     except Exception as e:
         logger.error(f"Browser stream error: {e}")
+        plan_stream_manager.disconnect(user.user_id, websocket, is_browser=True)
 
 @app.post("/sciparser/v1/browser/state")
 async def toggle_browser_state(req: Dict[str, Any], current_user: User = Depends(ChatService.get_current_user)):

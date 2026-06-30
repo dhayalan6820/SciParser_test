@@ -311,19 +311,20 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
   // Real-Time WebSocket stream connection for CDP frame screencasts
   React.useEffect(() => {
-    // We want to listen for frames even if browserActive is false to support auto-open
     if (!userProfile?.user_id) return;
     if (!activeThreadId) return;
-    // Reset first-frame flag so auto-open fires on every new thread connection
     isFirstFrame.current = true;
 
     const token = localStorage.getItem("access_token");
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/sciparser/v1/browser/stream?chat_id=${activeThreadId}&token=${token}`;
-    const ws = new WebSocket(wsUrl);
+    const buildUrl = () => `${protocol}//${window.location.host}/sciparser/v1/browser/stream?chat_id=${activeThreadId}&token=${token}`;
 
-    ws.onmessage = (event) => {
-      // Use requestAnimationFrame to batch state updates and prevent UI lag
+    let ws: WebSocket;
+    let heartbeatTimer: ReturnType<typeof setInterval>;
+    let reconnectTimer: ReturnType<typeof setTimeout>;
+    let destroyed = false;
+
+    const handleMessage = (event: MessageEvent) => {
       requestAnimationFrame(() => {
         try {
           const msg = JSON.parse(event.data);
@@ -331,49 +332,33 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           const rawData = msg.data || msg.frame;
 
           if (eventType === 'frame') {
-            // Parse the inner JSON which contains chat_id and frame
             let frameData;
             try {
               frameData = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
-            } catch (e) {
+            } catch {
               frameData = { frame: rawData };
             }
 
-            // --- FIX: Route frames by chat_id with fallback ---
-            // If the frame doesn't have a chat_id, or if it matches the active thread,
-            // or if we only have one active session, we should display it.
             const frameChatId = frameData.chat_id ? String(frameData.chat_id) : null;
             const activeId = activeThreadId ? String(activeThreadId) : null;
-            
-            if (frameChatId && activeId && frameChatId !== activeId) {
-              // Only ignore if both IDs exist and they explicitly mismatch
-              return;
-            }
+            if (frameChatId && activeId && frameChatId !== activeId) return;
 
-            // Extract the actual frame data (handle nested objects or raw strings)
             let actualFrame = frameData.frame;
             if (typeof actualFrame === 'object' && actualFrame !== null) {
               actualFrame = actualFrame.data || actualFrame.text || JSON.stringify(actualFrame);
             }
-
-            if (!actualFrame && typeof rawData === "string") {
+            if (!actualFrame && typeof rawData === 'string') {
               try {
                 const parsedRaw = JSON.parse(rawData);
                 actualFrame = parsedRaw.frame || parsedRaw.screenshot || parsedRaw.data || parsedRaw.image;
-              } catch {
-                // ignore parse errors here
-              }
+              } catch { /* ignore */ }
             }
 
             if (actualFrame) {
               setBrowserFrame(actualFrame);
-              
-              // --- NEW: Auto-open on first frame with green blink ---
               if (isFirstFrame.current && !userInterruptedBrowser) {
                 isFirstFrame.current = false;
                 setBrowserBlink("green");
-                
-                // Blink 5 times (approx 2.5s) then open
                 setTimeout(() => {
                   if (!userInterruptedBrowser) {
                     setBrowserActive(true);
@@ -384,9 +369,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             }
           } else if (eventType === 'tool_log') {
             try {
-              // --- FIX: Handle both stringified and object data ---
               const toolMsg = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
-              
               if (toolMsg.type === 'tool_start') {
                 setToolLogs(prev => [...prev, {
                   id: toolMsg.tool_call_id || uuidv4(),
@@ -396,9 +379,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   created_at: new Date().toISOString()
                 }]);
               } else if (toolMsg.type === 'tool_output') {
-                setToolLogs(prev => prev.map(log => 
-                  (log.id === toolMsg.tool_call_id) 
-                    ? { ...log, status: toolMsg.status, tool_output: toolMsg.output, error_message: toolMsg.error } 
+                setToolLogs(prev => prev.map(log =>
+                  log.id === toolMsg.tool_call_id
+                    ? { ...log, status: toolMsg.status, tool_output: toolMsg.output, error_message: toolMsg.error }
                     : log
                 ));
               }
@@ -412,10 +395,43 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       });
     };
 
-    ws.onopen = () => console.log("Browser stream connected for", activeThreadId);
-    ws.onclose = () => console.log("Browser stream disconnected");
+    const connect = () => {
+      if (destroyed) return;
+      ws = new WebSocket(buildUrl());
 
-    return () => ws.close();
+      ws.onopen = () => {
+        console.log("Browser stream connected for", activeThreadId);
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send("ping");
+          }
+        }, 20000);
+      };
+
+      ws.onmessage = handleMessage;
+
+      ws.onclose = () => {
+        clearInterval(heartbeatTimer);
+        console.log("Browser stream disconnected — reconnecting in 3s");
+        if (!destroyed) {
+          reconnectTimer = setTimeout(connect, 3000);
+        }
+      };
+
+      ws.onerror = () => {
+        ws.close();
+      };
+    };
+
+    connect();
+
+    return () => {
+      destroyed = true;
+      clearInterval(heartbeatTimer);
+      clearTimeout(reconnectTimer);
+      ws?.close();
+    };
   }, [activeThreadId, userProfile?.user_id]);
 
   // WebSocket for Live Agent Plan (Analysis -> Strategy -> Execution)
@@ -427,25 +443,56 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
     const token = localStorage.getItem("access_token");
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/sciparser/v1/ws/plan/${activeThreadId}?token=${token}`;
-    const ws = new WebSocket(wsUrl);
+    const buildUrl = () => `${protocol}//${window.location.host}/sciparser/v1/ws/plan/${activeThreadId}?token=${token}`;
 
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === "plan_update") {
-          setCurrentPlan(msg.data);
-          // If we receive a plan update, it means a task is active
-          setIsAiTyping(true);
-        } else if (msg.type === "thought_update") {
-          setAiThinking(msg.data);
+    let ws: WebSocket;
+    let heartbeatTimer: ReturnType<typeof setInterval>;
+    let reconnectTimer: ReturnType<typeof setTimeout>;
+    let destroyed = false;
+
+    const connect = () => {
+      if (destroyed) return;
+      ws = new WebSocket(buildUrl());
+
+      ws.onopen = () => {
+        console.log("Plan stream connected for", activeThreadId);
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) ws.send("ping");
+        }, 20000);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === "plan_update") {
+            setCurrentPlan(msg.data);
+            setIsAiTyping(true);
+          } else if (msg.type === "thought_update") {
+            setAiThinking(msg.data);
+          }
+        } catch { /* ignore non-JSON keep-alive responses */ }
+      };
+
+      ws.onclose = () => {
+        clearInterval(heartbeatTimer);
+        console.log("Plan stream disconnected — reconnecting in 3s");
+        if (!destroyed) {
+          reconnectTimer = setTimeout(connect, 3000);
         }
-      } catch (err) {
-        console.error("Plan stream error:", err);
-      }
+      };
+
+      ws.onerror = () => ws.close();
     };
 
-    return () => ws.close();
+    connect();
+
+    return () => {
+      destroyed = true;
+      clearInterval(heartbeatTimer);
+      clearTimeout(reconnectTimer);
+      ws?.close();
+    };
   }, [activeThreadId]);
 
   // Poll live tool logs via HTTP while the agent is running (catches logs even before WS connects)
@@ -1071,166 +1118,200 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
   const renderFormattedContent = (content: string, isUser: boolean = false) => {
     if (!content) return null;
-    
-    // Detect Markdown Tables
-    const tableRegex = /\|(.+)\|/g;
-    const hasTable = content.includes("|") && content.split("\n").some(line => line.trim().startsWith("|"));
 
+    // Split out fenced code blocks first so they don't get further parsed
     const parts = content.split(/(```[\s\S]*?```)/g);
-    
-    return parts.map((part, index) => {
+
+    return parts.map((part, partIdx) => {
+      // ── Fenced code block ──────────────────────────────────────────────
       if (part.startsWith("```") && part.endsWith("```")) {
-        // ... (existing code block rendering)
-        const lines = part.slice(3, -3).trim().split("\n");
-        const language = lines[0] && !lines[0].includes(" ") ? lines[0] : "";
-        const code = language ? lines.slice(1).join("\n") : lines.join("\n");
-        
+        const inner = part.slice(3, -3).trim().split("\n");
+        const lang = inner[0] && !/\s/.test(inner[0]) ? inner[0] : "";
+        const code = (lang ? inner.slice(1) : inner).join("\n");
         return (
-          <div key={index} className="my-3.5 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden font-mono text-[13px] shadow-md">
-            <div className="flex justify-between items-center px-4 py-1.5 bg-[#232323] text-xs text-slate-400 font-sans border-b border-[#2A2A2A] select-none font-bold">
-              <span className="uppercase text-[10px] tracking-widest text-white">{language || "text"}</span>
-              <span className="text-[10px] lowercase font-medium">ready</span>
+          <div key={partIdx} className="my-3.5 rounded-xl border border-[#2A2A2A] bg-[#111111] overflow-hidden font-mono text-[13px] shadow-md">
+            <div className="flex justify-between items-center px-4 py-1.5 bg-[#1e1e1e] border-b border-[#2A2A2A] select-none">
+              <span className="uppercase text-[10px] font-black tracking-widest text-[#9CA3AF]">{lang || "text"}</span>
+              <span className="text-[10px] text-[#6B7280] font-medium">ready</span>
             </div>
-            <pre className="p-4 overflow-x-auto text-[#E5E7EB] leading-relaxed whitespace-pre font-medium">
-              {code}
-            </pre>
+            <pre className="p-4 overflow-x-auto text-[#E5E7EB] leading-relaxed whitespace-pre">{code}</pre>
           </div>
         );
       }
-      
-      // Handle Tables
-      if (hasTable && part.includes("|")) {
-        const lines = part.split("\n");
-        const tableLines = lines.filter(l => l.trim().startsWith("|"));
-        if (tableLines.length > 1) {
-          const rows = tableLines.map(line => 
-            line.split("|").filter(cell => cell.trim() !== "").map(cell => cell.trim())
-          );
-          const isSeparatorRow = (row: string[]) =>
-            row.every(cell => /^:?-{3,}:?$/.test(cell.replace(/\s+/g, "")));
 
-          const headerRow = rows.find(row => !isSeparatorRow(row)) || [];
-          const separatorIndex = rows.findIndex(isSeparatorRow);
-          const body = separatorIndex >= 0 ? rows.slice(separatorIndex + 1).filter(row => !isSeparatorRow(row)) : rows.slice(1);
+      // ── Detect markdown table blocks ───────────────────────────────────
+      const hasTable = part.includes("|") && part.split("\n").some(l => l.trim().startsWith("|"));
+
+      if (!isUser && hasTable) {
+        const tableLines = part.split("\n").filter(l => l.trim().startsWith("|"));
+        if (tableLines.length > 1) {
+          const isSep = (row: string[]) => row.every(c => /^:?-{2,}:?$/.test(c.replace(/\s/g, "")));
+          const rows = tableLines.map(l => l.split("|").map(c => c.trim()).filter(Boolean));
+          const sepIdx = rows.findIndex(isSep);
+          const header = sepIdx > 0 ? rows[0] : rows[0];
+          const body = (sepIdx >= 0 ? rows.slice(sepIdx + 1) : rows.slice(1)).filter(r => !isSep(r));
+          const nonTableText = part.split("\n").filter(l => !l.trim().startsWith("|") && l.trim()).join("\n");
 
           return (
-            <div className="my-5 overflow-hidden rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] shadow-[0_8px_30px_rgba(0,0,0,0.35)]">
-              <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 bg-[#232323] border-b border-[#2A2A2A]">
-                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                  <TableIcon className="w-3.5 h-3.5 text-indigo-500" />
-                  <span>Data Table</span>
+            <div key={partIdx} className="space-y-3">
+              {nonTableText && <div>{renderFormattedContent(nonTableText, isUser)}</div>}
+              <div className="my-3 overflow-hidden rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] shadow-lg">
+                <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-[#1e1e1e] border-b border-[#2A2A2A]">
+                  <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#9CA3AF]">
+                    <TableIcon className="w-3.5 h-3.5 text-indigo-500" />
+                    Data Table
+                  </div>
+                  <Button variant="ghost" size="sm"
+                    onClick={() => downloadTableData([header, ...body], "sciparser_data")}
+                    className="h-7 px-3 text-[10px] font-black text-sky-400 hover:bg-sky-500/10 gap-1 rounded-xl">
+                    <Download className="w-3 h-3" />EXPORT CSV
+                  </Button>
                 </div>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => downloadTableData(rows.filter((_, i) => i !== 1), "sciparser_data")}
-                  className="h-8 px-3 text-[10px] font-black text-sky-400 hover:bg-sky-500/10 gap-1.5 rounded-xl"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  DOWNLOAD CSV
-                </Button>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-[13px] border-collapse min-w-max">
-                  <thead>
-                    <tr className="bg-[#232323]">
-                      {headerRow.map((h, i) => (
-                        <th key={i} className="px-4 sm:px-5 py-3.5 font-black text-white border-b border-[#2A2A2A] whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            {i === 0 && <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500/70" />}
-                            <span className={cn(isUser ? "text-white" : "text-white dark:text-white")}>{parseTableCellContent(h, isUser)}</span>
-                          </div>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {body.map((row, ri) => (
-                      <tr
-                        key={ri}
-                        className={cn(
-                          "transition-colors border-b border-[#2A2A2A]",
-                          ri % 2 === 0 ? "bg-[#1A1A1A]" : "bg-[#202020]",
-                          "hover:bg-[#262626]"
-                        )}
-                      >
-                        {row.map((cell, ci) => (
-                          <td
-                            key={ci}
-                            className={cn(
-                                "px-4 sm:px-5 py-3.5 text-[#E5E7EB] align-top",
-                                ci === 0 ? "font-medium text-[#E5E7EB] min-w-[22rem]" : "whitespace-nowrap"
-                            )}
-                          >
-                              <div className={cn(ci === 0 ? "whitespace-normal leading-relaxed" : "font-semibold text-[#D1D5DB]")}>{parseTableCellContent(cell, isUser)}</div>
-                          </td>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-[13px] border-collapse">
+                    <thead>
+                      <tr className="bg-[#1e1e1e]">
+                        {header.map((h, i) => (
+                          <th key={i} className="px-4 py-3 font-black text-white border-b border-[#2A2A2A] whitespace-nowrap">
+                            {parseTableCellContent(h, isUser)}
+                          </th>
                         ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {body.map((row, ri) => (
+                        <tr key={ri} className={cn("border-b border-[#2A2A2A] transition-colors hover:bg-[#242424]", ri % 2 === 0 ? "bg-[#1A1A1A]" : "bg-[#1d1d1d]")}>
+                          {row.map((cell, ci) => (
+                            <td key={ci} className="px-4 py-3 text-[#D1D5DB] align-top">
+                              {parseTableCellContent(cell, isUser)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           );
         }
       }
 
+      // ── Line-by-line rendering ─────────────────────────────────────────
       const lines = part.split("\n");
-      const firstRenderableLineIndex = lines.findIndex((line) => {
-        const trimmed = line.trim();
-        return !!trimmed && !trimmed.startsWith("|");
-      });
-      return (
-        <div key={index} className="space-y-2.5">
-          {lines.map((line, lineIdx) => {
-            const trimmedLine = line.trim();
-            if (!trimmedLine || trimmedLine.startsWith("|")) return null;
-            
-            if (trimmedLine.startsWith("- ") || trimmedLine.startsWith("* ") || trimmedLine.startsWith("• ")) {
-              const listContent = trimmedLine.replace(/^[-*•]\s+/, "");
-              return (
-                <li key={lineIdx} className={cn(
-                  "ml-5 list-disc leading-relaxed pr-2",
-                  isUser ? "text-white" : "text-foreground/90"
-                )}>
-                  {parseInlineFormatting(listContent, isUser)}
-                </li>
-              );
-            }
-            
-            const numMatch = trimmedLine.match(/^(\d+)\.\s+(.*)/);
-            if (numMatch) {
-              const listContent = numMatch[2];
-              return (
-                <li key={lineIdx} className={cn(
-                  "ml-5 list-decimal leading-relaxed pr-2",
-                  isUser ? "text-white" : "text-foreground/90"
-                )} style={{ listStyleType: "decimal" }}>
-                  {parseInlineFormatting(listContent, isUser)}
-                </li>
-              );
-            }
-            
-            const isLeadSentence = !isUser && lineIdx === firstRenderableLineIndex;
-            const isSectionHeading = !isUser && (/^Current Status:$/i.test(trimmedLine) || /^Verification Details:$/i.test(trimmedLine) || /^Verification Details:$/i.test(trimmedLine) || /^Current State:$/i.test(trimmedLine));
+      const rendered: React.ReactNode[] = [];
+      let i = 0;
 
-            return (
-              <p key={lineIdx} className={cn(
-                "relative leading-relaxed text-[15px] font-medium font-sans",
-                isUser
-                  ? "text-white"
-                  : isLeadSentence
-                    ? "text-[#E5E7EB]"
-                    : isSectionHeading
-                      ? "text-white dark:text-white font-bold"
-                      : (line.includes("--- Execution Summary ---") ? "text-slate-400 dark:text-slate-400 mt-4 pt-4 border-t border-border font-bold" : "text-[#E5E7EB]")
-              )}>
-                {parseInlineFormatting(line, isUser)}
-              </p>
-            );
-          })}
-        </div>
-      );
+      while (i < lines.length) {
+        const line = lines[i];
+        const trimmed = line.trim();
+
+        // Skip blank lines / table separator lines
+        if (!trimmed || trimmed.startsWith("|")) { i++; continue; }
+
+        // Horizontal rule
+        if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+          rendered.push(<hr key={i} className="my-3 border-t border-[#2A2A2A]" />);
+          i++; continue;
+        }
+
+        // ATX Headings  # / ## / ###
+        const h3 = trimmed.match(/^###\s+(.*)/);
+        const h2 = trimmed.match(/^##\s+(.*)/);
+        const h1 = trimmed.match(/^#\s+(.*)/);
+        if (!isUser && h1) {
+          rendered.push(
+            <h2 key={i} className="mt-4 mb-1 text-[18px] font-black text-white tracking-tight leading-snug">
+              {parseInlineFormatting(h1[1], isUser)}
+            </h2>
+          );
+          i++; continue;
+        }
+        if (!isUser && h2) {
+          rendered.push(
+            <h3 key={i} className="mt-3 mb-1 text-[15px] font-black text-[#E5E7EB] tracking-tight">
+              {parseInlineFormatting(h2[1], isUser)}
+            </h3>
+          );
+          i++; continue;
+        }
+        if (!isUser && h3) {
+          rendered.push(
+            <h4 key={i} className="mt-2 mb-0.5 text-[13px] font-black text-[#CBD5E1] uppercase tracking-wider">
+              {parseInlineFormatting(h3[1], isUser)}
+            </h4>
+          );
+          i++; continue;
+        }
+
+        // Setext-style bold heading: "Text:" alone on a line (section label pattern)
+        if (!isUser && /^[A-Z][^.!?]*:$/.test(trimmed) && trimmed.length < 60) {
+          rendered.push(
+            <p key={i} className="mt-3 mb-0.5 text-[13px] font-black text-[#22D3EE] uppercase tracking-wider">
+              {trimmed}
+            </p>
+          );
+          i++; continue;
+        }
+
+        // Bullet list — collect consecutive items
+        if (trimmed.startsWith("- ") || trimmed.startsWith("* ") || trimmed.startsWith("• ")) {
+          const items: string[] = [];
+          while (i < lines.length) {
+            const t = lines[i].trim();
+            if (t.startsWith("- ") || t.startsWith("* ") || t.startsWith("• ")) {
+              items.push(t.replace(/^[-*•]\s+/, ""));
+              i++;
+            } else { break; }
+          }
+          rendered.push(
+            <ul key={`ul-${i}`} className="my-1.5 space-y-1 pl-4">
+              {items.map((item, idx) => (
+                <li key={idx} className="flex gap-2 leading-relaxed text-[14px] text-[#CBD5E1]">
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#22D3EE]/70" />
+                  <span>{parseInlineFormatting(item, isUser)}</span>
+                </li>
+              ))}
+            </ul>
+          );
+          continue;
+        }
+
+        // Numbered list — collect consecutive items
+        const numMatch = trimmed.match(/^(\d+)\.\s+(.*)/);
+        if (numMatch) {
+          const items: { n: string; text: string }[] = [];
+          while (i < lines.length) {
+            const m = lines[i].trim().match(/^(\d+)\.\s+(.*)/);
+            if (m) { items.push({ n: m[1], text: m[2] }); i++; }
+            else { break; }
+          }
+          rendered.push(
+            <ol key={`ol-${i}`} className="my-1.5 space-y-1 pl-4">
+              {items.map((item, idx) => (
+                <li key={idx} className="flex gap-2.5 leading-relaxed text-[14px] text-[#CBD5E1]">
+                  <span className="shrink-0 text-[12px] font-black text-[#22D3EE] mt-0.5 w-4 text-right">{item.n}.</span>
+                  <span>{parseInlineFormatting(item.text, isUser)}</span>
+                </li>
+              ))}
+            </ol>
+          );
+          continue;
+        }
+
+        // Plain paragraph
+        rendered.push(
+          <p key={i} className={cn(
+            "leading-relaxed text-[14px]",
+            isUser ? "text-white" : "text-[#D1D5DB]"
+          )}>
+            {parseInlineFormatting(line, isUser)}
+          </p>
+        );
+        i++;
+      }
+
+      return <div key={partIdx} className="space-y-1.5">{rendered}</div>;
     });
   };
 
