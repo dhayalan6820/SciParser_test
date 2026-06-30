@@ -202,6 +202,48 @@ def _write_browser_use_config(
 
 
 # ---------------------------------------------------------------------------
+# Monkey-patch: reset browser_session on start() failure so tools retry
+# ---------------------------------------------------------------------------
+
+
+def _patch_mcp_server_session_retry() -> None:
+    """
+    browser-use's BrowserMCPServer._init_browser_session() sets
+    self.browser_session = BrowserSession(...) BEFORE calling start().
+    If start() raises (e.g. Chrome not ready yet), the broken session is
+    stored and every subsequent tool call sees `if not self.browser_session`
+    as False — bypassing init entirely, leaving _cdp_client_root=None forever.
+
+    This patch wraps _init_browser_session so that any exception from start()
+    resets self.browser_session back to None.  The NEXT tool call then gets a
+    clean retry and connects successfully once Chrome is ready.
+    """
+    try:
+        from browser_use.mcp.server import BrowserMCPServer
+    except ImportError:
+        print("Bridge: could not import BrowserMCPServer — skipping patch", file=sys.stderr)
+        return
+
+    original = BrowserMCPServer._init_browser_session
+
+    async def _patched_init(self, *args, **kwargs):
+        try:
+            await original(self, *args, **kwargs)
+        except Exception as exc:
+            # Reset so the next tool call retries from scratch
+            self.browser_session = None
+            print(
+                f"Bridge [patch]: _init_browser_session failed ({exc!r}) — "
+                "reset browser_session=None so next tool call retries",
+                file=sys.stderr,
+            )
+            raise
+
+    BrowserMCPServer._init_browser_session = _patched_init
+    print("Bridge: BrowserMCPServer._init_browser_session patched for retry", file=sys.stderr)
+
+
+# ---------------------------------------------------------------------------
 # Main bridge coroutine
 # ---------------------------------------------------------------------------
 
@@ -259,6 +301,14 @@ async def run_bridge() -> None:
             print(f"Bridge: Chrome CDP not ready after 90s", file=sys.stderr)
 
     asyncio.create_task(_start_chrome_background())
+
+    # ── Patch BrowserMCPServer so a failed start() is retried next call ─────
+    # browser-use's _init_browser_session sets self.browser_session BEFORE
+    # calling start().  If start() raises (Chrome not ready yet), the broken
+    # session stays stored and every subsequent tool call skips init entirely,
+    # leaving _cdp_client_root=None forever.  This patch resets the session to
+    # None on failure so the NEXT tool call gets a fresh try.
+    _patch_mcp_server_session_retry()
 
     # ── Start browser-use MCP server immediately ─────────────────────────────
     try:
