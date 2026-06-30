@@ -100,26 +100,58 @@ async def _wait_for_cdp(port: int, timeout_secs: int = 25) -> bool:
 
 def _write_browser_use_config(config_dir: str, cdp_url: str, headless: bool) -> None:
     """
-    Write a minimal browser-use config.json pointing the MCP server at cdp_url.
-    The profile entry MUST have an "id" field — required by BrowserProfileEntry.
+    Write a browser-use config.json in DB-style format pointing the MCP server at cdp_url.
+
+    browser-use 0.13.1 load_and_migrate_config() treats the file as valid ONLY when:
+      1. ALL THREE top-level keys exist: browser_profile, llm, agent
+      2. Each value in browser_profile has an 'id' field
+
+    If either condition fails it discards the file and regenerates fresh defaults,
+    which means our cdp_url is lost and MCP launches its own browser instead.
     """
+    import uuid
     os.makedirs(config_dir, exist_ok=True)
+
+    from datetime import datetime, timezone
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    profile_id = str(uuid.uuid4())
+    llm_id = str(uuid.uuid4())
+    agent_id = str(uuid.uuid4())
+
     config = {
         "browser_profile": {
-            "default": {
-                "id": "default",
+            profile_id: {
+                "id": profile_id,
                 "default": True,
+                "created_at": now_iso,
                 "cdp_url": cdp_url,
                 "headless": headless,
                 "disable_security": True,
                 "keep_alive": True,
             }
-        }
+        },
+        "llm": {
+            llm_id: {
+                "id": llm_id,
+                "default": True,
+                "created_at": now_iso,
+                "model": "gpt-4.1-mini",
+                "api_key": os.getenv("OPENAI_API_KEY", "placeholder"),
+            }
+        },
+        "agent": {
+            agent_id: {
+                "id": agent_id,
+                "default": True,
+                "created_at": now_iso,
+            }
+        },
     }
     config_path = os.path.join(config_dir, "config.json")
     with open(config_path, "w") as f:
         json.dump(config, f, indent=2)
-    print(f"Bridge: wrote browser-use config → {config_path}", file=sys.stderr)
+    print(f"Bridge: wrote browser-use config (DB-style) → {config_path}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
