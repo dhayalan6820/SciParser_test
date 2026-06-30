@@ -1,6 +1,0 @@
-2026/06/30-10:33:31.293 57cc Creating DB /home/runner/workspace/Backend/temp/user_43471/Default/IndexedDB/https_www.bing.com_0.indexeddb.leveldb since it was missing.
-2026/06/30-10:33:31.300 57cc Reusing MANIFEST /home/runner/workspace/Backend/temp/user_43471/Default/IndexedDB/https_www.bing.com_0.indexeddb.leveldb/MANIFEST-000001
-2026/06/30-10:33:35.348 57cd Level-0 table #5: started
-2026/06/30-10:33:35.356 57cd Level-0 table #5: 534 bytes OK
-2026/06/30-10:33:35.359 57cd Delete type=0 #3
-2026/06/30-10:33:35.359 57cd Manual compaction at level-0 from '\x00\x01\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x02\x00\x00\x00' @ 0 : 0; will stop at (end)
