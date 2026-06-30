@@ -230,30 +230,37 @@ async def run_bridge() -> None:
         file=sys.stderr,
     )
 
-    # ── Launch Chrome ────────────────────────────────────────────────────────
-    print("Bridge: launching Chrome...", file=sys.stderr)
-    chrome_proc = await _launch_chrome(port, user_data_dir, headless)
-
-    # ── Wait for Chrome CDP to be ready (up to 60 s) ─────────────────────────
-    print(f"Bridge: waiting for Chrome CDP at {cdp_url} ...", file=sys.stderr)
-    ready = await _wait_for_cdp(port, timeout_secs=60)
-    if not ready:
-        print(
-            f"Bridge: Chrome CDP not ready after 60s — aborting",
-            file=sys.stderr,
-        )
-        chrome_proc.terminate()
-        return
-
-    print(f"Bridge: Chrome ready at {cdp_url}", file=sys.stderr)
-
-    # ── Write browser-use config with cdp_url already set ───────────────────
+    # ── Write config BEFORE starting Chrome — cdp_url is already known ──────
+    # browser-use will connect lazily on the first browser tool call.
     _write_browser_use_config(config_dir, cdp_url, user_data_dir)
     os.environ["BROWSER_USE_CONFIG_DIR"] = config_dir
     os.environ["BROWSER_CDP_URL"] = cdp_url
     os.environ["MCP_BROWSER_CDP_URL"] = cdp_url
 
-    # ── Start browser-use MCP server ─────────────────────────────────────────
+    # ── Launch Chrome in the background ──────────────────────────────────────
+    # We must NOT block here — mcp_agent.py has a 60 s timeout waiting for
+    # the MCP "initialize" handshake.  Chrome cold-start can take up to 60 s
+    # on Replit, so waiting synchronously would exhaust the budget before the
+    # MCP server even starts.  Instead we fire-and-forget: Chrome starts in
+    # the background, the MCP server responds to "initialize" immediately
+    # (< 1 s), and by the time the first browser tool fires (5–15 s later,
+    # after LLM planning) Chrome is ready.  browser-use's connect() has its
+    # own 15 s retry window per tool call.
+    chrome_proc: asyncio.subprocess.Process | None = None
+
+    async def _start_chrome_background() -> None:
+        nonlocal chrome_proc
+        print("Bridge: launching Chrome in background...", file=sys.stderr)
+        chrome_proc = await _launch_chrome(port, user_data_dir, headless)
+        ready = await _wait_for_cdp(port, timeout_secs=90)
+        if ready:
+            print(f"Bridge: Chrome ready at {cdp_url}", file=sys.stderr)
+        else:
+            print(f"Bridge: Chrome CDP not ready after 90s", file=sys.stderr)
+
+    asyncio.create_task(_start_chrome_background())
+
+    # ── Start browser-use MCP server immediately ─────────────────────────────
     try:
         print("Bridge: starting browser-use MCP server...", file=sys.stderr)
         if inspect.iscoroutinefunction(mcp_main):
@@ -265,11 +272,12 @@ async def run_bridge() -> None:
         print(f"Bridge: MCP server error — {exc}", file=sys.stderr)
     finally:
         print("Bridge: shutting down Chrome...", file=sys.stderr)
-        try:
-            chrome_proc.terminate()
-            await asyncio.wait_for(chrome_proc.wait(), timeout=5)
-        except Exception:
-            chrome_proc.kill()
+        if chrome_proc is not None:
+            try:
+                chrome_proc.terminate()
+                await asyncio.wait_for(chrome_proc.wait(), timeout=5)
+            except Exception:
+                chrome_proc.kill()
         print("Bridge: cleanup complete", file=sys.stderr)
 
 
