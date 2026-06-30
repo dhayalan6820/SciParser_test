@@ -30,6 +30,7 @@ declare -A PKG_PATHS=(
   ["xorg.libxcb"]="/nix/store/2y2hhlki6macaj9j1409q1j6i33l6igf-libxcb-1.17.0"
   ["libxkbcommon"]="/nix/store/sisfq9wihyqqjzmrpik9b4xksifw97ha-libxkbcommon-1.8.1"
   ["alsa-lib"]="/nix/store/yw5xqn8lqinrifm9ij80nrmf0i6fdcbx-alsa-lib-1.2.13"
+  ["cups.lib"]="/nix/store/xm2418a7fclainspb35n6h05xfsxb6vn-cups-2.4.11-lib"
 )
 
 EXTRA_LD=""

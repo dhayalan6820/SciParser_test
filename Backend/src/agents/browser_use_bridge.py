@@ -223,7 +223,6 @@ async def _launch_chrome(
         "--disable-setuid-sandbox",
         "--no-first-run",
         "--no-default-browser-check",
-        "--no-proxy-server",
         "--window-size=1280,800",
         "--disable-blink-features=AutomationControlled",
         "--disable-infobars",
