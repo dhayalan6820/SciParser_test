@@ -4,26 +4,37 @@ browser_use_bridge.py
 We launch Chrome ourselves (plain asyncio subprocess, zero Playwright), wait
 for its CDP port to open, then hand the CDP URL to browser-use via
 browser_profile.cdp_url.  When cdp_url is pre-set, browser-use's
-on_BrowserStartEvent skips LocalBrowserWatchdog entirely and just calls
+on_BrowserStartEvent skips LocalBrowserWatchdog entirely and calls
 connect(cdp_url=...) — so browser-use owns all DOM / screenshot / action
 work and we keep full control over the port used by our screenshot streamer.
 
-Why not let browser-use launch Chrome (LocalBrowserWatchdog)?
-  • LocalBrowserWatchdog always appends its OWN --remote-debugging-port flag,
-    overriding ours.  Chrome listens on a random port; our screenshotter is
-    polling the wrong port.
-  • The 30-second BrowserStartEvent handler timeout races against the
-    _wait_for_cdp_url(30s) inside LocalBrowserWatchdog.  A cold Chrome start
-    on Replit hits this limit, leaving _cdp_client_root=None and corrupting
-    the session (navigation works, browser_get_state / browser_screenshot
-    fail).
+Root-cause notes (browser-use 0.13.1)
+──────────────────────────────────────
+start() flow:
+  BrowserSession.start()
+    → dispatch BrowserStartEvent
+    → on_BrowserStartEvent()
+        → if cdp_url already set: skip Chrome launch
+        → asyncio.wait_for(self.connect(cdp_url=...), timeout=15s)
+          → connect(): GET http://localhost:PORT/json/version  ← fails if Chrome cold
+            → except: self._cdp_client_root = None; raise
+        → on timeout: self._cdp_client_root = None; raise
+    → exception re-raised
+  back in _init_browser_session():
+    line 608: self.browser_session = BrowserSession(...)   ← ALREADY SET
+    line 609: await self.browser_session.start()           ← raises
+  Result: browser_session is non-None but _cdp_client_root is None.
+  Every subsequent tool call: `if self.browser_session: return` → init skipped
+  → tools assert _cdp_client_root → "Root CDP client not initialized"
 
-What we do instead:
-  1. Launch Chrome subprocess with all flags (including our CDP port).
-  2. Poll http://localhost:PORT/json/version until Chrome is ready.
-  3. Write browser-use config with cdp_url already set.
-  4. Start browser-use MCP server — it connects via CDP immediately,
-     no launch timeout possible.
+Two-part fix applied here:
+  1. _patch_mcp_server_session_retry():
+       Wraps _init_browser_session so any exception resets browser_session=None,
+       enabling a clean retry on the next tool call.
+  2. chrome_ready_event (asyncio.Event):
+       _init_browser_session waits for Chrome to be confirmed ready BEFORE
+       calling BrowserSession.start(), so the first attempt succeeds
+       instead of failing with "connection refused".
 """
 
 import asyncio
@@ -52,7 +63,7 @@ def _find_free_port() -> int:
         return s.getsockname()[1]
 
 
-async def _wait_for_cdp(port: int, timeout_secs: int = 60) -> bool:
+async def _wait_for_cdp(port: int, timeout_secs: int = 90) -> bool:
     """Poll http://localhost:PORT/json/version until Chrome is ready."""
     import aiohttp
 
@@ -202,35 +213,67 @@ def _write_browser_use_config(
 
 
 # ---------------------------------------------------------------------------
-# Monkey-patch: reset browser_session on start() failure so tools retry
+# Monkey-patch: wait for Chrome + reset browser_session on failure
 # ---------------------------------------------------------------------------
 
 
-def _patch_mcp_server_session_retry() -> None:
+def _patch_mcp_server_session_retry(chrome_ready: asyncio.Event) -> None:
     """
-    browser-use's BrowserMCPServer._init_browser_session() sets
-    self.browser_session = BrowserSession(...) BEFORE calling start().
-    If start() raises (e.g. Chrome not ready yet), the broken session is
-    stored and every subsequent tool call sees `if not self.browser_session`
-    as False — bypassing init entirely, leaving _cdp_client_root=None forever.
+    Two-part patch applied to BrowserUseServer._init_browser_session:
 
-    This patch wraps _init_browser_session so that any exception from start()
-    resets self.browser_session back to None.  The NEXT tool call then gets a
-    clean retry and connects successfully once Chrome is ready.
+    Part 1 — wait for Chrome before attempting start():
+        browser-use's connect() calls GET http://localhost:PORT/json/version.
+        If Chrome is still cold-starting that call fails immediately
+        (connection refused), start() raises, and the broken browser_session
+        is stored (see Part 2).  We avoid this entirely by awaiting the
+        chrome_ready Event (set by _start_chrome_background once /json/version
+        returns 200) before calling the original _init_browser_session.
+
+    Part 2 — reset browser_session on failure:
+        _init_browser_session sets self.browser_session = BrowserSession(...)
+        on line 608 BEFORE calling start() on line 609.  If start() raises,
+        the broken session is stored; every subsequent tool call sees
+        `if self.browser_session: return` as True — init is skipped, tools
+        run against _cdp_client_root=None forever.
+        We catch the exception and reset self.browser_session = None so the
+        NEXT tool call gets a clean retry.
     """
     try:
         from browser_use.mcp.server import BrowserUseServer as BrowserMCPServer
     except ImportError:
-        print("Bridge: could not import BrowserMCPServer — skipping patch", file=sys.stderr)
+        print(
+            "Bridge: could not import BrowserUseServer — skipping patch",
+            file=sys.stderr,
+        )
         return
 
     original = BrowserMCPServer._init_browser_session
 
     async def _patched_init(self, *args, **kwargs):
+        # Part 1: wait until Chrome is confirmed ready (up to 90s).
+        # This runs only once — after that the Event stays set forever.
+        if not chrome_ready.is_set():
+            print(
+                "Bridge [patch]: waiting for Chrome to be ready...",
+                file=sys.stderr,
+            )
+            try:
+                await asyncio.wait_for(chrome_ready.wait(), timeout=90.0)
+                print(
+                    "Bridge [patch]: Chrome is ready — proceeding with BrowserSession.start()",
+                    file=sys.stderr,
+                )
+            except asyncio.TimeoutError:
+                print(
+                    "Bridge [patch]: timed out waiting for Chrome (90s) — attempting anyway",
+                    file=sys.stderr,
+                )
+
+        # Part 2: reset browser_session on any start() failure.
         try:
             await original(self, *args, **kwargs)
         except Exception as exc:
-            # Reset so the next tool call retries from scratch
+            # Reset so the next tool call retries from scratch.
             self.browser_session = None
             print(
                 f"Bridge [patch]: _init_browser_session failed ({exc!r}) — "
@@ -240,7 +283,11 @@ def _patch_mcp_server_session_retry() -> None:
             raise
 
     BrowserMCPServer._init_browser_session = _patched_init
-    print("Bridge: BrowserMCPServer._init_browser_session patched for retry", file=sys.stderr)
+    print(
+        "Bridge: BrowserUseServer._init_browser_session patched "
+        "(wait-for-Chrome + retry-on-failure)",
+        file=sys.stderr,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -273,21 +320,22 @@ async def run_bridge() -> None:
     )
 
     # ── Write config BEFORE starting Chrome — cdp_url is already known ──────
-    # browser-use will connect lazily on the first browser tool call.
     _write_browser_use_config(config_dir, cdp_url, user_data_dir)
     os.environ["BROWSER_USE_CONFIG_DIR"] = config_dir
     os.environ["BROWSER_CDP_URL"] = cdp_url
     os.environ["MCP_BROWSER_CDP_URL"] = cdp_url
 
+    # ── Shared Event: set when Chrome is confirmed ready ─────────────────────
+    # _start_chrome_background sets it; the patched _init_browser_session
+    # awaits it before attempting BrowserSession.start().
+    chrome_ready = asyncio.Event()
+
     # ── Launch Chrome in the background ──────────────────────────────────────
     # We must NOT block here — mcp_agent.py has a 60 s timeout waiting for
     # the MCP "initialize" handshake.  Chrome cold-start can take up to 60 s
     # on Replit, so waiting synchronously would exhaust the budget before the
-    # MCP server even starts.  Instead we fire-and-forget: Chrome starts in
-    # the background, the MCP server responds to "initialize" immediately
-    # (< 1 s), and by the time the first browser tool fires (5–15 s later,
-    # after LLM planning) Chrome is ready.  browser-use's connect() has its
-    # own 15 s retry window per tool call.
+    # MCP server even starts.  Chrome starts concurrently; the patched
+    # _init_browser_session awaits chrome_ready before calling start().
     chrome_proc: asyncio.subprocess.Process | None = None
 
     async def _start_chrome_background() -> None:
@@ -297,18 +345,15 @@ async def run_bridge() -> None:
         ready = await _wait_for_cdp(port, timeout_secs=90)
         if ready:
             print(f"Bridge: Chrome ready at {cdp_url}", file=sys.stderr)
+            chrome_ready.set()          # ← unblocks patched _init_browser_session
         else:
             print(f"Bridge: Chrome CDP not ready after 90s", file=sys.stderr)
+            chrome_ready.set()          # ← unblock anyway; start() will fail+retry
 
     asyncio.create_task(_start_chrome_background())
 
-    # ── Patch BrowserMCPServer so a failed start() is retried next call ─────
-    # browser-use's _init_browser_session sets self.browser_session BEFORE
-    # calling start().  If start() raises (Chrome not ready yet), the broken
-    # session stays stored and every subsequent tool call skips init entirely,
-    # leaving _cdp_client_root=None forever.  This patch resets the session to
-    # None on failure so the NEXT tool call gets a fresh try.
-    _patch_mcp_server_session_retry()
+    # ── Patch BrowserUseServer._init_browser_session ─────────────────────────
+    _patch_mcp_server_session_retry(chrome_ready)
 
     # ── Start browser-use MCP server immediately ─────────────────────────────
     try:

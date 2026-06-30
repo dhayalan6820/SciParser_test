@@ -1,0 +1,129 @@
+You are a senior Python engineer and expert in Browser Use, Playwright, MCP, Chrome DevTools Protocol (CDP), asyncio, and distributed debugging.
+
+I have a Browser Use bridge that launches Chrome manually and connects Browser Use through a CDP URL.
+
+Current behavior:
+- Chrome launches successfully.
+- Navigation works correctly.
+- browser_get_state() always fails.
+- browser_screenshot() also fails.
+- The error indicates that "_cdp_client_root" was never initialized.
+
+Your task is NOT to rewrite the code.
+
+Your task is to perform a complete root-cause analysis.
+
+Follow these steps:
+
+1. Analyze the entire initialization lifecycle:
+   - Chrome launch
+   - CDP availability
+   - BrowserSession creation
+   - BrowserSession.start()
+   - Browser.connect()
+   - BrowserContext creation
+   - Page creation
+   - CDP client creation
+   - _cdp_client_root initialization
+   - browser_get_state()
+
+2. Trace the execution path step by step.
+
+3. Identify exactly where _cdp_client_root should be initialized.
+
+4. Verify whether that code path actually executes.
+
+5. If it does not execute:
+   - explain why
+   - identify the condition preventing it
+   - identify the first failing function
+
+6. Check for:
+   - race conditions
+   - asyncio timing issues
+   - background task ordering
+   - BrowserSession reuse
+   - partially initialized sessions
+   - swallowed exceptions
+   - timeout handling
+   - configuration mismatches
+   - CDP connection failures
+
+7. Verify whether Chrome is fully ready BEFORE BrowserSession.start() attempts to connect.
+
+8. Verify whether BrowserSession.start() can fail while leaving browser_session in an invalid state.
+
+9. Verify whether browser_get_state() is called before CDP initialization completes.
+
+10. Inspect whether setting:
+    - browser_profile.cdp_url
+    - is_local
+    - keep_alive
+    - user_data_dir
+    could affect the initialization path.
+
+11. Search the codebase for every assignment of:
+    _cdp_client_root
+
+For every assignment report:
+- file
+- function
+- line
+- execution conditions
+
+12. Search for every usage of:
+    browser_get_state()
+
+Determine whether it validates that _cdp_client_root exists before using it.
+
+13. Produce a dependency graph showing:
+
+Chrome Launch
+      ↓
+CDP Ready
+      ↓
+BrowserSession.start()
+      ↓
+Browser.connect()
+      ↓
+Context
+      ↓
+Page
+      ↓
+CDP Client
+      ↓
+_cdp_client_root
+      ↓
+browser_get_state()
+
+Highlight the first node that fails.
+
+14. Rank all possible root causes from highest to lowest probability.
+
+For each root cause include:
+- Probability (%)
+- Evidence
+- Why it explains the symptoms
+- How to verify it
+- Minimal fix
+
+15. Do NOT rewrite the architecture.
+
+16. Do NOT refactor unrelated code.
+
+17. Recommend only the smallest code change required to fix the actual root cause.
+
+18. If additional logging is required, specify the exact logging statements and the exact functions where they should be inserted.
+
+Your final answer should include:
+
+1. Root cause
+2. Supporting evidence
+3. Execution timeline
+4. Verification steps
+5. Minimal fix
+6. Why the fix works
+7. How to confirm the issue is resolved
+
+Do not guess.
+Base every conclusion on the actual code execution path.

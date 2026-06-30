@@ -1,1 +1,1 @@
-- [Vite WebSocket proxy](vite-ws-proxy.md) — `ws: true` required in every Vite proxy rule that carries WS upgrades; omitting it silently drops upgrade requests.
+- [browser-use CDP init race](browser-use-cdp-init-race.md) — _init_browser_session stores broken session before start() returns; patch with asyncio.Event + reset-on-failure
