@@ -135,6 +135,8 @@ _SANDBOX_ARGS = [
     "--no-first-run",
     "--no-default-browser-check",
     "--disable-extensions",
+    "--no-proxy-server",
+    "--window-size=1280,800",
 ]
 
 # Option 1 stealth flags — remove bot-detection fingerprints

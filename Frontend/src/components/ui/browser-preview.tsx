@@ -147,7 +147,7 @@ export function BrowserPreview({
               </div>
               <div className="h-4 w-px bg-[#232B36] mx-1" />
               <div className="flex-1 truncate text-[13px] font-medium text-[#CBD5E1] select-all">
-                {toolLogs.find(l => l.tool_name === 'browser_navigate')?.tool_input?.url || 'https://www.google.com'}
+                {[...toolLogs].reverse().find(l => l.tool_name === 'browser_navigate')?.tool_input?.url || 'https://www.google.com'}
               </div>
               <ShieldCheck className="h-3.5 w-3.5 text-[#10B981] shrink-0" />
             </div>
@@ -198,7 +198,7 @@ export function BrowserPreview({
                   style={{ transform: `scale(${zoom / 100})` }}
                 >
                   <img 
-                    src={frame.startsWith('data:') ? frame : `data:image/png;base64,${frame}`} 
+                    src={frame.startsWith('data:') ? frame : `data:image/jpeg;base64,${frame}`} 
                     alt="Live Browser" 
                     className="max-w-full max-h-full object-contain shadow-[0_30px_100px_rgba(0,0,0,0.8)] border border-white/5 rounded-lg"
                   />
@@ -239,14 +239,32 @@ export function BrowserPreview({
             <div className="h-10 border-t border-[#232B36] bg-white/[0.02] px-4 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-4 overflow-x-auto hide-scrollbar">
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-[#10B981]" />
-                  <span className="text-[10px] font-bold text-[#10B981] uppercase tracking-wider">Page loaded successfully</span>
+                  {frame ? (
+                    <>
+                      <CheckCircle2 className="h-3.5 w-3.5 text-[#10B981]" />
+                      <span className="text-[10px] font-bold text-[#10B981] uppercase tracking-wider">Page loaded successfully</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertCircle className="h-3.5 w-3.5 text-[#F59E0B]" />
+                      <span className="text-[10px] font-bold text-[#F59E0B] uppercase tracking-wider">Waiting for page...</span>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-3 shrink-0 ml-4">
                 <div className="flex items-center gap-1.5">
-                  <Wifi className="h-3 w-3 text-[#10B981]" />
-                  <span className="text-[10px] font-black text-[#10B981]">STABLE</span>
+                  {frame ? (
+                    <>
+                      <Wifi className="h-3 w-3 text-[#10B981]" />
+                      <span className="text-[10px] font-black text-[#10B981]">STABLE</span>
+                    </>
+                  ) : (
+                    <>
+                      <WifiOff className="h-3 w-3 text-[#F59E0B]" />
+                      <span className="text-[10px] font-black text-[#F59E0B]">CONNECTING</span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
