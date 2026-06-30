@@ -74,6 +74,10 @@ class RenameChatRequest(BaseModel):
     log_id: Optional[str] = None
     success: bool = True
 
+class ToolContextItem(BaseModel):
+    tool_name: str
+    output: Optional[str] = None
+
 class ScheduleRequest(BaseModel):
     chat_id: str
     title: str
@@ -81,6 +85,7 @@ class ScheduleRequest(BaseModel):
     selected_tool_ids: List[str]
     schedule_type: str # daily, weekly, monthly
     email_recipient: str
+    tool_context: Optional[List[ToolContextItem]] = None
 
 class ScheduleResponse(BaseModel):
     schedule_id: str

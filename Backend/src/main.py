@@ -318,8 +318,14 @@ async def create_schedule(req: ScheduleRequest, db: AsyncSession = Depends(get_d
         for log in tool_logs
     ]
     
-    # 2. Generate the Python script using the specialized code model
-    generated_script = await brain.code_processor.run_script_generation(req.title, execution_history)
+    # 2. Build tool_context list from request (frontend-supplied summaries of successful tools)
+    tool_context = [
+        {"tool_name": item.tool_name, "output": item.output}
+        for item in (req.tool_context or [])
+    ]
+
+    # 3. Generate the Python script using the specialized code model
+    generated_script = await brain.code_processor.run_script_generation(req.title, execution_history, tool_context=tool_context)
     
     # 3. Create the schedule with the generated script
     schedule = await ChatService.create_schedule(db, current_user.user_id, req)

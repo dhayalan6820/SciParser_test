@@ -431,7 +431,7 @@ class ATAGProcessor:
         except Exception as e:
             return False, str(e)
 
-    async def run_script_generation(self, task_summary: str, execution_history: List[Dict[str, Any]], framework: str = "playwright") -> str:
+    async def run_script_generation(self, task_summary: str, execution_history: List[Dict[str, Any]], framework: str = "playwright", tool_context: Optional[List[Dict[str, Any]]] = None) -> str:
         """Generates a production-ready script based on the execution history using the specified framework."""
         
         if framework == "playwright":
@@ -492,8 +492,19 @@ class ATAGProcessor:
             """
 
         history_str = json.dumps(execution_history, indent=2)
+
+        tool_context_section = ""
+        if tool_context:
+            tool_context_lines = []
+            for i, item in enumerate(tool_context, 1):
+                tool_name = item.get("tool_name", "unknown_tool")
+                output = item.get("output") or "(no output)"
+                tool_context_lines.append(f"  [{i}] {tool_name}:\n      {output}")
+            tool_context_section = "\nTOOL EXECUTION LOG (real outputs from successful tools — use these URL patterns, selectors, and data values directly in the script):\n" + "\n".join(tool_context_lines) + "\n"
+
         USER_PROMPT = f"""
         USER INTENT: {task_summary}
+        {tool_context_section}
         EXECUTION TRACE (Tool Calls):
         {history_str}
 
