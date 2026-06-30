@@ -5,12 +5,24 @@ Launches Chrome directly via subprocess so the CDP endpoint is TCP-accessible,
 then lets browser-use's MCP server connect to that same Chrome instance.
 
 Architecture
-  1. Find the chrome-headless-shell binary installed by Playwright
+  1. Find the best available Chrome binary (full Chromium preferred over headless-shell)
   2. Start it via asyncio.create_subprocess_exec with --remote-debugging-port=PORT
   3. Poll http://localhost:PORT/json/version until CDP is ready (HTTP, not pipe)
   4. Connect Playwright to the running Chrome via connect_over_cdp()
   5. Write a browser-use config.json pointing cdp_url at the running Chrome
   6. Start the browser-use MCP server — it connects to existing Chrome, never launches its own
+
+Anti-bot strategy (two-stage fallback)
+  Option 1 (default): Full Chromium with --headless=new + stealth flags.
+    --headless=new renders identically to a real browser (same GPU pipeline, JS
+    fingerprint, navigator properties) and is much harder to detect than the old
+    headless-shell.  --disable-blink-features=AutomationControlled removes the
+    navigator.webdriver flag that most bot-detection services check.
+  Option 2 (Xvfb fallback): If Option 1 fails (CDP never becomes ready) AND the
+    Xvfb binary is available on the system, restart Chrome headed (no --headless)
+    with a virtual X11 framebuffer so it runs completely invisibly.  Screenshots
+    still work identically via CDP because Playwright reads the framebuffer.
+    Set BROWSER_USE_XVFB=true to force Option 2 without waiting for Option 1 to fail.
 
 WHY subprocess instead of playwright.launch():
   playwright.launch() uses an internal pipe (--remote-debugging-pipe), so even when
@@ -22,6 +34,7 @@ import asyncio
 import glob
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -39,40 +52,79 @@ def _find_free_port() -> int:
         return s.getsockname()[1]
 
 
-def _find_chrome_binary() -> str:
-    """Locate the chrome-headless-shell binary installed by Playwright."""
-    # Playwright may install browsers into the workspace dir (Replit) or the user home dir
+def _playwright_search_roots() -> list:
     workspace_root = os.path.abspath(
         os.path.join(os.path.dirname(__file__), "..", "..", "..")
     )
     home_pw = os.path.expanduser("~/.cache/ms-playwright")
     workspace_pw = os.path.join(workspace_root, ".cache", "ms-playwright")
     pw_env = os.getenv("PLAYWRIGHT_BROWSERS_PATH", "")
+    return [r for r in [pw_env, workspace_pw, home_pw] if r]
 
-    search_roots = [r for r in [pw_env, workspace_pw, home_pw] if r]
 
-    sub_patterns = [
+def _find_full_chrome_binary() -> str | None:
+    """
+    Locate the FULL Chromium binary (not headless-shell).
+    Full Chromium supports --headless=new which is near-invisible to bot detection.
+    Returns None if not found.
+    """
+    patterns = [
+        os.path.join("chromium-*", "chrome-linux64", "chrome"),
+        os.path.join("chromium-*", "chrome-linux", "chrome"),
+    ]
+    for root in _playwright_search_roots():
+        for pat in patterns:
+            matches = glob.glob(os.path.join(root, pat))
+            if matches:
+                return matches[0]
+    return None
+
+
+def _find_headless_shell_binary() -> str | None:
+    """Locate the chrome-headless-shell binary installed by Playwright."""
+    patterns = [
         os.path.join(
             "chromium_headless_shell-*",
             "chrome-headless-shell-linux64",
             "chrome-headless-shell",
         ),
-        os.path.join("chromium-*", "chrome-linux", "chrome"),
         os.path.join("chromium_headless_shell-*", "chrome-headless-shell"),
     ]
-
-    for root in search_roots:
-        for sub in sub_patterns:
-            matches = glob.glob(os.path.join(root, sub))
+    for root in _playwright_search_roots():
+        for pat in patterns:
+            matches = glob.glob(os.path.join(root, pat))
             if matches:
                 return matches[0]
+    return None
 
-    searched = [os.path.join(r, s) for r in search_roots for s in sub_patterns]
+
+def _find_any_chrome_binary() -> str:
+    """
+    Return the best available Chrome binary.
+    Preference order: full Chromium → headless-shell.
+    Raises RuntimeError if neither is found.
+    """
+    binary = _find_full_chrome_binary() or _find_headless_shell_binary()
+    if binary:
+        return binary
     raise RuntimeError(
-        "chrome-headless-shell binary not found. "
-        f"Run: python -m playwright install chromium.  Searched: {searched}"
+        "No Chrome binary found. Run: python -m playwright install chromium"
     )
 
+
+def _is_full_chromium(binary_path: str) -> bool:
+    """True when the binary is full Chromium (not headless-shell)."""
+    return "headless-shell" not in os.path.basename(binary_path)
+
+
+def _find_xvfb() -> str | None:
+    """Return path to Xvfb binary if available, else None."""
+    return shutil.which("Xvfb")
+
+
+# ---------------------------------------------------------------------------
+# Chrome flags
+# ---------------------------------------------------------------------------
 
 _SANDBOX_ARGS = [
     "--no-sandbox",
@@ -84,6 +136,22 @@ _SANDBOX_ARGS = [
     "--no-default-browser-check",
     "--disable-extensions",
 ]
+
+# Option 1 stealth flags — remove bot-detection fingerprints
+_STEALTH_ARGS = [
+    "--disable-blink-features=AutomationControlled",
+    "--disable-infobars",
+    "--disable-notifications",
+    "--disable-popup-blocking",
+    "--disable-default-apps",
+    "--mute-audio",
+    "--lang=en-US,en",
+]
+
+
+# ---------------------------------------------------------------------------
+# CDP helpers
+# ---------------------------------------------------------------------------
 
 
 async def _wait_for_cdp(port: int, timeout_secs: int = 25) -> bool:
@@ -105,6 +173,11 @@ async def _wait_for_cdp(port: int, timeout_secs: int = 25) -> bool:
     return False
 
 
+# ---------------------------------------------------------------------------
+# browser-use config
+# ---------------------------------------------------------------------------
+
+
 def _write_browser_use_config(config_dir: str, cdp_url: str, headless: bool) -> None:
     """
     Write a browser-use config.json in DB-style format pointing the MCP server at cdp_url.
@@ -117,13 +190,11 @@ def _write_browser_use_config(config_dir: str, cdp_url: str, headless: bool) -> 
     which means our cdp_url is lost and MCP launches its own browser instead.
     """
     import uuid
+    from datetime import datetime, timezone
 
     os.makedirs(config_dir, exist_ok=True)
 
-    from datetime import datetime, timezone
-
     now_iso = datetime.now(timezone.utc).isoformat()
-
     profile_id = str(uuid.uuid4())
     llm_id = str(uuid.uuid4())
     agent_id = str(uuid.uuid4())
@@ -166,6 +237,80 @@ def _write_browser_use_config(config_dir: str, cdp_url: str, headless: bool) -> 
 
 
 # ---------------------------------------------------------------------------
+# Chrome launch helpers
+# ---------------------------------------------------------------------------
+
+
+async def _launch_chrome(
+    binary: str,
+    port: int,
+    user_data_dir: str,
+    headless: bool,
+    display: str | None = None,
+) -> "asyncio.subprocess.Process":
+    """
+    Build the Chrome command and start it.
+
+    headless=True  + full Chromium   → --headless=new  (Option 1, stealth)
+    headless=False + full Chromium   → no --headless   (Option 2, Xvfb virtual display)
+    headless=True  + headless-shell  → --headless      (legacy fallback)
+    """
+    cmd = [
+        binary,
+        f"--remote-debugging-port={port}",
+        f"--user-data-dir={user_data_dir}",
+        *_SANDBOX_ARGS,
+        *_STEALTH_ARGS,
+    ]
+
+    if headless:
+        if _is_full_chromium(binary):
+            cmd.append("--headless=new")
+        else:
+            cmd.append("--headless")
+    else:
+        # Headed mode — requires a display (real or virtual)
+        cmd.append("--start-maximized")
+        cmd.append("--window-size=1280,800")
+
+    env = os.environ.copy()
+    if display:
+        env["DISPLAY"] = display
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env=env,
+    )
+    return proc
+
+
+async def _start_xvfb(display_num: int = 99) -> "asyncio.subprocess.Process | None":
+    """
+    Start a virtual X11 framebuffer on :{display_num}.
+    Returns the process on success, None if Xvfb is not available.
+    """
+    xvfb = _find_xvfb()
+    if not xvfb:
+        return None
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            xvfb,
+            f":{display_num}",
+            "-screen", "0", "1280x800x24",
+            "-ac",
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        await asyncio.sleep(1)  # give Xvfb a moment to initialise
+        return proc
+    except Exception as exc:
+        print(f"Bridge: Xvfb start failed — {exc}", file=sys.stderr)
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Main bridge coroutine
 # ---------------------------------------------------------------------------
 
@@ -180,6 +325,7 @@ async def run_bridge() -> None:
         int(port_env) if port_env and port_env not in ("", "0") else _find_free_port()
     )
     headless = os.getenv("BROWSER_USE_HEADLESS", "true").lower() != "false"
+    force_xvfb = os.getenv("BROWSER_USE_XVFB", "false").lower() == "true"
     user_data_dir = os.getenv("BROWSER_USER_DATA_DIR") or tempfile.mkdtemp(
         prefix="chrome_cdp_"
     )
@@ -188,49 +334,107 @@ async def run_bridge() -> None:
     config_dir = os.path.join(tempfile.gettempdir(), f"browser_use_cfg_{port}")
     cdp_url = f"http://localhost:{port}"
 
-    print(
-        f"Bridge: port={port}  headless={headless}  user_data_dir={user_data_dir}",
-        file=sys.stderr,
-    )
-
     # ── Step 1: Find Chrome binary ───────────────────────────────────────────────
     try:
-        chrome_binary = _find_chrome_binary()
+        chrome_binary = _find_any_chrome_binary()
     except RuntimeError as exc:
         print(f"Bridge: {exc}", file=sys.stderr)
         return
 
-    print(f"Bridge: Chrome binary → {chrome_binary}", file=sys.stderr)
-
-    # ── Step 2: Start Chrome directly via subprocess ─────────────────────────────
-    cmd = [
-        chrome_binary,
-        f"--remote-debugging-port={port}",
-        f"--user-data-dir={user_data_dir}",
-        *_SANDBOX_ARGS,
-    ]
-    if headless:
-        cmd.append("--headless")
-
-    chrome_process = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    is_full = _is_full_chromium(chrome_binary)
     print(
-        f"Bridge: Chrome pid={chrome_process.pid} started, waiting for CDP...",
+        f"Bridge: port={port}  headless={headless}  full_chromium={is_full}  "
+        f"force_xvfb={force_xvfb}  user_data_dir={user_data_dir}",
         file=sys.stderr,
     )
+    print(f"Bridge: Chrome binary → {chrome_binary}", file=sys.stderr)
 
-    # ── Step 3: Wait for CDP TCP port to be ready ────────────────────────────────
-    cdp_ready = await _wait_for_cdp(port, timeout_secs=25)
-    if not cdp_ready:
+    # ── Step 2 / Option selection ────────────────────────────────────────────────
+    # Option 1: Full Chromium + --headless=new + stealth flags (default)
+    # Option 2: Full Chromium + Xvfb virtual display (headed) → better for
+    #           sites that detect headless mode even with stealth flags.
+    #           Triggered automatically if Option 1 CDP never becomes ready,
+    #           or forced via BROWSER_USE_XVFB=true.
+
+    chrome_process = None
+    xvfb_process = None
+    effective_headless = headless  # passed to browser-use config
+
+    if force_xvfb and headless:
+        # BROWSER_USE_XVFB=true overrides headless — use Option 2 directly
+        print("Bridge: BROWSER_USE_XVFB=true — skipping to Option 2", file=sys.stderr)
+        headless = False
+
+    # ── Option 1: Start Chrome (headless or headless=new) ────────────────────────
+    if headless or not _find_xvfb():
+        print(f"Bridge: [Option 1] launching Chrome with stealth flags", file=sys.stderr)
+        chrome_process = await _launch_chrome(
+            chrome_binary, port, user_data_dir, headless=True
+        )
         print(
-            f"Bridge: Chrome failed to expose CDP on port {port} within 25 s",
+            f"Bridge: Chrome pid={chrome_process.pid} started, waiting for CDP...",
             file=sys.stderr,
         )
-        chrome_process.terminate()
-        return
+        cdp_ready = await _wait_for_cdp(port, timeout_secs=25)
+
+        if not cdp_ready:
+            print(
+                f"Bridge: [Option 1] Chrome failed to expose CDP — trying Option 2 (Xvfb headed mode)",
+                file=sys.stderr,
+            )
+            chrome_process.terminate()
+            chrome_process = None
+            headless = False  # fall through to Option 2
+
+    # ── Option 2: Xvfb + headed Chrome ───────────────────────────────────────────
+    if not headless and chrome_process is None:
+        xvfb_bin = _find_xvfb()
+        if xvfb_bin:
+            display_num = _find_free_port() % 200 + 10  # pick a free display number
+            print(
+                f"Bridge: [Option 2] starting Xvfb on :{display_num}",
+                file=sys.stderr,
+            )
+            xvfb_process = await _start_xvfb(display_num)
+            if xvfb_process:
+                display = f":{display_num}"
+                chrome_process = await _launch_chrome(
+                    chrome_binary, port, user_data_dir,
+                    headless=False, display=display,
+                )
+                print(
+                    f"Bridge: [Option 2] Chrome pid={chrome_process.pid} "
+                    f"headed DISPLAY={display}, waiting for CDP...",
+                    file=sys.stderr,
+                )
+                cdp_ready = await _wait_for_cdp(port, timeout_secs=25)
+                if not cdp_ready:
+                    print(
+                        "Bridge: [Option 2] Xvfb Chrome also failed to expose CDP — aborting",
+                        file=sys.stderr,
+                    )
+                    chrome_process.terminate()
+                    xvfb_process.terminate()
+                    return
+                effective_headless = False
+            else:
+                print("Bridge: Xvfb unavailable, aborting (no display)", file=sys.stderr)
+                return
+        else:
+            # Xvfb not installed — fall back to Option 1 anyway
+            print(
+                "Bridge: Xvfb binary not found — retrying Option 1 (headless=new)",
+                file=sys.stderr,
+            )
+            chrome_process = await _launch_chrome(
+                chrome_binary, port, user_data_dir, headless=True
+            )
+            cdp_ready = await _wait_for_cdp(port, timeout_secs=25)
+            if not cdp_ready:
+                print("Bridge: Chrome failed to start — aborting", file=sys.stderr)
+                chrome_process.terminate()
+                return
+            effective_headless = True
 
     print(f"Bridge: CDP ready at {cdp_url}", file=sys.stderr)
     os.environ["BROWSER_CDP_URL"] = cdp_url
@@ -245,7 +449,6 @@ async def run_bridge() -> None:
         pw = await async_playwright().start()
         pw_browser = await pw.chromium.connect_over_cdp(cdp_url)
 
-        # Ensure at least one page exists so browser-use has something to work with
         contexts = pw_browser.contexts
         if contexts and contexts[0].pages:
             page = contexts[0].pages[0]
@@ -262,10 +465,9 @@ async def run_bridge() -> None:
             f"Bridge: Playwright CDP connect warning — {exc} (non-fatal)",
             file=sys.stderr,
         )
-        # Non-fatal — browser-use will connect to Chrome directly via the cdp_url
 
     # ── Step 5: Write browser-use config pointing at cdp_url ────────────────────
-    _write_browser_use_config(config_dir, cdp_url, headless)
+    _write_browser_use_config(config_dir, cdp_url, effective_headless)
     os.environ["BROWSER_USE_CONFIG_DIR"] = config_dir
 
     # ── Step 6: Start the browser-use MCP server ─────────────────────────────────
@@ -299,6 +501,11 @@ async def run_bridge() -> None:
                     chrome_process.kill()
                 except Exception:
                     pass
+        if xvfb_process:
+            try:
+                xvfb_process.terminate()
+            except Exception:
+                pass
         print("Bridge: cleanup complete", file=sys.stderr)
 
 

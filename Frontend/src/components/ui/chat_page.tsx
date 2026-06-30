@@ -341,7 +341,10 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
             const frameChatId = frameData.chat_id ? String(frameData.chat_id) : null;
             const activeId = activeThreadId ? String(activeThreadId) : null;
-            if (frameChatId && activeId && frameChatId !== activeId) return;
+            if (frameChatId && activeId && frameChatId !== activeId) {
+              console.log("[BrowserStream] frame dropped — chat_id mismatch:", frameChatId, "vs active:", activeId);
+              return;
+            }
 
             let actualFrame = frameData.frame;
             if (typeof actualFrame === 'object' && actualFrame !== null) {
@@ -354,17 +357,15 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               } catch { /* ignore */ }
             }
 
+            console.log("[BrowserStream] frame event — length:", actualFrame?.length ?? 0, "chat_id:", frameChatId);
+
             if (actualFrame) {
               setBrowserFrame(actualFrame);
               if (isFirstFrame.current && !userInterruptedBrowser) {
                 isFirstFrame.current = false;
                 setBrowserBlink("green");
-                setTimeout(() => {
-                  if (!userInterruptedBrowser) {
-                    setBrowserActive(true);
-                    setBrowserBlink(null);
-                  }
-                }, 2500);
+                setBrowserActive(true);
+                setTimeout(() => setBrowserBlink(null), 1500);
               }
             }
           } else if (eventType === 'tool_log') {
