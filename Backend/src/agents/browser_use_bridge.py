@@ -219,7 +219,7 @@ def _patch_mcp_server_session_retry() -> None:
     clean retry and connects successfully once Chrome is ready.
     """
     try:
-        from browser_use.mcp.server import BrowserMCPServer
+        from browser_use.mcp.server import BrowserUseServer as BrowserMCPServer
     except ImportError:
         print("Bridge: could not import BrowserMCPServer — skipping patch", file=sys.stderr)
         return
