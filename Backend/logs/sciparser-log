@@ -461,3 +461,63 @@ These errors indicate that the browser automation system is unable to establish 
 2026-06-30 06:58:38 | INFO     | sciparser | Initializing multi-agent orchestrator system...
 2026-06-30 06:58:38 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
 2026-06-30 06:58:38 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-30 07:00:05 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-30 07:00:06 | INFO     | sciparser | Preparing MCP manager for user bb3a2f06-dfad-441d-888e-856c5c8f0423...
+2026-06-30 07:00:06 | INFO     | sciparser | Preparing MCP manager for user bb3a2f06-dfad-441d-888e-856c5c8f0423...
+2026-06-30 07:00:06 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server connecting to http://localhost:47665...
+2026-06-30 07:00:38 | ERROR    | src.agents.mcp_agent | >>> MCP Initialization Failed: unhandled errors in a TaskGroup (1 sub-exception)
+  + Exception Group Traceback (most recent call last):
+  |   File "/home/runner/workspace/Backend/src/agents/mcp_agent.py", line 88, in initialize
+  |     session = await self.stack.enter_async_context(
+  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |   File "/nix/store/iizfzmqjdfvbyx82gqw92glb5zl6m4my-python3-3.12.12/lib/python3.12/contextlib.py", line 659, in enter_async_context
+  |     result = await _enter(cm)
+  |              ^^^^^^^^^^^^^^^^
+  |   File "/nix/store/iizfzmqjdfvbyx82gqw92glb5zl6m4my-python3-3.12.12/lib/python3.12/contextlib.py", line 210, in __aenter__
+  |     return await anext(self.gen)
+  |            ^^^^^^^^^^^^^^^^^^^^^
+  |   File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/langchain_mcp_adapters/client.py", line 155, in session
+  |     async with create_session(
+  |                ^^^^^^^^^^^^^^^
+  |   File "/nix/store/iizfzmqjdfvbyx82gqw92glb5zl6m4my-python3-3.12.12/lib/python3.12/contextlib.py", line 231, in __aexit__
+  |     await self.gen.athrow(value)
+  |   File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/langchain_mcp_adapters/sessions.py", line 464, in create_session
+  |     async with _create_stdio_session(**params) as session:
+  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |   File "/nix/store/iizfzmqjdfvbyx82gqw92glb5zl6m4my-python3-3.12.12/lib/python3.12/contextlib.py", line 231, in __aexit__
+  |     await self.gen.athrow(value)
+  |   File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/langchain_mcp_adapters/sessions.py", line 268, in _create_stdio_session
+  |     stdio_client(server_params) as (read, write),
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |   File "/nix/store/iizfzmqjdfvbyx82gqw92glb5zl6m4my-python3-3.12.12/lib/python3.12/contextlib.py", line 231, in __aexit__
+  |     await self.gen.athrow(value)
+  |   File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/mcp/client/stdio/__init__.py", line 183, in stdio_client
+  |     anyio.create_task_group() as tg,
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |   File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/anyio/_backends/_asyncio.py", line 783, in __aexit__
+  |     raise BaseExceptionGroup(
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/mcp/client/stdio/__init__.py", line 162, in stdout_reader
+    |     await read_stream_writer.send(session_message)
+    |   File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/anyio/streams/memory.py", line 249, in send
+    |     self.send_nowait(item)
+    |   File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/anyio/streams/memory.py", line 220, in send_nowait
+    |     raise BrokenResourceError
+    | anyio.BrokenResourceError
+    +------------------------------------
+2026-06-30 07:00:38 | ERROR    | sciparser | Error in process_message: MCP Server failed to start: unhandled errors in a TaskGroup (1 sub-exception) (Sub-errors: )
+2026-06-30 07:00:38 | ERROR    | sciparser | Error in process_message: MCP Server failed to start: unhandled errors in a TaskGroup (1 sub-exception) (Sub-errors: )
+2026-06-30 07:00:38 | WARNING  | sciparser | Detected anyio TaskGroup error, attempting to extract root cause.
+2026-06-30 07:00:38 | WARNING  | sciparser | Detected anyio TaskGroup error, attempting to extract root cause.
+2026-06-30 07:00:38 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: MCP Server failed to start: unhandled errors in a TaskGroup (1 sub-exception) (Sub-errors: )
+Traceback (most recent call last):
+  File "/home/runner/workspace/Backend/src/main.py", line 202, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: MCP Server failed to start: unhandled errors in a TaskGroup (1 sub-exception) (Sub-errors: )
+2026-06-30 07:00:38 | ERROR    | sciparser | Chat endpoint error: 500: An unexpected error occurred: MCP Server failed to start: unhandled errors in a TaskGroup (1 sub-exception) (Sub-errors: )
+Traceback (most recent call last):
+  File "/home/runner/workspace/Backend/src/main.py", line 202, in chat
+    raise HTTPException(status_code=500, detail=error_msg)
+fastapi.exceptions.HTTPException: 500: An unexpected error occurred: MCP Server failed to start: unhandled errors in a TaskGroup (1 sub-exception) (Sub-errors: )
