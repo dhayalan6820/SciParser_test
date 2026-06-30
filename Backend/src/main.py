@@ -30,7 +30,8 @@ class PlanStreamManager:
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
         self.browser_connections: Dict[str, List[WebSocket]] = {}
-        self.schedule_connections: Dict[str, List[WebSocket]] = {} # New: Track schedule monitoring connections
+        self.schedule_connections: Dict[str, List[WebSocket]] = {}
+        self.last_frame: Dict[str, Any] = {}  # last browser frame per user_id
 
     async def connect(self, chat_id: str, websocket: WebSocket, is_browser: bool = False, is_schedule: bool = False):
         if is_schedule:
@@ -88,6 +89,8 @@ class PlanStreamManager:
 
     async def broadcast_frame(self, frame_data: Any, user_id: str, is_tool: bool = False):
         """Broadcasts a base64 CDP frame or tool log to all connected browser stream clients for a user."""
+        if not is_tool:
+            self.last_frame[user_id] = frame_data
         if user_id in self.browser_connections:
             event_type = "tool_log" if is_tool else "frame"
             dead: list = []
@@ -667,6 +670,15 @@ async def browser_stream(
 
     # Use user.user_id for browser session mapping instead of chat_id
     await plan_stream_manager.connect(user.user_id, websocket, is_browser=True)
+
+    # Immediately replay the last frame so reconnecting clients never see a blank panel
+    cached = plan_stream_manager.last_frame.get(user.user_id)
+    if cached:
+        try:
+            await websocket.send_json({"event": "frame", "data": cached})
+        except Exception:
+            pass
+
     try:
         while True:
             # Keep connection alive — receive() handles text, binary, and ping/pong
