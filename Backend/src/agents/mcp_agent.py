@@ -103,6 +103,10 @@ class MCPToolManager:
             # Headless + security-off for server-side automation
             "BROWSER_USE_HEADLESS": "true",
             "BROWSER_USE_DISABLE_SECURITY": "true",
+            # Point browser-use's internal Playwright at our local Chromium cache
+            # (Chrome lives in .cache/ms-playwright, NOT in uvx's cache)
+            "PLAYWRIGHT_BROWSERS_PATH": "/home/runner/workspace/.cache/ms-playwright",
+            "PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS": "true",
             # Remove any stale CDP config from parent env so the bridge always
             # starts fresh for this port
             "BROWSER_CDP_URL": "",

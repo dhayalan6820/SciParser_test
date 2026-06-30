@@ -86,6 +86,13 @@ def _write_browser_use_config(config_dir: str, cdp_port: int, headless: bool) ->
     llm_id = str(uuid.uuid4())
     agent_id = str(uuid.uuid4())
 
+    # Explicit path to the Chrome binary — Playwright inside browser-use must use
+    # our local .cache/ms-playwright copy, NOT look in uvx's managed cache.
+    chrome_binary = (
+        "/home/runner/workspace/.cache/ms-playwright"
+        "/chromium-1228/chrome-linux64/chrome"
+    )
+
     extra_args = [
         # Expose CDP on a known TCP port so our screenshot streamer can connect
         f"--remote-debugging-port={cdp_port}",
@@ -125,6 +132,7 @@ def _write_browser_use_config(config_dir: str, cdp_port: int, headless: bool) ->
                 "disable_security": True,
                 "keep_alive": True,
                 "chromium_sandbox": False,
+                "executable_path": chrome_binary,
                 "args": extra_args,
             }
         },
