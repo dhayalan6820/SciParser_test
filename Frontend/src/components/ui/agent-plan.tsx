@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import {
   CheckCircle2,
   Circle,
@@ -45,6 +45,7 @@ interface PlanProps {
   tasks?: Task[];
   thoughts?: string[];
   onHide?: () => void;
+  isAiTyping?: boolean;
 }
 
 const palette = {
@@ -64,8 +65,17 @@ const isCompleted = (status?: string) => status === "completed";
 const isRunning = (status?: string) => status === "in-progress" || status === "running";
 const isFailed = (status?: string) => status === "failed";
 
-export default function Plan({ tasks: propTasks = [], thoughts = [] }: PlanProps) {
+export default function Plan({ tasks: propTasks = [], thoughts = [], isAiTyping }: PlanProps) {
   const [isWorkflowVisible, setIsWorkflowVisible] = useState(true);
+  const prevAiTyping = useRef<boolean | undefined>(undefined);
+
+  // Auto-collapse when the task finishes (isAiTyping flips true → false)
+  useEffect(() => {
+    if (prevAiTyping.current === true && isAiTyping === false) {
+      setIsWorkflowVisible(false);
+    }
+    prevAiTyping.current = isAiTyping;
+  }, [isAiTyping]);
 
   const activeTaskIndex = useMemo(() => {
     if (propTasks.length === 0) return -1;

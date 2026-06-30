@@ -372,13 +372,16 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             try {
               const toolMsg = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
               if (toolMsg.type === 'tool_start') {
-                setToolLogs(prev => [...prev, {
-                  id: toolMsg.tool_call_id || uuidv4(),
-                  tool_name: toolMsg.tool,
-                  tool_input: toolMsg.args,
-                  status: 'IN_PROGRESS',
-                  created_at: new Date().toISOString()
-                }]);
+                setToolLogs(prev => {
+                  if (prev.some(log => log.id === toolMsg.tool_call_id)) return prev;
+                  return [...prev, {
+                    id: toolMsg.tool_call_id || uuidv4(),
+                    tool_name: toolMsg.tool,
+                    tool_input: toolMsg.args,
+                    status: 'IN_PROGRESS',
+                    created_at: new Date().toISOString()
+                  }];
+                });
               } else if (toolMsg.type === 'tool_output') {
                 setToolLogs(prev => prev.map(log =>
                   log.id === toolMsg.tool_call_id
@@ -2119,7 +2122,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                                 {currentPlan ? (
                                   <Plan 
                                     tasks={currentPlan} 
-                                    thoughts={aiThinking ? [aiThinking] : []} 
+                                    thoughts={aiThinking ? [aiThinking] : []}
+                                    isAiTyping={isAiTyping}
                                   />
                                 ) : (
                                   <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl p-5 shadow-sm">
