@@ -177,10 +177,23 @@ class Brain:
         self.initialized = True
         logger.info("Multi-agent orchestrator initialization complete.")
 
+    def _compress_screenshot(self, png_bytes: bytes, max_width: int = 1280, quality: int = 80) -> str:
+        """Resize to max_width and encode as JPEG to keep WS payload within proxy limits."""
+        import io
+        from PIL import Image
+        img = Image.open(io.BytesIO(png_bytes))
+        if img.width > max_width:
+            ratio = max_width / img.width
+            img = img.resize((max_width, int(img.height * ratio)), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.convert("RGB").save(buf, format="JPEG", quality=quality, optimize=True)
+        return base64.b64encode(buf.getvalue()).decode("utf-8")
+
     async def _stream_browser_frames(self, user_id: str, chat_id: str, stop_event: asyncio.Event):
         """
         Capture screenshots directly from Chrome via Playwright CDP — no MCP overhead.
-        This always screenshots the real active page, not a stale blank tab.
+        Screenshots are compressed to JPEG 80%/1280 px before sending so they fit
+        within the Replit proxy WebSocket message size limit (~64 KB).
         """
         from playwright.async_api import async_playwright
 
@@ -199,21 +212,22 @@ class Brain:
 
         pw = None
         browser = None
+        last_page = None
         try:
             pw = await async_playwright().start()
             browser = await pw.chromium.connect_over_cdp(cdp_url)
 
             while not stop_event.is_set():
                 try:
-                    # Find the most recently active page across all contexts
                     page = None
                     for ctx in browser.contexts:
                         if ctx.pages:
                             page = ctx.pages[-1]
 
                     if page:
+                        last_page = page
                         png_bytes = await page.screenshot(type="png", full_page=False)
-                        b64 = base64.b64encode(png_bytes).decode("utf-8")
+                        b64 = self._compress_screenshot(png_bytes)
                         logger.info(
                             f"Broadcasting browser frame for user {user_id}, "
                             f"chat {chat_id}, length={len(b64)}"
@@ -228,6 +242,18 @@ class Brain:
                     logger.error(f"Error capturing direct CDP frame for user {user_id}: {e}")
 
                 await asyncio.sleep(1.5)
+
+            # --- Send one final frame so the panel shows the last browser state ---
+            try:
+                if last_page and self.stream_manager:
+                    png_bytes = await last_page.screenshot(type="png", full_page=False)
+                    b64 = self._compress_screenshot(png_bytes)
+                    await self.stream_manager.broadcast_frame(
+                        {"chat_id": chat_id, "frame": b64}, user_id
+                    )
+                    logger.info(f"Sent final browser frame for user {user_id}")
+            except Exception as e:
+                logger.debug(f"Could not send final frame for user {user_id}: {e}")
 
         except Exception as e:
             logger.error(f"Failed to start direct CDP Playwright for user {user_id}: {e}")

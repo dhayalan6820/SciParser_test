@@ -90,11 +90,14 @@ class PlanStreamManager:
         """Broadcasts a base64 CDP frame or tool log to all connected browser stream clients for a user."""
         if user_id in self.browser_connections:
             event_type = "tool_log" if is_tool else "frame"
-            for connection in self.browser_connections[user_id]:
+            dead: list = []
+            for connection in list(self.browser_connections[user_id]):
                 try:
                     await connection.send_json({"event": event_type, "data": frame_data})
                 except Exception:
-                    pass
+                    dead.append(connection)
+            for conn in dead:
+                self.disconnect(user_id, conn, is_browser=True)
 
 plan_stream_manager = PlanStreamManager()
 # Inject manager into brain and its session_manager so they can broadcast

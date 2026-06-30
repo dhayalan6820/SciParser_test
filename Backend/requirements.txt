@@ -20,3 +20,4 @@ browser-use
 pydantic
 PyJWT
 passlib[bcrypt]
+Pillow

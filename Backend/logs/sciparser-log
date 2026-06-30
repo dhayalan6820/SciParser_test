@@ -4069,3 +4069,16 @@ The website is protected by a security firewall (Microsoft Azure Application Gat
 **Exact Error:** `403 Forbidden - Microsoft-Azure-Application-Gateway/v2`
 2026-06-30 10:37:46 | ERROR    | sciparser | All 3 attempts failed.
 2026-06-30 10:37:46 | ERROR    | sciparser | All 3 attempts failed.
+2026-06-30 10:49:58 | INFO     | src.agents.mcp_agent | >>> Closing MCP Session — port=43471
+2026-06-30 10:50:00 | ERROR    | sciparser | [User bb3a2f06-dfad-441d-888e-856c5c8f0423] Error closing MCP manager: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-30 10:50:00 | ERROR    | sciparser | [User bb3a2f06-dfad-441d-888e-856c5c8f0423] Error closing MCP manager: Attempted to exit cancel scope in a different task than it was entered in
+2026-06-30 10:50:00 | INFO     | sciparser | Session for user bb3a2f06-dfad-441d-888e-856c5c8f0423 fully cleaned up.
+2026-06-30 10:50:00 | INFO     | sciparser | Session for user bb3a2f06-dfad-441d-888e-856c5c8f0423 fully cleaned up.
+2026-06-30 10:50:04 | INFO     | sciparser | Creating/verifying database tables...
+2026-06-30 10:50:04 | INFO     | sciparser | Creating/verifying database tables...
+2026-06-30 10:50:04 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-30 10:50:04 | INFO     | sciparser | Database tables checked/created successfully.
+2026-06-30 10:50:04 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-30 10:50:04 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-06-30 10:50:04 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-06-30 10:50:04 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
