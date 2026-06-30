@@ -187,7 +187,8 @@ class Brain:
             img = img.resize((max_width, int(img.height * ratio)), Image.LANCZOS)
         buf = io.BytesIO()
         img.convert("RGB").save(buf, format="JPEG", quality=quality, optimize=True)
-        return base64.b64encode(buf.getvalue()).decode("utf-8")
+        b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+        return f"data:image/jpeg;base64,{b64}"
 
     async def _stream_browser_frames(self, user_id: str, chat_id: str, stop_event: asyncio.Event):
         """
