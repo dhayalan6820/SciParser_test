@@ -390,7 +390,7 @@ async def run_bridge() -> None:
             f"Bridge: Chrome pid={chrome_process.pid} started, waiting for CDP...",
             file=sys.stderr,
         )
-        cdp_ready = await _wait_for_cdp(port, timeout_secs=20)
+        cdp_ready = await _wait_for_cdp(port, timeout_secs=8)
         if not cdp_ready:
             print(
                 "Bridge: [Option 1] full Chromium failed (likely missing libs) "

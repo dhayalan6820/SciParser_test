@@ -147,7 +147,7 @@ class MCPToolManager:
         try:
             for server_name in self.config:
                 try:
-                    async with asyncio.timeout(30):
+                    async with asyncio.timeout(60):
                         session = await self.stack.enter_async_context(
                             self.client.session(server_name, auto_initialize=True)
                         )

@@ -1,5 +1,1 @@
-- [Browser screenshot architecture](browser-screenshot.md) — direct CDP Playwright beats MCP tools; MCP browser_screenshot always captured about:blank not the agent's active page
-- [Tool log delivery](tool-log-delivery.md) — tool logs must buffer in-memory and serve via HTTP polling; WebSocket-only delivery drops logs when WS not yet connected
-- [WS heartbeat pattern](ws-heartbeat-pattern.md) — Replit proxy kills idle browser/plan WebSockets in ~4 min; always add 20s ping + auto-reconnect
-- [FK guard for message save](fk-guard-message-save.md) — call get_or_create_chat_session right before INSERT message to handle old-thread restarts
-- [Replit WS frame size limit](replit-ws-frame-limit.md) — proxy silently drops WS messages >~64 KB; always compress screenshots to JPEG before sending
+- [Vite WebSocket proxy](vite-ws-proxy.md) — `ws: true` required in every Vite proxy rule that carries WS upgrades; omitting it silently drops upgrade requests.

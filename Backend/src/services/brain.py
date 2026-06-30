@@ -192,11 +192,16 @@ class Brain:
 
     async def _stream_browser_frames(self, user_id: str, chat_id: str, stop_event: asyncio.Event):
         """
-        Capture screenshots directly from Chrome via Playwright CDP — no MCP overhead.
-        Screenshots are compressed to JPEG 80%/1280 px before sending so they fit
-        within the Replit proxy WebSocket message size limit (~64 KB).
+        Capture screenshots from Chrome via raw CDP HTTP + WebSocket (aiohttp).
+
+        Replaces the old Playwright connect_over_cdp approach, which only saw
+        contexts created by the *same* Playwright session.  Raw CDP /json lists
+        ALL page targets regardless of which client created them, so we reliably
+        see pages opened by the bridge subprocess's browser-use agent.
         """
-        from playwright.async_api import async_playwright
+        import aiohttp
+        import json as json_lib
+        from urllib.parse import urlparse
 
         session_obj = self.session_manager.get_session(user_id)
         mcp_manager = session_obj.get("mcp_manager")
@@ -209,71 +214,101 @@ class Brain:
             logger.warning(f"No CDP URL for user {user_id}, live preview disabled.")
             return
 
-        logger.info(f"Starting direct CDP screenshot stream: user={user_id} chat={chat_id} cdp={cdp_url}")
+        parsed = urlparse(cdp_url)
+        host = parsed.hostname or "localhost"
+        port = parsed.port
+        json_endpoint = f"http://{host}:{port}/json"
 
-        pw = None
-        browser = None
-        last_page = None
-        try:
-            pw = await async_playwright().start()
-            browser = await pw.chromium.connect_over_cdp(cdp_url)
+        logger.info(f"Starting raw-CDP screenshot stream: user={user_id} chat={chat_id} port={port}")
 
-            while not stop_event.is_set():
-                try:
-                    page = None
-                    for ctx in browser.contexts:
-                        if ctx.pages:
-                            page = ctx.pages[-1]
+        msg_id_counter = [0]
 
-                    if page:
-                        last_page = page
-                        png_bytes = await page.screenshot(type="png", full_page=False)
-                        b64 = self._compress_screenshot(png_bytes)
-                        logger.info(
-                            f"Broadcasting browser frame for user {user_id}, "
-                            f"chat {chat_id}, length={len(b64)}"
-                        )
-                        if self.stream_manager:
-                            await self.stream_manager.broadcast_frame(
-                                {"chat_id": chat_id, "frame": b64}, user_id
-                            )
-                    else:
-                        logger.debug(f"No active page found for user {user_id}")
-                except Exception as e:
-                    logger.error(f"Error capturing direct CDP frame for user {user_id}: {e}")
-
-                # Sleep for up to 1.5 s, but wake immediately when stop_event fires
-                try:
-                    await asyncio.wait_for(stop_event.wait(), timeout=1.5)
-                    break  # stop_event set — exit loop right away
-                except asyncio.TimeoutError:
-                    pass  # normal inter-frame interval; keep looping
-
-            # --- Send one final frame so the panel shows the last browser state ---
+        async def _get_page_ws_url() -> Optional[str]:
+            """Return the WS debugger URL of the first available page target."""
             try:
-                if last_page and self.stream_manager:
-                    png_bytes = await last_page.screenshot(type="png", full_page=False)
-                    b64 = self._compress_screenshot(png_bytes)
-                    await self.stream_manager.broadcast_frame(
-                        {"chat_id": chat_id, "frame": b64}, user_id
-                    )
-                    logger.info(f"Sent final browser frame for user {user_id}")
-            except Exception as e:
-                logger.debug(f"Could not send final frame for user {user_id}: {e}")
+                async with aiohttp.ClientSession() as http:
+                    async with http.get(
+                        json_endpoint,
+                        timeout=aiohttp.ClientTimeout(total=3),
+                    ) as resp:
+                        targets = await resp.json(content_type=None)
+                for t in targets:
+                    if t.get("type") == "page" and t.get("webSocketDebuggerUrl"):
+                        return t["webSocketDebuggerUrl"]
+            except Exception as exc:
+                logger.debug(f"CDP /json failed for user {user_id}: {exc}")
+            return None
 
-        except Exception as e:
-            logger.error(f"Failed to start direct CDP Playwright for user {user_id}: {e}")
-        finally:
-            if browser:
-                try:
-                    await browser.close()
-                except Exception:
-                    pass
-            if pw:
-                try:
-                    await pw.stop()
-                except Exception:
-                    pass
+        async def _take_screenshot(ws_url: str) -> Optional[str]:
+            """Issue Page.captureScreenshot over CDP and return base64 JPEG string."""
+            msg_id_counter[0] += 1
+            mid = msg_id_counter[0]
+            cmd = json_lib.dumps({
+                "id": mid,
+                "method": "Page.captureScreenshot",
+                "params": {"format": "jpeg", "quality": 75, "captureBeyondViewport": False},
+            })
+            try:
+                async with aiohttp.ClientSession() as http:
+                    async with http.ws_connect(
+                        ws_url,
+                        timeout=aiohttp.ClientTimeout(total=8),
+                    ) as ws:
+                        await ws.send_str(cmd)
+                        async for msg in ws:
+                            if msg.type == aiohttp.WSMsgType.TEXT:
+                                data = json_lib.loads(msg.data)
+                                if data.get("id") == mid:
+                                    if "result" in data:
+                                        return data["result"].get("data")
+                                    logger.debug(f"CDP screenshot error: {data.get('error')}")
+                                    return None
+                            elif msg.type in (aiohttp.WSMsgType.ERROR, aiohttp.WSMsgType.CLOSE):
+                                break
+            except Exception as exc:
+                logger.debug(f"CDP screenshot WS failed for user {user_id}: {exc}")
+            return None
+
+        async def _broadcast_frame(b64: str):
+            # Ensure the frame has the data-URL prefix the frontend expects
+            if not b64.startswith("data:"):
+                b64 = f"data:image/jpeg;base64,{b64}"
+            logger.info(
+                f"Broadcasting browser frame: user={user_id} chat={chat_id} len={len(b64)}"
+            )
+            if self.stream_manager:
+                await self.stream_manager.broadcast_frame(
+                    {"chat_id": chat_id, "frame": b64}, user_id
+                )
+
+        # ── Main capture loop ─────────────────────────────────────────────────────
+        while not stop_event.is_set():
+            try:
+                ws_url = await _get_page_ws_url()
+                if ws_url:
+                    b64 = await _take_screenshot(ws_url)
+                    if b64:
+                        await _broadcast_frame(b64)
+                # If no page yet, silently wait and retry next tick
+            except Exception as exc:
+                logger.error(f"Error in raw-CDP frame capture for user {user_id}: {exc}")
+
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=1.5)
+                break
+            except asyncio.TimeoutError:
+                pass
+
+        # ── Final frame after task completes ─────────────────────────────────────
+        try:
+            ws_url = await _get_page_ws_url()
+            if ws_url:
+                b64 = await _take_screenshot(ws_url)
+                if b64:
+                    await _broadcast_frame(b64)
+                    logger.info(f"Sent final browser frame for user {user_id}")
+        except Exception as exc:
+            logger.debug(f"Could not send final frame for user {user_id}: {exc}")
 
     def _calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
         """Calculates the cost of an LLM call based on OpenRouter pricing (approximate)."""
@@ -703,12 +738,22 @@ class Brain:
             session_obj = self.session_manager.get_session(user_id)
             user_port = session_obj.get("port")
             
-            # 2. Initialize MCP manager ONLY if needed
+            # 2. Initialize MCP manager — create fresh if missing OR if previous init failed
+            existing_mgr = session_obj.get("mcp_manager")
+            if existing_mgr and not getattr(existing_mgr, "_initialized", False):
+                # Previous init failed — close the dead manager and replace it
+                logger.info(f"Replacing dead MCP manager for user {user_id} (prev _initialized=False)...")
+                try:
+                    await existing_mgr.close()
+                except Exception:
+                    pass
+                session_obj["mcp_manager"] = None
+
             if not session_obj.get("mcp_manager"):
                 logger.info(f"Preparing MCP manager for user {user_id}...")
-                cdp_url = session_obj.get("cdp_url")
-                session_obj["mcp_manager"] = MCPToolManager(port=user_port, cdp_url=cdp_url)
-            
+                # Always let MCPToolManager pick a fresh port so stale Chrome dirs never conflict
+                session_obj["mcp_manager"] = MCPToolManager()
+
             mcp_manager = session_obj["mcp_manager"]
             
             # 3. Discover tools ONCE outside the retry loop to save time

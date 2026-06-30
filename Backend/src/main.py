@@ -91,13 +91,17 @@ class PlanStreamManager:
         """Broadcasts a base64 CDP frame or tool log to all connected browser stream clients for a user."""
         if not is_tool:
             self.last_frame[user_id] = frame_data
+        conns = self.browser_connections.get(user_id, [])
+        if not is_tool:
+            logger.info(f"broadcast_frame: user={user_id[:8]} connections={len(conns)} frame_len={len(str(frame_data.get('frame','') if isinstance(frame_data, dict) else frame_data))}")
         if user_id in self.browser_connections:
             event_type = "tool_log" if is_tool else "frame"
             dead: list = []
             for connection in list(self.browser_connections[user_id]):
                 try:
                     await connection.send_json({"event": event_type, "data": frame_data})
-                except Exception:
+                except Exception as exc:
+                    logger.warning(f"broadcast_frame: send FAILED for user={user_id[:8]}: {exc}")
                     dead.append(connection)
             for conn in dead:
                 self.disconnect(user_id, conn, is_browser=True)
