@@ -1034,9 +1034,9 @@ class Brain:
                 session_obj["mcp_manager"] = None
 
             if not session_obj.get("mcp_manager"):
-                logger.info(f"Preparing MCP manager for user {user_id}...")
-                # Always let MCPToolManager pick a fresh port so stale Chrome dirs never conflict
-                session_obj["mcp_manager"] = MCPToolManager()
+                logger.info(f"Preparing MCP manager for user {user_id} on port {user_port}...")
+                ua_index = session_obj.get("ua_index", 0)
+                session_obj["mcp_manager"] = MCPToolManager(port=user_port, user_agent_index=ua_index)
 
             mcp_manager = session_obj["mcp_manager"]
             
@@ -1129,17 +1129,29 @@ class Brain:
                     logger.warning(f"Execution attempt {retry_count} failed: {last_error}")
                     
                     if retry_count < max_retries:
+                        await update_ui(1, "in-progress", details=f"Attempt {retry_count} failed. Resetting browser with new identity and retrying…")
+
+                        # --- Browser reset: close stale session, rotate user agent, reopen ---
+                        logger.info(f"[Retry] Closing browser for user {user_id} before retry {retry_count + 1}...")
+                        await self.session_manager.close_browser(user_id)
+
+                        # Rotate user agent for the fresh browser so the site sees a different client
+                        next_ua = (session_obj.get("ua_index", 0) + 1) % 5
+                        session_obj["ua_index"] = next_ua
+                        logger.info(f"[Retry] Starting fresh browser with user-agent index {next_ua}...")
+                        session_obj["mcp_manager"] = MCPToolManager(port=user_port, user_agent_index=next_ua)
+                        mcp_manager = session_obj["mcp_manager"]
+
+                        # Re-discover tools from the fresh session
+                        all_tools = await mcp_manager.get_tools()
+                        if self.search_tool:
+                            all_tools = list(all_tools) + [self.search_tool]
+
                         logger.info(f"Running Critic to revise strategy for attempt {retry_count + 1}...")
-                        # The critic will now receive the full context including the task summary and confirmed inputs
-                        # and the last message from the failed graph execution.
-                        # For simplicity, we'll pass the initial execution message and the error.
                         critic_input_message = f"The previous execution attempt failed with error: {last_error}. Please analyze the current page state and provide a refined strategy to achieve the goal: {task_summary}. Confirmed inputs: {json.dumps(confirmed_inputs)}"
                         revised_strategy = await self.atag_processor.run_critic(user_message, critic_input_message, last_error)
                         
-                        # The critic should return a REVISED PROMPT that the agent can use to restart.
-                        # For now, we'll assume it returns a string that can be used as the next HumanMessage content.
                         initial_execution_message = HumanMessage(content=revised_strategy)
-                        await update_ui(1, "in-progress", details=f"Attempt {retry_count} failed: {last_error[:50]}... Critic is revising strategy.")
                         await asyncio.sleep(2)
                     else:
                         logger.error(f"All {max_retries} attempts failed.")

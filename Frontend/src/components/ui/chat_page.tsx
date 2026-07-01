@@ -613,12 +613,22 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     return () => clearInterval(interval);
   }, [isAiTyping, activeThreadId]);
 
+  const MIN_TEXTAREA_H = 44;  // ~1 row
+  const MAX_TEXTAREA_H = 160; // ~4 rows
+
   const adjustHeight = () => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
-    }
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const clamped = Math.min(Math.max(el.scrollHeight, MIN_TEXTAREA_H), MAX_TEXTAREA_H);
+    el.style.height = `${clamped}px`;
+    el.style.overflowY = el.scrollHeight > MAX_TEXTAREA_H ? "auto" : "hidden";
   };
+
+  // Keep height in sync whenever value changes (covers programmatic clears too)
+  React.useEffect(() => {
+    adjustHeight();
+  }, [textareaValue]);
 
   const fetchUserProfile = async (token: string) => {
     try {
@@ -2385,10 +2395,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     ref={textareaRef}
                     rows={1}
                     value={textareaValue}
-                    onChange={(e) => {
-                      setTextareaValue(e.target.value);
-                      adjustHeight();
-                    }}
+                    onChange={(e) => setTextareaValue(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
@@ -2396,7 +2403,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                       }
                     }}
                     placeholder="Ask SciParser anything..."
-                    className="flex-1 max-h-48 resize-none bg-transparent border-none focus:outline-none text-sm py-2 px-1 text-[#E5E7EB] placeholder:text-[#6B7280]"
+                    style={{ minHeight: `${MIN_TEXTAREA_H}px`, maxHeight: `${MAX_TEXTAREA_H}px`, height: `${MIN_TEXTAREA_H}px`, overflowY: "hidden" }}
+                    className="w-full resize-none bg-transparent border-none focus:outline-none text-sm py-2 px-1 text-[#E5E7EB] placeholder:text-[#6B7280]"
                   />
                   <Button
                     onClick={() => handleSendMessage(textareaValue)}

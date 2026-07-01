@@ -46,6 +46,32 @@ async def _wait_for_cdp(port: int, timeout_secs: int = 90) -> bool:
 # Chrome subprocess launch
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# User-agent rotation pool
+# ---------------------------------------------------------------------------
+
+_USER_AGENTS = [
+    # Chrome on Windows (index 0 — default)
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    # Chrome on macOS
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    # Firefox on Windows
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
+    # Edge on Windows
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0",
+    # Chrome on Linux
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+]
+
+def _pick_user_agent() -> str:
+    """Return a user agent string selected by the BROWSER_USER_AGENT_INDEX env var."""
+    try:
+        idx = int(os.getenv("BROWSER_USER_AGENT_INDEX", "0"))
+    except (ValueError, TypeError):
+        idx = 0
+    return _USER_AGENTS[idx % len(_USER_AGENTS)]
+
+
 async def _launch_chrome(port: int, user_data_dir: str, headless: bool) -> asyncio.subprocess.Process:
     args = [
         CHROME_BINARY,
@@ -83,11 +109,7 @@ async def _launch_chrome(port: int, user_data_dir: str, headless: bool) -> async
         "--disable-sync",
         "--metrics-recording-only",
         "--safebrowsing-disable-auto-update",
-        (
-            "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/131.0.0.0 Safari/537.36"
-        ),
+        f"--user-agent={_pick_user_agent()}",
         f"--user-data-dir={user_data_dir}",
     ]
     if headless:
