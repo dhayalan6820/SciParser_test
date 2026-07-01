@@ -65,6 +65,24 @@ async def _launch_chrome(port: int, user_data_dir: str, headless: bool) -> async
         "--disable-default-apps",
         "--mute-audio",
         "--lang=en-US,en",
+        # --- Network / proxy fixes -------------------------------------------
+        # Bypass any transparent proxy Replit injects so Chrome connects directly
+        "--no-proxy-server",
+        # Don't fail on self-signed or mismatched TLS certs
+        "--ignore-certificate-errors",
+        "--ignore-ssl-errors",
+        "--ignore-certificate-errors-spki-list",
+        "--allow-running-insecure-content",
+        # Disable CORS enforcement (lets the agent access any origin)
+        "--disable-web-security",
+        "--allow-file-access-from-files",
+        # Suppress harmless dBus / sandbox noise in headless Linux
+        "--disable-dbus",
+        "--disable-background-networking",
+        "--disable-client-side-phishing-detection",
+        "--disable-sync",
+        "--metrics-recording-only",
+        "--safebrowsing-disable-auto-update",
         (
             "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "

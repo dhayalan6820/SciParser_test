@@ -111,6 +111,53 @@ class DatabaseManager:
                 raise
 
 
+def _sanitize_browser_observation(observation: Any, tool_call: Dict[str, Any]) -> Any:
+    """
+    Inspect a browser tool observation and replace raw HTML error pages
+    (e.g. Replit proxy "couldn't reach this app") with a clean, actionable
+    error string so the LLM never sees—or echoes back—the raw markup.
+    """
+    text = str(observation)
+
+    # Patterns that identify known error/proxy pages
+    is_html_page = (
+        re.search(r'<!DOCTYPE\s+html', text, re.IGNORECASE) or
+        re.search(r'<html[\s>]', text, re.IGNORECASE) or
+        ('<body' in text and '</html>' in text.lower())
+    )
+
+    if not is_html_page:
+        return observation
+
+    # Extract a short human-readable snippet from the HTML
+    snippet = re.sub(r'<[^>]+>', ' ', text)           # strip tags
+    snippet = re.sub(r'\s+', ' ', snippet).strip()[:200]
+
+    # Determine specific error kind
+    url_attempted = tool_call.get("args", {}).get("url", "")
+
+    if re.search(r"couldn't reach|couldn't reach|We couldn't reach", text, re.IGNORECASE):
+        reason = "Replit proxy blocked the request — this URL is unreachable inside the sandbox."
+    elif re.search(r'ERR_NAME_NOT_RESOLVED|ERR_CONNECTION_REFUSED|ERR_CONNECTION_TIMED_OUT', text):
+        reason = "DNS/connection error — the host could not be reached."
+    elif re.search(r'403\s+Forbidden|Access\s+Denied', text, re.IGNORECASE):
+        reason = "The server returned 403 Forbidden."
+    elif re.search(r'404\s+Not\s+Found', text, re.IGNORECASE):
+        reason = "The server returned 404 Not Found."
+    else:
+        reason = "The page returned unexpected HTML content instead of the expected data."
+
+    clean_error = (
+        f"[Navigation Error] {reason}"
+        + (f" URL attempted: {url_attempted}" if url_attempted else "")
+        + f" Page text: \"{snippet}\""
+        + " — Try a different URL or search for the correct address."
+    )
+
+    logger.warning(f"Browser observation sanitized for tool '{tool_call.get('name')}': {reason}")
+    return clean_error
+
+
 class Brain:
     """
     Orchestrates the Multi-Agent System (Agent 1, Agent 2, Agent 3) using LangGraph and LangChain.
@@ -357,6 +404,12 @@ class Brain:
                 5. **CRITICAL:** Do NOT close the browser or the current page. Keep the session active for further instructions.
                 6. **COMPLETION:** Once you have achieved the goal (e.g., you see the result, confirmation, or requested data on the page), STOP calling tools and provide the final result to the user. Do NOT repeat steps.
 
+                NAVIGATION RESTRICTIONS (IMPORTANT):
+                - NEVER navigate to localhost, 127.0.0.1, 0.0.0.0, or any internal/private IP address — these are not reachable from the browser.
+                - NEVER navigate to *.replit.dev, *.repl.co, *.replit.app, or any Replit-hosted preview URL — these will return a proxy error page.
+                - If a tool returns "[Navigation Error]", the URL is blocked or unreachable. Use web search to find an alternative public URL and try that instead.
+                - Always use full public URLs starting with https:// for external websites.
+
                 VISUAL SEARCH & DYNAMIC RECOVERY:
                 - **Diagnostic Mode:** If you take an action (like typing) and the UI does not change (e.g., button stays disabled), you MUST stop and diagnose.
                 - **Popups & Overlays Must Be Removed First (MANDATORY):**
@@ -482,6 +535,14 @@ class Brain:
                         
                         # 2. Execute the actual tool (Playwright or Tavily) SEQUENTIALLY
                         observation = await tool.ainvoke(tool_args)
+
+                        # --- Sanitize Replit proxy / network error pages ------
+                        # When Chrome navigates to an unreachable URL, Replit's
+                        # reverse-proxy serves its own HTML error page.  That raw
+                        # HTML must never reach the LLM as-is; replace it with a
+                        # clean, actionable error so the agent can recover.
+                        observation = _sanitize_browser_observation(observation, tool_call)
+
                     except Exception as e:
                         observation = f"Error executing tool: {str(e)}"
                 
