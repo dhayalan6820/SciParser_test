@@ -1302,6 +1302,58 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               </div>
             )}
 
+            {/* AI Response Stats (tokens · cost · time) */}
+            {!isUser && msg.plan && msg.plan.length > 0 && (() => {
+              const totalInput  = msg.plan.reduce((s: number, t: Task) => s + (t.token_usage?.input  ?? 0), 0);
+              const totalOutput = msg.plan.reduce((s: number, t: Task) => s + (t.token_usage?.output ?? 0), 0);
+              const totalCost   = msg.plan.reduce((s: number, t: Task) => s + ((t.token_usage as any)?.cost ?? 0), 0);
+              if (totalInput === 0 && totalOutput === 0) return null;
+
+              const fmtTokens = (n: number) =>
+                n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+
+              const msgIdx = messages.findIndex((m: ChatMessage) => m.id === msg.id);
+              let processingMs: number | null = null;
+              if (msgIdx > 0) {
+                const prevUser = [...messages].slice(0, msgIdx).reverse()
+                  .find((m: ChatMessage) => m.role === "user" || m.role === "human");
+                if (prevUser?.timestamp && msg.timestamp) {
+                  processingMs = new Date(msg.timestamp).getTime() - new Date(prevUser.timestamp).getTime();
+                }
+              }
+              const fmtTime = (ms: number) => {
+                if (ms < 60000) return `${Math.round(ms / 1000)}s`;
+                const m = Math.floor(ms / 60000);
+                const s = Math.round((ms % 60000) / 1000);
+                return s > 0 ? `${m}m ${s}s` : `${m}m`;
+              };
+
+              return (
+                <div className="flex items-center gap-3 flex-wrap mt-0.5 px-1">
+                  {processingMs !== null && processingMs > 0 && (
+                    <div className="flex items-center gap-1 text-[10px] text-[#6B7280]">
+                      <Clock className="w-3 h-3 text-[#4B5563]" />
+                      <span>{fmtTime(processingMs)}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1 text-[10px] text-[#6B7280]">
+                    <span className="text-[#374151]">↑</span>
+                    <span>{fmtTokens(totalInput)}</span>
+                    <span className="text-[#374151] mx-0.5">/</span>
+                    <span className="text-[#374151]">↓</span>
+                    <span>{fmtTokens(totalOutput)}</span>
+                    <span className="text-[#4B5563] ml-0.5">tok</span>
+                  </div>
+                  {totalCost > 0 && (
+                    <div className="flex items-center gap-1 text-[10px] text-[#6B7280]">
+                      <span className="text-[#374151]">$</span>
+                      <span>{totalCost < 0.001 ? totalCost.toExponential(1) : totalCost.toFixed(4)}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Timestamp & Actions */}
             <div
               className={cn(

@@ -749,6 +749,7 @@ class Brain:
                     "total": usage.get("total_tokens", 0)
                 }
                 cost = self._calculate_cost(self.llm.model_name, token_usage["input"], token_usage["output"])
+                token_usage["cost"] = cost
 
             # Broadcast thinking to UI
             if response.content:
