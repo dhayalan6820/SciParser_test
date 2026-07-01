@@ -411,6 +411,8 @@ class Brain:
         self.checkpointer = MemorySaver()
         self.active_tasks: Dict[str, asyncio.Task] = {}
         self.active_plans: Dict[str, List[Dict]] = {}
+        # Cooperative cancellation: chat_ids explicitly stopped by the user
+        self.cancelled_chats: set = set()
         # In-memory tool log buffer: chat_id → list of tool events (capped at 200)
         self.tool_log_buffer: Dict[str, List[Dict]] = {}
 
@@ -873,6 +875,9 @@ class Brain:
 
     async def stop_process(self, chat_id: str, user_id: str = None):
         """Stops an active agent process and closes the browser (without destroying the session)."""
+        # Mark as cancelled so process_message exits at its next checkpoint
+        self.cancelled_chats.add(chat_id)
+
         task = self.active_tasks.get(chat_id)
         if task:
             task.cancel()
@@ -881,10 +886,14 @@ class Brain:
 
             # Close the browser process but keep the session alive for reuse
             if user_id:
-                await self.session_manager.close_browser(user_id)
-                logger.info(f"Browser closed for user {user_id} via stop_process.")
+                try:
+                    await self.session_manager.close_browser(user_id)
+                    logger.info(f"Browser closed for user {user_id} via stop_process.")
+                except Exception as e:
+                    logger.warning(f"Browser close error during stop: {e}")
 
             return True
+        # Even if no active task found, flag was set (guards stale tasks)
         return False
 
     async def process_message(self, user_id: str, user_message: str, chat_id: str) -> Dict[str, Any]:
@@ -1053,6 +1062,12 @@ class Brain:
             stream_task = asyncio.create_task(self._stream_browser_frames(user_id, chat_id, stop_stream))
 
             while retry_count < max_retries:
+                # --- Cooperative cancellation: exit cleanly if user pressed Stop ---
+                if chat_id in self.cancelled_chats:
+                    self.cancelled_chats.discard(chat_id)
+                    logger.info(f"[Cooperative cancel] Exiting process loop for chat_id {chat_id}")
+                    return {"success": False, "message": "Process stopped by user."}
+
                 try:
                     await update_ui(1, "in-progress", input_data={"task_summary": task_summary, "confirmed_inputs": confirmed_inputs, "retry": retry_count})
                     

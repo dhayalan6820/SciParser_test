@@ -212,30 +212,15 @@ async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db), current_use
             error_msg = result.get("message") or result.get("error") or "Unknown error"
             raise HTTPException(status_code=500, detail=error_msg)
     except asyncio.CancelledError:
-        # Save the cancellation message to DB so it persists on reload
-        ai_msg_id = str(uuid.uuid4())
-        async with AsyncSessionLocal() as db:
-            # CRITICAL: Ensure the session exists before adding a message to it
-            # (In case the process was stopped before the session was created in brain.py)
-            await brain.db_manager.get_or_create_chat_session(current_user.user_id, chat_id)
-            
-            ai_msg = Message(
-                message_id=ai_msg_id,
-                chat_id=chat_id,
-                user_id=current_user.user_id,
-                role="ai",
-                content="Process stopped by user.",
-                plan_data=json.dumps([]),
-                created_at=datetime.now(timezone.utc)
-            )
-            db.add(ai_msg)
-            await db.commit()
-
+        # The /chat/stop endpoint already persisted "⛔ Process stopped by user." to DB
+        # the moment the user pressed Stop, so we don't need to write it again here.
+        # Just return a lightweight response so the HTTP request resolves cleanly.
+        logger.info(f"Task for chat_id {chat_id} unwound via CancelledError (stop message already in DB)")
         return {
             "message": {
-                "id": ai_msg_id,
+                "id": str(uuid.uuid4()),
                 "role": "ai",
-                "content": "Process stopped by user.",
+                "content": "⛔ Process stopped by user.",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "plan": [],
                 "log_id": str(uuid.uuid4())
@@ -284,7 +269,29 @@ async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db), current_use
 @app.post("/sciparser/v1/chat/stop")
 async def stop_chat_process(chat_id: str = Query(...), current_user: User = Depends(ChatService.get_current_user)):
     stopped = await brain.stop_process(chat_id, user_id=current_user.user_id)
-    return {"status": "success" if stopped else "not_found"}
+
+    # Persist the stopped message to DB immediately so it survives a page refresh,
+    # regardless of whether the background task has fully unwound yet.
+    ai_msg_id = str(uuid.uuid4())
+    try:
+        async with AsyncSessionLocal() as db:
+            await brain.db_manager.get_or_create_chat_session(current_user.user_id, chat_id)
+            ai_msg = Message(
+                message_id=ai_msg_id,
+                chat_id=chat_id,
+                user_id=current_user.user_id,
+                role="ai",
+                content="⛔ Process stopped by user.",
+                plan_data=json.dumps([]),
+                created_at=datetime.now(timezone.utc)
+            )
+            db.add(ai_msg)
+            await db.commit()
+        logger.info(f"Stop message persisted to DB for chat_id {chat_id}")
+    except Exception as e:
+        logger.warning(f"Could not persist stop message for {chat_id}: {e}")
+
+    return {"status": "success" if stopped else "not_found", "message_id": ai_msg_id}
 
 @app.get("/sciparser/v1/chat/sessions")
 async def get_sessions(db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_user)):
