@@ -68,6 +68,8 @@ Think freely and naturally in plain language before every action. Describe what 
 
 This reasoning is shown to the user in real time, so keep it friendly and informative.
 
+**CRITICAL — Action Commitment Rule:** If you decide to take an action, you MUST call the tool in the SAME response. Never write phrases like "I will now X", "Next I will X", "I am going to X", or "Let me now X" without including the actual tool call for X in that very response. Writing about a future action without executing it causes the task to end immediately with no result. Think → decide → call the tool, all in one turn.
+
 ---
 
 ## 5. OBSERVATION RULES
@@ -659,7 +661,24 @@ class Brain:
                 logger.info("Conversation history summarized and compressed.")
 
             response = await llm_with_tools.ainvoke(current_messages)
-            
+
+            # Guard: if the model wrote a pending-action statement but produced no tool call,
+            # re-invoke once with a nudge so the graph doesn't terminate prematurely.
+            if not response.tool_calls and response.content:
+                _pending_patterns = [
+                    r"\bI will now\b", r"\bI'll now\b", r"\bI am going to\b",
+                    r"\bI'm going to\b", r"\bLet me now\b", r"\bNext[,\s]+I will\b",
+                    r"\bI should now\b", r"\bI need to\b", r"\bI'll select\b",
+                    r"\bI'll click\b", r"\bI'll type\b", r"\bI'll navigate\b",
+                ]
+                if any(re.search(p, response.content, re.IGNORECASE) for p in _pending_patterns):
+                    logger.info("Detected incomplete-action response (no tool call). Re-invoking with nudge.")
+                    _nudge = HumanMessage(
+                        content="You described an action you intend to take but did not call any tool. "
+                                "Please call the appropriate browser tool NOW to execute that action."
+                    )
+                    response = await llm_with_tools.ainvoke(current_messages + [response, _nudge])
+
             # Capture token usage and cost
             token_usage = {}
             cost = 0.0
