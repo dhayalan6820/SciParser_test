@@ -410,6 +410,36 @@ class Brain:
                 - If a tool returns "[Navigation Error]", the URL is blocked or unreachable. Use web search to find an alternative public URL and try that instead.
                 - Always use full public URLs starting with https:// for external websites.
 
+                HUMAN-LIKE INTERACTION PROTOCOL (MANDATORY — follow this exact sequence):
+
+                TYPING into any input field:
+                  1. browser_click the field first (focus it)
+                  2. browser_type the text
+                  3. browser_wait 700ms  ← wait for autocomplete/validation to trigger
+                  4. If an autocomplete dropdown appeared → browser_click the correct suggestion
+                  5. browser_wait 300ms  ← wait for selection to register
+                  6. Find and browser_click the SUBMIT/GO/SEARCH button  — OR —  browser_key_press "Enter"
+                  CRITICAL: NEVER stop after step 4. Always complete step 6 to submit.
+
+                ADDRESS / LOCATION FIELDS specifically:
+                  - After clicking an autocomplete address suggestion, the address populates the field.
+                  - You MUST then find the submit/search/GO/arrow button next to the field and click it.
+                  - If no button is visible, press browser_key_press "Enter" to submit.
+                  - Confirm submission by calling browser_get_state and checking the result page.
+
+                FORM SUBMISSION rules:
+                  - After filling ALL fields in a form, always click the submit button explicitly.
+                  - If a button stays disabled after filling fields, try Tab-to-next-field with browser_key_press "Tab", then try again.
+                  - Use browser_key_press "Enter" as fallback when no submit button is clickable.
+
+                HOVER before important clicks:
+                  - For any submit/CTA button: first browser_hover at its coordinates, wait 200ms, then browser_click.
+                  - This triggers hover CSS effects and ensures the element is interactive before clicking.
+
+                SCROLLING:
+                  - Before clicking any element that may be below the fold, browser_scroll down first.
+                  - After navigating to a new page, browser_get_state before any action.
+
                 VISUAL SEARCH & DYNAMIC RECOVERY:
                 - **Diagnostic Mode:** If you take an action (like typing) and the UI does not change (e.g., button stays disabled), you MUST stop and diagnose.
                 - **Popups & Overlays Must Be Removed First (MANDATORY):**

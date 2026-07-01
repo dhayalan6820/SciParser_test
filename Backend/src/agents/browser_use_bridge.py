@@ -222,6 +222,263 @@ def _patch_mcp_server_session_retry(chrome_ready: asyncio.Event, cdp_url: str, h
 
 
 # ---------------------------------------------------------------------------
+# Patch: add human-like interaction tools
+# (browser_key_press, browser_hover, browser_wait, browser_drag)
+# ---------------------------------------------------------------------------
+
+def _patch_add_human_tools() -> None:
+    """
+    Extend the browser-use MCP server with four missing human-interaction tools:
+      browser_key_press  — keyboard key / combo (Enter, Tab, ArrowDown, …)
+      browser_hover      — move mouse to element or coords without clicking
+      browser_wait       — sleep N milliseconds (wait for autocomplete / animations)
+      browser_drag       — click-drag from one position to another
+
+    Strategy
+    --------
+    1.  Monkey-patch BrowserUseServer._execute_tool so the new tool names are routed
+        to our implementations.
+    2.  Monkey-patch BrowserUseServer._setup_handlers so that after the original
+        handler runs we replace the MCP Server's ListToolsRequest handler with one
+        that appends the new tool schemas — that way langchain_mcp_adapters picks
+        them up when it calls list_tools().
+    """
+    try:
+        from browser_use.mcp.server import BrowserUseServer
+        import mcp.types as mcp_types
+    except ImportError as e:
+        print(f"Bridge: import error — skipping human-tools patch: {e}", file=sys.stderr)
+        return
+
+    # ── Tool schema definitions ────────────────────────────────────────────
+    NEW_TOOL_SCHEMAS = [
+        mcp_types.Tool(
+            name="browser_key_press",
+            description=(
+                "Press a keyboard key or combination on the currently focused element. "
+                "Use this to: submit forms (Enter), move between fields (Tab), "
+                "close dialogs (Escape), navigate autocomplete dropdowns (ArrowDown/ArrowUp). "
+                "Always call this after browser_type or after clicking an autocomplete suggestion "
+                "to make sure the form is actually submitted. "
+                "Examples: 'Enter', 'Tab', 'Escape', 'ArrowDown', 'ArrowUp', "
+                "'Control+A', 'Control+C', 'Backspace', 'Delete'."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "description": (
+                            "Key name. Single: Enter, Tab, Escape, Backspace, Delete, Space, "
+                            "ArrowDown, ArrowUp, ArrowLeft, ArrowRight, Home, End, PageDown, PageUp. "
+                            "Combinations: Control+A, Control+C, Control+V, Shift+Enter, Shift+Tab."
+                        ),
+                    }
+                },
+                "required": ["key"],
+            },
+        ),
+        mcp_types.Tool(
+            name="browser_hover",
+            description=(
+                "Move the mouse cursor to an element or pixel coordinates WITHOUT clicking. "
+                "Use to: reveal hover-only menus/tooltips, pre-position cursor before drag, "
+                "or trigger CSS :hover effects that reveal a submit button."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "coordinate_x": {
+                        "type": "integer",
+                        "description": "X pixel coordinate (use with coordinate_y). Provide this OR index.",
+                    },
+                    "coordinate_y": {
+                        "type": "integer",
+                        "description": "Y pixel coordinate (use with coordinate_x).",
+                    },
+                    "index": {
+                        "type": "integer",
+                        "description": "Element index from browser_get_state. Provide this OR coordinate_x+coordinate_y.",
+                    },
+                },
+            },
+        ),
+        mcp_types.Tool(
+            name="browser_wait",
+            description=(
+                "Pause execution for a specified number of milliseconds. "
+                "Use after browser_type to let autocomplete suggestions load (300–800 ms), "
+                "or after a click to wait for animations/page transitions (500–1500 ms)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "milliseconds": {
+                        "type": "integer",
+                        "description": "Milliseconds to wait. Range 50–8000. Typical: 500 (animation), 800 (autocomplete).",
+                        "default": 500,
+                    }
+                },
+            },
+        ),
+        mcp_types.Tool(
+            name="browser_drag",
+            description=(
+                "Click-and-drag from one set of pixel coordinates to another. "
+                "Use for sliders, range inputs, drag-to-reorder lists, and drawing."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "from_x": {"type": "integer", "description": "Starting X coordinate."},
+                    "from_y": {"type": "integer", "description": "Starting Y coordinate."},
+                    "to_x": {"type": "integer", "description": "Ending X coordinate."},
+                    "to_y": {"type": "integer", "description": "Ending Y coordinate."},
+                    "steps": {
+                        "type": "integer",
+                        "description": "Number of intermediate mouse-move steps (smoother = more steps). Default 15.",
+                        "default": 15,
+                    },
+                },
+                "required": ["from_x", "from_y", "to_x", "to_y"],
+            },
+        ),
+    ]
+
+    # ── Tool implementations ───────────────────────────────────────────────
+
+    async def _exec_key_press(srv, args: dict) -> str:
+        if not srv.browser_session:
+            return "Error: No browser session active"
+        key = str(args.get("key", "Enter"))
+        try:
+            page = await srv.browser_session.get_current_page()
+            if page is None:
+                return "Error: No active page"
+            await page.press(key)
+            return f"Pressed key: {key}"
+        except Exception as exc:
+            return f"Error pressing key '{key}': {exc}"
+
+    async def _exec_hover(srv, args: dict) -> str:
+        if not srv.browser_session:
+            return "Error: No browser session active"
+        cx = args.get("coordinate_x")
+        cy = args.get("coordinate_y")
+        idx = args.get("index")
+        try:
+            page = await srv.browser_session.get_current_page()
+            if page is None:
+                return "Error: No active page"
+            mouse = await page.mouse()
+
+            if cx is not None and cy is not None:
+                await mouse.move(int(cx), int(cy))
+                return f"Hovered at ({cx}, {cy})"
+
+            if idx is not None:
+                element = await srv.browser_session.get_dom_element_by_index(idx)
+                if not element:
+                    return f"Error: Element {idx} not found"
+                # Try common coordinate attributes on DOMElementNode
+                coords = (
+                    getattr(element, "viewport_coordinates", None)
+                    or getattr(element, "center", None)
+                )
+                if coords is not None:
+                    if hasattr(coords, "x"):
+                        x, y = int(coords.x), int(coords.y)
+                    elif hasattr(coords, "__iter__"):
+                        x, y = int(coords[0]), int(coords[1])
+                    else:
+                        return f"Error: Cannot read coordinates for element {idx}"
+                    await mouse.move(x, y)
+                    return f"Hovered over element {idx} at ({x}, {y})"
+                return f"Error: Cannot determine coordinates for element {idx}"
+
+            return "Error: Provide index or coordinate_x+coordinate_y"
+        except Exception as exc:
+            return f"Error hovering: {exc}"
+
+    async def _exec_wait(srv, args: dict) -> str:
+        ms = max(50, min(8000, int(args.get("milliseconds", 500))))
+        await asyncio.sleep(ms / 1000.0)
+        return f"Waited {ms} ms"
+
+    async def _exec_drag(srv, args: dict) -> str:
+        if not srv.browser_session:
+            return "Error: No browser session active"
+        fx, fy = int(args["from_x"]), int(args["from_y"])
+        tx, ty = int(args["to_x"]),   int(args["to_y"])
+        steps = max(5, min(50, int(args.get("steps", 15))))
+        try:
+            page = await srv.browser_session.get_current_page()
+            if page is None:
+                return "Error: No active page"
+            mouse = await page.mouse()
+            await mouse.move(fx, fy)
+            await asyncio.sleep(0.08)
+            await mouse.down()
+            await asyncio.sleep(0.05)
+            for i in range(1, steps + 1):
+                ix = int(fx + (tx - fx) * i / steps)
+                iy = int(fy + (ty - fy) * i / steps)
+                await mouse.move(ix, iy)
+                await asyncio.sleep(0.02)
+            await mouse.up()
+            return f"Dragged from ({fx}, {fy}) to ({tx}, {ty})"
+        except Exception as exc:
+            return f"Error dragging: {exc}"
+
+    # ── Patch 1: _execute_tool routing ────────────────────────────────────
+    _orig_execute = BrowserUseServer._execute_tool
+
+    async def _patched_execute_tool(self, tool_name: str, arguments: dict):
+        if tool_name == "browser_key_press":
+            return await _exec_key_press(self, arguments)
+        if tool_name == "browser_hover":
+            return await _exec_hover(self, arguments)
+        if tool_name == "browser_wait":
+            return await _exec_wait(self, arguments)
+        if tool_name == "browser_drag":
+            return await _exec_drag(self, arguments)
+        return await _orig_execute(self, tool_name, arguments)
+
+    BrowserUseServer._execute_tool = _patched_execute_tool  # type: ignore[method-assign]
+
+    # ── Patch 2: _setup_handlers — extend list_tools response ────────────
+    _orig_setup = BrowserUseServer._setup_handlers
+
+    def _patched_setup_handlers(self):
+        _orig_setup(self)
+        # The MCP Server stores handlers in self.server.request_handlers keyed by
+        # the request type class.  We replace the ListToolsRequest handler with a
+        # wrapper that appends our new schemas to whatever the original returned.
+        try:
+            ListToolsRequest = mcp_types.ListToolsRequest
+            ListToolsResult  = mcp_types.ListToolsResult
+            orig_lt = self.server.request_handlers.get(ListToolsRequest)
+            if orig_lt is None:
+                return
+
+            async def _extended_list_tools(req):
+                result = await orig_lt(req)
+                if isinstance(result, ListToolsResult):
+                    result.tools = list(result.tools) + NEW_TOOL_SCHEMAS
+                return result
+
+            self.server.request_handlers[ListToolsRequest] = _extended_list_tools
+        except Exception as exc:
+            print(f"Bridge: list_tools extend failed: {exc}", file=sys.stderr)
+
+    BrowserUseServer._setup_handlers = _patched_setup_handlers  # type: ignore[method-assign]
+    print(
+        "Bridge: human-tools patched — browser_key_press, browser_hover, browser_wait, browser_drag",
+        file=sys.stderr,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main bridge coroutine
 # ---------------------------------------------------------------------------
 
@@ -308,6 +565,7 @@ async def run_bridge():
 
     # -- Apply patches --------------------------------------------------------
     _patch_mcp_server_session_retry(chrome_ready, cdp_url, headless)
+    _patch_add_human_tools()  # adds browser_key_press / browser_hover / browser_wait / browser_drag
 
     # -- Start browser-use MCP server (blocking) ------------------------------
     try:
