@@ -3,7 +3,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import (
-    TIMESTAMP, BigInteger, Column, ForeignKey, Float, Integer, String, Text, DateTime
+    TIMESTAMP, BigInteger, Column, ForeignKey, Float, Index, Integer, String, Text, DateTime
 )
 
 from sqlalchemy.orm import Mapped, declarative_base, relationship
@@ -228,6 +228,10 @@ class MemoryEpisodic(Base):
     last_accessed = Column(TIMESTAMP(timezone=True), nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
 
+    __table_args__ = (
+        Index("ix_memory_episodic_user_confidence", "user_id", "confidence_score"),
+    )
+
 
 class MemorySemantic(Base):
     """Factual knowledge about a domain (selectors, URLs, bot-detection quirks)."""
@@ -243,6 +247,10 @@ class MemorySemantic(Base):
     access_count = Column(Integer, default=0)
     last_validated = Column(TIMESTAMP(timezone=True), nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        Index("ix_memory_semantic_user_confidence", "user_id", "confidence_score"),
+    )
 
 
 class MemoryProcedural(Base):

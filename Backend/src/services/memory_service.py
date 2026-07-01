@@ -1,10 +1,10 @@
 import json
 import uuid
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 
-from sqlalchemy import select, and_, or_
+from sqlalchemy import delete, select, and_, or_
 
 from src.database.chat_db import (
     AsyncSessionLocal,
@@ -56,6 +56,12 @@ class MemoryContext:
                 lines.append(f"  - [{r['severity']}][{r['category']}] {r['lesson']}")
 
         return "\n".join(lines)
+
+
+_DECAY_LAST_RUN: Dict[str, datetime] = {}
+_DECAY_INTERVAL = timedelta(hours=6)
+_DECAY_STALE_DAYS = 7
+_DECAY_DELETE_THRESHOLD = 0.05
 
 
 class MemoryService:
@@ -350,27 +356,84 @@ class MemoryService:
     # ── decay ────────────────────────────────────────────────────────────────
 
     async def apply_decay(self, user_id: str):
-        """Reduce confidence of memories that haven't been accessed recently."""
+        """Reduce confidence of stale memories and hard-delete near-zero rows.
+
+        Rate-limited to at most once per 6 hours per user.  Only rows whose
+        last-access / last-validated timestamp is older than _DECAY_STALE_DAYS
+        are touched, so freshly-used rows are never loaded unnecessarily.
+        Rows that fall below _DECAY_DELETE_THRESHOLD are deleted outright.
+        """
         now = datetime.now(timezone.utc)
+
+        last_run = _DECAY_LAST_RUN.get(user_id)
+        if last_run and (now - last_run) < _DECAY_INTERVAL:
+            logger.debug(f"[Memory] apply_decay skipped for {user_id} (ran {now - last_run} ago)")
+            return
+
+        _DECAY_LAST_RUN[user_id] = now
+        stale_cutoff = now - timedelta(days=_DECAY_STALE_DAYS)
+
         try:
             async with AsyncSessionLocal() as db:
-                for row in (await db.execute(
-                    select(MemoryEpisodic).where(MemoryEpisodic.user_id == user_id)
-                )).scalars().all():
+                ep_rows = (await db.execute(
+                    select(MemoryEpisodic).where(and_(
+                        MemoryEpisodic.user_id == user_id,
+                        or_(
+                            MemoryEpisodic.last_accessed < stale_cutoff,
+                            and_(
+                                MemoryEpisodic.last_accessed.is_(None),
+                                MemoryEpisodic.created_at < stale_cutoff,
+                            ),
+                        ),
+                    ))
+                )).scalars().all()
+
+                for row in ep_rows:
                     ref = row.last_accessed or row.created_at
                     if ref:
-                        weeks = max(0, (now - ref.replace(tzinfo=timezone.utc) if ref.tzinfo is None else now - ref).days / 7)
+                        ref = ref.replace(tzinfo=timezone.utc) if ref.tzinfo is None else ref
+                        weeks = max(0, (now - ref).days / 7)
                         row.confidence_score = max(0.0, (row.confidence_score or 1.0) - 0.03 * weeks)
 
-                for row in (await db.execute(
-                    select(MemorySemantic).where(MemorySemantic.user_id == user_id)
-                )).scalars().all():
+                await db.execute(
+                    delete(MemoryEpisodic).where(and_(
+                        MemoryEpisodic.user_id == user_id,
+                        MemoryEpisodic.confidence_score < _DECAY_DELETE_THRESHOLD,
+                    ))
+                )
+
+                sem_rows = (await db.execute(
+                    select(MemorySemantic).where(and_(
+                        MemorySemantic.user_id == user_id,
+                        or_(
+                            MemorySemantic.last_validated < stale_cutoff,
+                            and_(
+                                MemorySemantic.last_validated.is_(None),
+                                MemorySemantic.created_at < stale_cutoff,
+                            ),
+                        ),
+                    ))
+                )).scalars().all()
+
+                for row in sem_rows:
                     ref = row.last_validated or row.created_at
                     if ref:
-                        weeks = max(0, (now - ref.replace(tzinfo=timezone.utc) if ref.tzinfo is None else now - ref).days / 7)
+                        ref = ref.replace(tzinfo=timezone.utc) if ref.tzinfo is None else ref
+                        weeks = max(0, (now - ref).days / 7)
                         row.confidence_score = max(0.0, (row.confidence_score or 1.0) - 0.03 * weeks)
 
+                await db.execute(
+                    delete(MemorySemantic).where(and_(
+                        MemorySemantic.user_id == user_id,
+                        MemorySemantic.confidence_score < _DECAY_DELETE_THRESHOLD,
+                    ))
+                )
+
                 await db.commit()
+                logger.debug(
+                    f"[Memory] apply_decay done for {user_id}: "
+                    f"processed {len(ep_rows)} episodic, {len(sem_rows)} semantic stale rows"
+                )
         except Exception as e:
             logger.error(f"[Memory] apply_decay error: {e}")
 
