@@ -753,6 +753,38 @@ async def websocket_schedule_endpoint(
     except Exception as e:
         logger.error(f"Schedule stream error: {e}")
 
+# ─────────────────────────────────────────────────────────────────────────────
+#  COGNITIVE MEMORY API
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/memory/episodes")
+async def get_memory_episodes(
+    domain: Optional[str] = Query(None, description="Filter by domain, e.g. 'zillow.com'"),
+    limit: int = Query(20, ge=1, le=100),
+    token: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_token_user(token, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if not brain.memory_service:
+        return []
+    return await brain.memory_service.get_recent_episodes(str(user.id), domain=domain, limit=limit)
+
+
+@app.get("/memory/skills")
+async def get_memory_skills(
+    token: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_token_user(token, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if not brain.memory_service:
+        return []
+    return await brain.memory_service.get_all_skills(str(user.id))
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

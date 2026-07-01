@@ -28,6 +28,7 @@ from src.database.chat_db import AsyncSessionLocal, Message, ChatSession, AgentE
 from src.utils.logger import logger
 from src.agents.mcp_agent import MCPToolManager
 from src.utils.session_manager import SessionManager
+from src.services.memory_service import MemoryService
 
 # ATAG Models
 from src.services.ATAG import (
@@ -264,6 +265,26 @@ Adapt your plan as the browser state changes. Prior assumptions may be invalidat
 """
 
 
+def _detect_captcha(observation_text: str) -> Optional[str]:
+    """Return CAPTCHA type string if a known CAPTCHA signal is present, else None."""
+    t = observation_text.lower()
+    if 'recaptcha' in t or 'g-recaptcha' in t:
+        if 'v3' in t or 'invisible' in t:
+            return 'recaptcha_v3'
+        return 'recaptcha_v2'
+    if 'hcaptcha' in t or 'h-captcha' in t:
+        return 'hcaptcha'
+    if 'cf-turnstile' in t or ('cloudflare' in t and 'challenge' in t):
+        return 'cloudflare_turnstile'
+    if 'slider' in t and ('captcha' in t or 'drag' in t or 'verify' in t):
+        return 'slider'
+    if ('captcha' in t or 'verification code' in t) and (
+        'type' in t or 'enter' in t or 'characters' in t
+    ):
+        return 'image_text'
+    return None
+
+
 class DatabaseManager:
     """Manages transaction-scoped database operations securely to prevent locking connection pools."""
     
@@ -415,6 +436,8 @@ class Brain:
         self.cancelled_chats: set = set()
         # In-memory tool log buffer: chat_id → list of tool events (capped at 200)
         self.tool_log_buffer: Dict[str, List[Dict]] = {}
+        # Cognitive memory service (initialized after LLM is ready)
+        self.memory_service: Optional[MemoryService] = None
 
     def buffer_tool_event(self, chat_id: str, event: Dict[str, Any]):
         """Append a tool event to the in-memory buffer (max 200 per chat)."""
@@ -462,7 +485,11 @@ class Brain:
         self.search_tool = TavilySearch(max_results=3)
         self.atag_processor = ATAGProcessor(self.llm)
         self.code_processor = ATAGProcessor(self.code_llm, tavily_api_key=os.getenv("TAVILY_API_KEY"))
-        
+
+        # Cognitive memory service
+        self.memory_service = MemoryService(llm=self.llm)
+        await self.memory_service.seed_captcha_skills()
+
         self.initialized = True
         logger.info("Multi-agent orchestrator initialization complete.")
 
@@ -599,6 +626,16 @@ class Brain:
         except Exception as exc:
             logger.debug(f"Could not send final frame for user {user_id}: {exc}")
 
+    def _extract_domain_from_task(self, user_message: str, confirmed_inputs: Dict[str, Any]) -> str:
+        """Extract primary domain from confirmed inputs or raw message."""
+        # Try confirmed inputs first
+        for key in ("website", "url", "site"):
+            val = confirmed_inputs.get(key, "")
+            if val:
+                return MemoryService.extract_domain(str(val))
+        # Fall back to scanning the user message for a URL/domain
+        return MemoryService.extract_domain(user_message)
+
     def _calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
         """Calculates the cost of an LLM call based on OpenRouter pricing (approximate)."""
         # Pricing per 1M tokens (approximate for Gemini 3 Flash Preview)
@@ -612,7 +649,7 @@ class Brain:
         cost = (input_tokens / 1_000_000 * p["input"]) + (output_tokens / 1_000_000 * p["output"])
         return round(cost, 6)
 
-    async def _execute_tool_graph(self, graph_input: Dict[str, Any], tools: List[BaseTool], user_id: str, chat_id: str, task_summary: str, confirmed_inputs: Dict[str, Any], update_ui_func=None) -> Dict[str, Any]:
+    async def _execute_tool_graph(self, graph_input: Dict[str, Any], tools: List[BaseTool], user_id: str, chat_id: str, task_summary: str, confirmed_inputs: Dict[str, Any], update_ui_func=None, memory_block: str = "") -> Dict[str, Any]:
         """Executes a LangGraph tool-calling graph for the given input and tools."""
         
         # Bind tools to the LLM
@@ -637,7 +674,9 @@ class Brain:
                     status_text = "SUCCESS" if entry["status"] == "SUCCESS" else "FAILED"
                     memory_summary += f"- {status_text} {entry['tool']}: {entry['result'][:100]}...\n"
 
+            memory_prefix = f"{memory_block}\n\n---\n\n" if memory_block else ""
             dynamic_context = (
+                f"{memory_prefix}"
                 f"TASK: {task_summary}\n"
                 f"CONFIRMED INPUTS: {json.dumps(confirmed_inputs)}"
                 f"{memory_summary}"
@@ -769,6 +808,29 @@ class Brain:
 
                     except Exception as e:
                         observation = f"Error executing tool: {str(e)}"
+
+                # ── CAPTCHA detection (runs after try/except, observation always set) ──
+                try:
+                    _captcha_type = _detect_captcha(str(observation))
+                    if _captcha_type and self.memory_service:
+                        _skill = await self.memory_service.get_captcha_skill(user_id, _captcha_type)
+                        if _skill:
+                            _steps_txt = json.dumps(_skill.get("steps", []), indent=2)[:1200]
+                            _captcha_note = (
+                                f"\n\n[CAPTCHA_DETECTED: {_captcha_type}]\n"
+                                f"A {_captcha_type} CAPTCHA is present on this page.\n"
+                                f"Stored skill: {_skill.get('summary', '')}\n"
+                                f"Steps to follow:\n{_steps_txt}\n"
+                                f"Execute these steps now to bypass the CAPTCHA before continuing."
+                            )
+                            observation = str(observation) + _captcha_note
+                        else:
+                            observation = str(observation) + (
+                                f"\n\n[CAPTCHA_DETECTED: {_captcha_type}]\n"
+                                f"No stored skill found — attempt manual bypass."
+                            )
+                except Exception as _ce:
+                    logger.warning(f"CAPTCHA detection error (non-fatal): {_ce}")
                 
                 status = "SUCCESS" if "Error" not in str(observation) else "FAILED"
 
@@ -1011,6 +1073,19 @@ class Brain:
             confirmed_inputs = understanding.get("confirmed_inputs", {})
             discovery_strategy = understanding.get("discovery_strategy", "direct_execution")
 
+            # ── Memory routing: extract domain + retrieve relevant memories ──
+            domain = self._extract_domain_from_task(user_message, confirmed_inputs)
+            graph_output: Dict[str, Any] = {}   # ensure exists for finally write-back
+            memory_block = ""
+            if self.memory_service:
+                try:
+                    mem_ctx = await self.memory_service.retrieve(user_id, domain, task_summary)
+                    memory_block = mem_ctx.to_prompt_block()
+                    if memory_block:
+                        logger.info(f"[Memory] Injecting {len(memory_block)} chars for domain '{domain}'")
+                except Exception as _me:
+                    logger.warning(f"[Memory] retrieve error (non-fatal): {_me}")
+
             await update_ui(0, "completed", output_data=understanding, details=f"Task Summary: {task_summary}")
             # --- NEW: Update Session Title based on Task Summary ---
             async with AsyncSessionLocal() as db:
@@ -1111,7 +1186,7 @@ class Brain:
                     # 2. Execute via MCP Tool Graph
                     graph_input = {"messages": [HumanMessage(content=mission_objective)]}
                     graph_output = await self._execute_tool_graph(
-                        graph_input, all_tools, user_id, chat_id, task_summary, confirmed_inputs, update_ui_func=update_ui
+                        graph_input, all_tools, user_id, chat_id, task_summary, confirmed_inputs, update_ui_func=update_ui, memory_block=memory_block
                     )
                     
                     # Capture tool calls from the graph execution
@@ -1243,6 +1318,33 @@ class Brain:
             # thread isn't immediately killed (handles the CancelledError path where
             # the discard above was never reached)
             self.cancelled_chats.discard(chat_id)
+
+            # ── Memory write-back (non-fatal — never blocks cleanup) ──────────
+            if self.memory_service:
+                try:
+                    _outcome = "FAIL"
+                    if 'final_response' in locals() and final_response and \
+                            "attempted the task" not in str(final_response) and \
+                            "encountered persistent errors" not in str(final_response):
+                        _outcome = "SUCCESS"
+                    _compact_steps: List[Dict] = []
+                    if 'graph_output' in locals() and isinstance(graph_output, dict):
+                        for _e in graph_output.get("execution_history", []):
+                            if _e.get("status") == "SUCCESS":
+                                _compact_steps.append({"tool": _e.get("tool", "")})
+                    _d = domain if 'domain' in locals() else "general"
+                    _ts = task_summary if 'task_summary' in locals() else user_message[:200]
+                    await self.memory_service.store_episode(
+                        user_id=user_id,
+                        domain=_d,
+                        task_summary=_ts,
+                        outcome=_outcome,
+                        key_steps=_compact_steps,
+                    )
+                    await self.memory_service.apply_decay(user_id)
+                    logger.info(f"[Memory] Stored {_outcome} episode for domain '{_d}'")
+                except Exception as _mem_err:
+                    logger.warning(f"[Memory] write-back error (non-fatal): {_mem_err}")
 
     async def _save_session_state(self, chat_id: str, updated_state: dict):
         """Safely commits processed state dictionaries back into short-lived database queries."""

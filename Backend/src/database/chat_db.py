@@ -3,7 +3,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import (
-    TIMESTAMP, BigInteger, Column, ForeignKey, Integer, String, Text, DateTime
+    TIMESTAMP, BigInteger, Column, ForeignKey, Float, Integer, String, Text, DateTime
 )
 
 from sqlalchemy.orm import Mapped, declarative_base, relationship
@@ -205,4 +205,72 @@ class ToolExecutionLog(Base):
     status = Column(String(20), default="PENDING")
     error_message = Column(Text)
     screenshot_url = Column(String(500))
+    created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+# ─────────────────────────────────────────────
+#  COGNITIVE MEMORY TABLES
+# ─────────────────────────────────────────────
+
+class MemoryEpisodic(Base):
+    """Specific run experiences per user/domain."""
+    __tablename__ = "memory_episodic"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), nullable=False, index=True)
+    domain = Column(String(255), nullable=False, index=True)
+    task_summary = Column(Text, nullable=False)
+    outcome = Column(String(20), nullable=False)        # SUCCESS | FAIL | PARTIAL
+    key_steps = Column(Text)                            # JSON array of compact step records
+    tags = Column(Text)                                 # JSON array of keyword strings
+    confidence_score = Column(Float, default=1.0)
+    access_count = Column(Integer, default=0)
+    last_accessed = Column(TIMESTAMP(timezone=True), nullable=True)
+    created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class MemorySemantic(Base):
+    """Factual knowledge about a domain (selectors, URLs, bot-detection quirks)."""
+    __tablename__ = "memory_semantic"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), nullable=False, index=True)
+    domain = Column(String(255), nullable=False, index=True)
+    fact_key = Column(String(255), nullable=False)      # e.g. "address_input_selector"
+    fact_value = Column(Text, nullable=False)
+    confidence_score = Column(Float, default=1.0)
+    source_episode_id = Column(String(36), nullable=True)
+    access_count = Column(Integer, default=0)
+    last_validated = Column(TIMESTAMP(timezone=True), nullable=True)
+    created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class MemoryProcedural(Base):
+    """Stored skill programs — reusable step sequences (includes CAPTCHA skills)."""
+    __tablename__ = "memory_procedural"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), nullable=True, index=True)   # NULL = universal skill
+    skill_name = Column(String(255), nullable=False, index=True)
+    domain = Column(String(255), nullable=True)                # NULL = applies anywhere
+    procedure = Column(Text, nullable=False)                   # JSON with summary + steps
+    success_count = Column(Integer, default=0)
+    failure_count = Column(Integer, default=0)
+    confidence_score = Column(Float, default=0.7)
+    last_used = Column(TIMESTAMP(timezone=True), nullable=True)
+    last_success = Column(TIMESTAMP(timezone=True), nullable=True)
+    created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class MemoryReflection(Base):
+    """Lessons distilled from failures and successes."""
+    __tablename__ = "memory_reflection"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), nullable=False, index=True)
+    domain = Column(String(255), nullable=False, index=True)
+    lesson = Column(Text, nullable=False)
+    category = Column(String(50), nullable=False)   # BOT_DETECTION|SELECTOR|AUTH|CAPTCHA|NAVIGATION|OTHER
+    severity = Column(String(20), nullable=False)   # LOW | MEDIUM | HIGH
+    validated_count = Column(Integer, default=0)
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
