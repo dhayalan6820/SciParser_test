@@ -1,5 +1,6 @@
 import * as React from "react";
 import { FcGoogle } from "react-icons/fc";
+import logoImage from "@/assets/logo.png";
 
 import { Button } from "./button";
 import { Input } from "./input";
@@ -29,8 +30,8 @@ interface Signup1Props {
 const Signup1 = ({
   heading,
   logo = {
-    url: "https://www.shadcnblocks.com",
-    src: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=120&h=120&q=80", // Using a stylized organic abstract pattern instead of static domains
+    url: "#",
+    src: logoImage,
     alt: "SciParser Logo",
     title: "SciParser",
   },
@@ -92,17 +93,13 @@ const Signup1 = ({
         {/* Logo and Greeting Section */}
         <div className="space-y-2 text-center mb-6">
           <div className="flex justify-center mb-3">
-            <a href={logo.url} className="inline-flex items-center gap-2">
+            <a href={logo.url} className="inline-flex items-center">
               <img
                 src={logo.src}
                 alt={logo.alt}
                 title={logo.title}
-                className="h-9 w-9 rounded-lg object-cover hover:scale-105 transition-transform border border-border shadow-sm"
-                referrerPolicy="no-referrer"
+                className="h-12 w-auto object-contain hover:scale-105 transition-transform"
               />
-              <span className="text-xl font-bold tracking-tight text-foreground">
-                SciParser
-              </span>
             </a>
           </div>
           <h1 className="text-3xl font-semibold text-foreground tracking-tight">

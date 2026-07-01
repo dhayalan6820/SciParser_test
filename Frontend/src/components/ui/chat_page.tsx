@@ -1,5 +1,6 @@
 // ChatPage.tsx
 import * as React from "react";
+import logo from "@/assets/logo.png";
 import { Signup1 } from "./signup-1";
 import { Button } from "./button";
 import { sciparserApi, ChatMessage, UploadedFile, User } from "../../api";
@@ -2262,8 +2263,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           <div className="flex h-full flex-col items-center py-4 gap-3">
             <div className="pointer-events-none absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_28%)]" />
             {/* Logo */}
-            <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full border border-[#22D3EE]/20 bg-[#0B0F14] text-[#10B981] shadow-[0_0_18px_rgba(16,185,129,0.16)]">
-              <Sparkles className="h-5 w-5" />
+            <div className="relative z-10">
+              <img src={logo} alt="SciParser" className="h-8 w-auto object-contain" />
             </div>
             <div className="relative z-10 w-8 h-px bg-[#232B36]" />
             {/* Chat nav icon */}
@@ -2338,14 +2339,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             <div className="rounded-[18px] border border-[#232B36] bg-white/[0.03] px-4 py-4 shadow-[0_14px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#22D3EE]/20 bg-[#0B0F14] text-[#10B981] shadow-[0_0_18px_rgba(16,185,129,0.16)]">
-                    <Sparkles className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="truncate text-[17px] font-semibold tracking-tight text-[#F8FAFC]">
-                      SciParser AI
-                    </div>
-                  </div>
+                  <img src={logo} alt="SciParser" className="h-8 w-auto object-contain" />
                 </div>
                 <div className="flex items-center gap-1.5">
                   {isMobile && (
