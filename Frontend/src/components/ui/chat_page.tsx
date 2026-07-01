@@ -16,7 +16,7 @@ import {
   BookOpen, MessageSquare, Plus, LogOut, Trash, Pencil, Check, Menu, X, 
   ChevronDown, Globe, Send, PanelLeftClose, PanelLeftOpen, Search, Code, Terminal,
   Sun, Moon, FileText, Paperclip, X as XIcon,
-  Loader2, Download, Table as TableIcon, Calendar, Clock
+  Loader2, Download, Table as TableIcon, Calendar, Clock, Camera
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import Plan, { Task } from "./agent-plan";
@@ -123,6 +123,11 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   // Resizable panel states
   const [browserPanelWidth, setBrowserPanelWidth] = React.useState(50); // percentage
   const [historyPanelWidth, setHistoryPanelWidth] = React.useState(320); // pixels
+  const [sidebarWidth, setSidebarWidth] = React.useState(300); // pixels
+
+  // Refs
+  const sidebarResizeRef = React.useRef<{ startX: number; startWidth: number } | null>(null);
+  const lastBrowserFrameRef = React.useRef<string | null>(null);
   
   // File upload states
   const [isDraggingFile, setIsDraggingFile] = React.useState(false);
@@ -233,6 +238,24 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const handleHistoryResizeStart = (e: React.MouseEvent) => {
     setResizingPanel('history');
     e.preventDefault();
+  };
+
+  const handleSidebarMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    sidebarResizeRef.current = { startX: e.clientX, startWidth: sidebarWidth };
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!sidebarResizeRef.current) return;
+      const delta = ev.clientX - sidebarResizeRef.current.startX;
+      const next = Math.max(200, Math.min(520, sidebarResizeRef.current.startWidth + delta));
+      setSidebarWidth(next);
+    };
+    const onMouseUp = () => {
+      sidebarResizeRef.current = null;
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
   };
 
   React.useEffect(() => {
@@ -361,6 +384,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
             if (actualFrame) {
               setBrowserFrame(actualFrame);
+              lastBrowserFrameRef.current = actualFrame;
               if (isFirstFrame.current && !userInterruptedBrowser) {
                 isFirstFrame.current = false;
                 setBrowserBlink("green");
@@ -824,9 +848,17 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       }
 
       if (aiMsg) {
-        setMessages(prev => [...prev, aiMsg]);
+        const hasScreenshotTool = toolLogs.some((l: any) =>
+          l.tool_name?.toLowerCase().includes('screenshot')
+        );
+        const contentMentionsScreenshot = /screenshot/i.test(aiMsg.content || '');
+        const msgToAdd: ChatMessage = { ...aiMsg };
+        if ((hasScreenshotTool || contentMentionsScreenshot) && lastBrowserFrameRef.current) {
+          msgToAdd.screenshots = [lastBrowserFrameRef.current];
+        }
+        setMessages(prev => [...prev, msgToAdd]);
         setThreads(prev => prev.map(t => 
-          t.id === currentThreadId ? { ...t, messages: [...t.messages, userMsg, aiMsg] } : t
+          t.id === currentThreadId ? { ...t, messages: [...t.messages, userMsg, msgToAdd] } : t
         ));
 
         // --- NEW: Auto-hide execution plan if task completed successfully ---
@@ -999,6 +1031,25 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 {renderFormattedContent(msg.content, isUser)}
               </div>
             </div>
+
+            {/* Inline screenshots */}
+            {!isUser && msg.screenshots && msg.screenshots.length > 0 && (
+              <div className="flex flex-col gap-2 mt-1">
+                {msg.screenshots.map((src, i) => (
+                  <div key={i} className="rounded-xl overflow-hidden border border-[#2A2A2A] shadow-lg max-w-xl">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-[#1e1e1e] border-b border-[#2A2A2A] select-none">
+                      <Camera className="w-3.5 h-3.5 text-cyan-400" />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-[#9CA3AF]">Screenshot</span>
+                    </div>
+                    <img
+                      src={src.startsWith('data:') ? src : `data:image/jpeg;base64,${src}`}
+                      alt="Browser screenshot"
+                      className="w-full h-auto object-contain max-h-96 bg-[#111]"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
             
             {/* Timestamp & Actions */}
             <div className={cn(
@@ -1122,6 +1173,28 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
   const renderFormattedContent = (content: string, isUser: boolean = false) => {
     if (!content) return null;
+
+    // Detect raw HTML pages (e.g. Replit proxy/hosting page served instead of data)
+    if (!isUser && (
+      /^\s*<!DOCTYPE\s/i.test(content) ||
+      /^\s*<html[\s>]/i.test(content) ||
+      (content.includes('<body') && content.includes('</html>'))
+    )) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = content;
+      const text = (tmp.textContent || tmp.innerText || '').trim().replace(/\s+/g, ' ');
+      return (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs">
+            <span className="text-amber-400 font-semibold shrink-0">⚠ HTML Response</span>
+            <span className="text-[#9CA3AF]">The server returned a web page instead of data — this may be a Replit hosting or proxy page.</span>
+          </div>
+          {text && (
+            <p className="text-[13px] text-[#9CA3AF] leading-relaxed line-clamp-3 px-1">{text.slice(0, 400)}</p>
+          )}
+        </div>
+      );
+    }
 
     // Split out fenced code blocks first so they don't get further parsed
     const parts = content.split(/(```[\s\S]*?```)/g);
@@ -1637,22 +1710,74 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       {/* Sidebar */}
       <div 
         className={cn(
-          "flex flex-col shrink-0 transition-all duration-300 overflow-hidden border-[#232B36] backdrop-blur-xl bg-[#05070A]/95",
+          "flex flex-col shrink-0 overflow-hidden border-[#232B36] backdrop-blur-xl bg-[#05070A]/95",
           isMobile
             ? cn(
-                "fixed inset-y-0 left-0 z-50 h-full w-[320px] max-w-[85vw] border-r",
+                "fixed inset-y-0 left-0 z-50 h-full w-[320px] max-w-[85vw] border-r transition-transform duration-300",
                 isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
               )
-            : cn(
-                "relative h-full z-20 border-r",
-                isSidebarCollapsed
-                  ? "w-0 border-r-0"
-                  : currentView === "schedules"
-                    ? "w-16"
-                    : "w-[320px] lg:w-[340px] xl:w-[360px]"
-              )
+            : "relative h-full z-20 border-r transition-[width] duration-300"
         )}
+        style={!isMobile ? {
+          width: isSidebarCollapsed
+            ? '56px'
+            : currentView === "schedules"
+              ? '64px'
+              : `${sidebarWidth}px`
+        } : undefined}
       >
+        {/* Collapsed icon-only rail (desktop only, when sidebar is toggled off) */}
+        {!isMobile && isSidebarCollapsed && (
+          <div className="flex h-full flex-col items-center py-4 gap-3 overflow-hidden">
+            <div className="pointer-events-none absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_28%)]" />
+            <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full border border-[#22D3EE]/20 bg-[#0B0F14] text-[#10B981] shadow-[0_0_18px_rgba(16,185,129,0.16)]">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div className="relative z-10 w-8 h-px bg-[#232B36]" />
+            <button onClick={() => handleNewChat(true)} title="New Chat"
+              className="relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border border-[#232B36] bg-white/[0.02] text-[#9CA3AF] hover:border-[#22D3EE]/25 hover:bg-[#161B22] hover:text-[#F8FAFC] transition-all"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+            <button onClick={() => setShowHistory(!showHistory)} title="History"
+              className={cn(
+                "relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border transition-all",
+                showHistory
+                  ? "border-indigo-500/35 bg-indigo-500/15 text-indigo-300"
+                  : "border-[#232B36] bg-white/[0.02] text-[#9CA3AF] hover:border-[#22D3EE]/25 hover:bg-[#161B22] hover:text-[#F8FAFC]"
+              )}
+            >
+              <Clock className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => handleSwitchView(currentView === "schedules" ? "chat" : "schedules")}
+              title="Automation"
+              className={cn(
+                "relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border transition-all",
+                currentView === "schedules"
+                  ? "border-[#22D3EE]/35 bg-gradient-to-b from-[#10B981]/20 to-[#22D3EE]/15 text-[#F8FAFC] shadow-[0_0_16px_rgba(34,211,238,0.15)]"
+                  : "border-[#232B36] bg-white/[0.02] text-[#9CA3AF] hover:border-[#22D3EE]/25 hover:bg-[#161B22] hover:text-[#F8FAFC]"
+              )}
+            >
+              <Calendar className="h-5 w-5" />
+            </button>
+            <div className="flex-1" />
+            <button onClick={toggleTheme} title="Toggle theme"
+              className="relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border border-[#232B36] bg-[#0B0F14] text-[#9CA3AF] hover:bg-[#161B22] hover:text-[#F8FAFC] transition-all"
+            >
+              {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+            <button onClick={handleLogout} title="Log out"
+              className="relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border border-[#232B36] bg-[#0B0F14] text-red-400 hover:bg-[#161B22] hover:text-red-300 transition-all"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+            <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full bg-[#10B981] text-white text-xs font-black shadow-[0_0_18px_rgba(16,185,129,0.3)]">
+              {userProfile?.username.slice(0, 2).toUpperCase()}
+            </div>
+          </div>
+        )}
+
         {/* Icon-only rail shown when on Automation page (desktop only) */}
         {!isMobile && !isSidebarCollapsed && currentView === "schedules" && (
           <div className="flex h-full flex-col items-center py-4 gap-3">
@@ -1702,8 +1827,21 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             </div>
           </div>
         )}
-        <div className={cn("relative flex h-full flex-col bg-[#05070A]/95", (!isMobile && !isSidebarCollapsed && currentView === "schedules") && "hidden")}>
+        <div className={cn("relative flex h-full flex-col bg-[#05070A]/95", (!isMobile && (isSidebarCollapsed || currentView === "schedules")) && "hidden")}>
           <div className="pointer-events-none absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_28%),radial-gradient(circle_at_bottom,rgba(16,185,129,0.06),transparent_22%)]" />
+
+          {/* Drag-resize handle — right edge of sidebar */}
+          {!isMobile && (
+            <div
+              onMouseDown={handleSidebarMouseDown}
+              title="Drag to resize"
+              className="absolute right-0 top-0 h-full w-1 z-30 cursor-col-resize group"
+              style={{ userSelect: 'none' }}
+            >
+              <div className="absolute inset-y-0 -left-2 -right-2 cursor-col-resize" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[3px] h-10 rounded-full bg-transparent group-hover:bg-[#22D3EE]/40 transition-colors duration-150" />
+            </div>
+          )}
 
           {/* Sidebar Header */}
           <div className="relative z-10 px-4 pt-4 pb-3">
@@ -1951,8 +2089,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             >
               
               {/* Chat Header */}
-              <div className="h-14 border-b border-[#2A2A2A] bg-[#1A1A1A] px-4 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-3">
+              <div className="h-14 border-b border-[#2A2A2A] bg-[#1A1A1A] px-4 flex items-center gap-2 shrink-0 overflow-hidden">
+                <div className="flex items-center gap-2 shrink-0">
                   <Button 
                     variant="ghost" 
                     size="icon" 
@@ -1963,14 +2101,16 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                         setIsSidebarCollapsed(!isSidebarCollapsed);
                       }
                     }}
-                    className="hover:bg-muted"
+                    className="hover:bg-muted shrink-0"
                   >
                     {(isMobile ? isMobileSidebarOpen : !isSidebarCollapsed) ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeftOpen className="w-5 h-5" />}
                   </Button>
-                  <div className="font-semibold text-sm text-[#F8FAFC]">{activeModel}</div>
+                  <div className="font-semibold text-sm text-[#F8FAFC] truncate max-w-[120px] sm:max-w-none">{activeModel}</div>
                 </div>
 
-                <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto scroll-x-smooth shrink-0">
+                <div className="flex-1" />
+
+                <div className="flex items-center gap-1 sm:gap-1.5 flex-nowrap shrink-0">
                   <Button
                     variant={showHistory ? "default" : "outline"}
                     size="sm"

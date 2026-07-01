@@ -447,7 +447,8 @@ export interface ChatMessage {
   role: "user" | "assistant" | "human" | "ai";
   content: string;
   timestamp: string;
-  plan?: any[]; // This allows the plan to be saved and retrieved from history
+  plan?: any[];
+  screenshots?: string[];
 }
 
 export interface UploadedFile {
