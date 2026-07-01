@@ -1066,7 +1066,7 @@ class Brain:
                 if chat_id in self.cancelled_chats:
                     self.cancelled_chats.discard(chat_id)
                     logger.info(f"[Cooperative cancel] Exiting process loop for chat_id {chat_id}")
-                    return {"success": False, "message": "Process stopped by user."}
+                    raise asyncio.CancelledError("Stopped by user")
 
                 try:
                     await update_ui(1, "in-progress", input_data={"task_summary": task_summary, "confirmed_inputs": confirmed_inputs, "retry": retry_count})
@@ -1238,7 +1238,11 @@ class Brain:
                     pass
             self.session_manager.remove_active_chat(user_id, chat_id)
             self.active_tasks.pop(chat_id, None)
-            self.active_plans.pop(chat_id, None) # Clean up rehydration data
+            self.active_plans.pop(chat_id, None)
+            # Always clear the cooperative-cancel flag so the next message in this
+            # thread isn't immediately killed (handles the CancelledError path where
+            # the discard above was never reached)
+            self.cancelled_chats.discard(chat_id)
 
     async def _save_session_state(self, chat_id: str, updated_state: dict):
         """Safely commits processed state dictionaries back into short-lived database queries."""
