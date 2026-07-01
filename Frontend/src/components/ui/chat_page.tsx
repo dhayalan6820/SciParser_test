@@ -1,6 +1,7 @@
 // ChatPage.tsx
 import * as React from "react";
 import logo from "@/assets/logo.png";
+import atomIcon from "@/assets/atom-icon.png";
 import { Signup1 } from "./signup-1";
 import { Button } from "./button";
 import { sciparserApi, ChatMessage, UploadedFile, User } from "../../api";
@@ -1246,7 +1247,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             {isUser ? (
               <User2 className="w-4 h-4" />
             ) : (
-              <Sparkles className="w-4 h-4" />
+              <img src={atomIcon} alt="SciParser" className="w-4 h-4 object-contain" />
             )}
           </div>
 
@@ -2194,8 +2195,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         {!isMobile && isSidebarCollapsed && (
           <div className="flex h-full flex-col items-center py-4 gap-3 overflow-hidden">
             <div className="pointer-events-none absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_28%)]" />
-            <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full border border-[#22D3EE]/20 bg-[#0B0F14] text-[#10B981] shadow-[0_0_18px_rgba(16,185,129,0.16)]">
-              <Sparkles className="h-5 w-5" />
+            <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full border border-[#22D3EE]/20 bg-[#0B0F14] shadow-[0_0_18px_rgba(16,185,129,0.16)]">
+              <img src={atomIcon} alt="SciParser" className="h-6 w-6 object-contain" />
             </div>
             <div className="relative z-10 w-8 h-px bg-[#232B36]" />
             <button
@@ -2394,7 +2395,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                       AI Chat Core
                     </span>
                   </div>
-                  <Sparkles className="h-4 w-4 shrink-0 text-[#22D3EE]" />
+                  <img src={atomIcon} alt="SciParser" className="h-4 w-4 object-contain shrink-0" />
                 </button>
 
                 <button
@@ -2751,8 +2752,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 >
                   {messages.length === 0 && !isAiTyping ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-center p-4 sm:p-6 chat-content-cap space-y-4">
-                      <div className="w-12 h-12 rounded-2xl bg-[#1E1E1E] flex items-center justify-center text-[#22D3EE] border border-[#2A2A2A]">
-                        <Sparkles className="w-6 h-6" />
+                      <div className="w-12 h-12 rounded-2xl bg-[#1E1E1E] flex items-center justify-center border border-[#2A2A2A]">
+                        <img src={atomIcon} alt="SciParser" className="w-8 h-8 object-contain" />
                       </div>
                       <h2 className="text-xl font-bold text-[#F8FAFC]">
                         How can I assist you today?
