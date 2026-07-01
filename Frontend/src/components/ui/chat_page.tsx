@@ -75,10 +75,16 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const [currentPlan, setCurrentPlan] = React.useState<Task[] | null>(null);
   const [toolLogs, setToolLogs] = React.useState<any[]>([]);
   const [aiThinking, setAiThinking] = React.useState<string | null>(null);
+  const [taskThoughts, setTaskThoughts] = React.useState<Record<string, string>>({});
   const [showExecutionPlan, setShowExecutionPlan] = React.useState(true);
   const [userInterruptedHide, setUserInterruptedHide] = React.useState(false);
   const [visiblePlans, setVisiblePlans] = React.useState<Record<string, boolean>>({});
   const [visibleTools, setVisibleTools] = React.useState<Record<string, boolean>>({});
+
+  // Sidebar auto-collapse refs
+  const sidebarAutoCollapsedRef  = React.useRef(false);
+  const sidebarUserInteractedRef = React.useRef(false);
+  const prevBrowserActiveRef     = React.useRef(false);
 
   const [agentHistory, setAgentHistory] = React.useState<any[]>([]);
   const [showHistory, setShowHistory] = React.useState(false);
@@ -308,6 +314,27 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Auto-collapse sidebar when browser opens; restore when it closes
+  React.useEffect(() => {
+    if (isMobile) return;
+    const wasActive = prevBrowserActiveRef.current;
+    prevBrowserActiveRef.current = browserActive;
+
+    if (browserActive && !wasActive) {
+      // Browser just opened
+      if (!isSidebarCollapsed && !sidebarUserInteractedRef.current) {
+        setIsSidebarCollapsed(true);
+        sidebarAutoCollapsedRef.current = true;
+      }
+    } else if (!browserActive && wasActive) {
+      // Browser just closed
+      if (sidebarAutoCollapsedRef.current && !sidebarUserInteractedRef.current) {
+        setIsSidebarCollapsed(false);
+        sidebarAutoCollapsedRef.current = false;
+      }
+    }
+  }, [browserActive, isMobile]);
+
   React.useEffect(() => {
     const token = localStorage.getItem("access_token");
     if (token) {
@@ -498,6 +525,17 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             setIsAiTyping(true);
           } else if (msg.type === "thought_update") {
             setAiThinking(msg.data);
+            // Associate thought with the currently running task
+            setCurrentPlan((prev) => {
+              if (!prev) return prev;
+              const active = prev.find(
+                (t) => t.status === "in-progress" || t.status === "running"
+              );
+              if (active) {
+                setTaskThoughts((th) => ({ ...th, [active.id]: msg.data }));
+              }
+              return prev;
+            });
           }
         } catch { /* ignore non-JSON keep-alive responses */ }
       };
@@ -2095,6 +2133,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     variant="ghost" 
                     size="icon" 
                     onClick={() => {
+                      sidebarUserInteractedRef.current = true;
+                      sidebarAutoCollapsedRef.current = false;
                       if (isMobile) {
                         setIsMobileSidebarOpen(!isMobileSidebarOpen);
                       } else {
@@ -2263,6 +2303,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                                   <Plan 
                                     tasks={currentPlan} 
                                     thoughts={aiThinking ? [aiThinking] : []}
+                                    taskThoughts={taskThoughts}
                                     isAiTyping={isAiTyping}
                                   />
                                 ) : (

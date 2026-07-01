@@ -458,10 +458,7 @@ class Brain:
                 - **Fuzzy Search:** If a selector fails, inspect the page state for related elements or text nodes and choose the best candidate.
                 - **Fail-Safe:** If a popup appears after a navigation or click, immediately stop the current plan, close the popup, refresh the state, and then resume the task.
 
-                OUTPUT STRUCTURE (MANDATORY):
-                Before calling any tool, you MUST provide your response in the following format:
-                THOUGHT: [Diagnostic: What is the current state? Is anything blocking me? Why am I choosing this tool?]
-                INSTRUCTION: [The specific actionable step to move forward or unblock the UI.]
+                Think freely and naturally before acting. You may reason in plain language — describe what you observe, what you're uncertain about, and why you're choosing a specific action. Do NOT use any forced format like THOUGHT:/INSTRUCTION:. Just think, then act.
 
                 If there is a form, fill it. If there is a button, click it. If an element is missing, use your tools to find it. Continue until you have the final result requested by the user.
             """
@@ -517,11 +514,13 @@ class Brain:
                 clean_content = re.sub(r"<｜tool▁.*?｜>", "", response.content)
                 clean_content = re.sub(r"MMMM+.*", "", clean_content).strip()
                 
-                # Extract THOUGHT for the UI
-                thought_match = re.search(r"THOUGHT:(.*?)(?:INSTRUCTION:|$)", clean_content, re.DOTALL | re.IGNORECASE)
-                if thought_match and self.stream_manager:
-                    thought_text = thought_match.group(1).strip()
-                    await self.stream_manager.broadcast_thought(chat_id, thought_text)
+                # Broadcast full reasoning to UI — no format restriction
+                if self.stream_manager and clean_content:
+                    # Strip any residual THOUGHT:/INSTRUCTION: markers from older model outputs
+                    thought_text = re.sub(r"(?i)^THOUGHT\s*:\s*", "", clean_content.strip())
+                    thought_text = re.sub(r"(?i)\bINSTRUCTION\s*:.*$", "", thought_text, flags=re.DOTALL).strip()
+                    if thought_text:
+                        await self.stream_manager.broadcast_thought(chat_id, thought_text)
                 
                 if clean_content:
                     # Update Task 2 Details (Main Chat)
