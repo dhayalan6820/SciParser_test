@@ -31,6 +31,8 @@ declare -A PKG_PATHS=(
   ["libxkbcommon"]="/nix/store/sisfq9wihyqqjzmrpik9b4xksifw97ha-libxkbcommon-1.8.1"
   ["alsa-lib"]="/nix/store/yw5xqn8lqinrifm9ij80nrmf0i6fdcbx-alsa-lib-1.2.13"
   ["cups.lib"]="/nix/store/xm2418a7fclainspb35n6h05xfsxb6vn-cups-2.4.11-lib"
+  ["cairo"]="/nix/store/prjwp9nyczsza4kga6a2bcb3qz1mvxg7-cairo-1.18.2"
+  ["pango"]="/nix/store/802n2ppbgbsk6211wjkg6dcjmifdcfr6-pango-1.56.3"
 )
 
 EXTRA_LD=""

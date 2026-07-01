@@ -1,8 +1,10 @@
 import os
 import sys
+import json
 import asyncio
 import socket
 import tempfile
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Chrome binary (Playwright-managed Chromium in the Replit sandbox)
@@ -83,58 +85,122 @@ async def _launch_chrome(port: int, user_data_dir: str, headless: bool) -> async
 
 
 # ---------------------------------------------------------------------------
+# Write browser-use config.json so _init_browser_session gets cdp_url
+# ---------------------------------------------------------------------------
+
+def _write_browser_use_config(cdp_url: str, headless: bool) -> None:
+    """
+    Write the browser-use config.json with cdp_url so that
+    BrowserUseServer.__init__ → load_browser_use_config() picks it up
+    and passes it to BrowserProfile(cdp_url=...) inside _init_browser_session.
+
+    Uses browser-use's own Config._get_config_path() so the file lands at the
+    exact path the library will read from (respects XDG_CONFIG_HOME,
+    BROWSER_USE_CONFIG_DIR, and BROWSER_USE_CONFIG_PATH env vars).
+    """
+    try:
+        from browser_use.config import Config as _BUConfig
+        config_path = _BUConfig()._get_config_path()
+    except Exception:
+        # Fallback: respect XDG_CONFIG_HOME if set, else ~/.config
+        xdg = os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))
+        config_path = Path(xdg) / "browseruse" / "config.json"
+    config_dir = config_path.parent
+    config_dir.mkdir(parents=True, exist_ok=True)
+    config_data = {
+        "browser_profile": {
+            "bridge-default": {
+                "id": "bridge-default",
+                "default": True,
+                "headless": headless,
+                "cdp_url": cdp_url,
+            }
+        },
+        "llm": {},
+        "agent": {},
+    }
+    config_path.write_text(json.dumps(config_data, indent=2))
+    print(f"Bridge: wrote browser-use config → {config_path}  cdp_url={cdp_url}", file=sys.stderr)
+
+
+# ---------------------------------------------------------------------------
 # Monkey-patch: wait for Chrome + reset browser_session on failure
 # ---------------------------------------------------------------------------
 
-def _patch_mcp_server_session_retry(chrome_ready: asyncio.Event) -> None:
+def _patch_mcp_server_session_retry(chrome_ready: asyncio.Event, cdp_url: str, headless: bool) -> None:
     """
-    Two-part patch on BrowserUseServer._init_browser_session:
+    Full replacement of BrowserUseServer._init_browser_session that:
 
-    Part 1 — wait for Chrome:
-        Awaits chrome_ready (set once /json/version returns 200) before
-        calling original().  Prevents "connection refused" on first tool call.
-
-    Part 2 — reset on failure:
-        If original() raises, resets self.browser_session = None so the next
-        tool call creates a fresh BrowserSession instead of reusing the broken
-        one (which would leave _cdp_client_root=None permanently).
+    1. Waits for chrome_ready before attempting to connect.
+    2. Creates BrowserSession(cdp_url=..., is_local=False) directly — bypassing
+       the config chain and the BrowserSession.__init__ logic that forces
+       is_local=True whenever the cdp_url kwarg is None.
+    3. Resets self.browser_session = None on any failure so the next tool call
+       creates a fresh session (prevents permanent _cdp_client_root=None).
     """
     try:
         from browser_use.mcp.server import BrowserUseServer
-    except ImportError:
-        print("Bridge: BrowserUseServer not importable — skipping patch", file=sys.stderr)
+        from browser_use.browser import BrowserSession
+    except ImportError as e:
+        print(f"Bridge: import error — skipping patch: {e}", file=sys.stderr)
         return
 
     if not hasattr(BrowserUseServer, "_init_browser_session"):
         print("Bridge: _init_browser_session not found — skipping patch", file=sys.stderr)
         return
 
-    original = BrowserUseServer._init_browser_session
+    # Capture cdp_url and headless in closure
+    _cdp_url = cdp_url
+    _headless = headless
 
     async def _patched_init(self, allowed_domains: "list[str] | None" = None, **kwargs):
-        # Part 1: block until Chrome is confirmed ready
+        # Already connected
+        if self.browser_session:
+            return
+
+        # Wait until our Chrome is confirmed ready
         if not chrome_ready.is_set():
-            print("Bridge [patch]: waiting for Chrome...", file=sys.stderr)
+            print(f"Bridge [patch]: waiting for Chrome at {_cdp_url}...", file=sys.stderr)
             try:
                 await asyncio.wait_for(chrome_ready.wait(), timeout=90.0)
                 print("Bridge [patch]: Chrome ready — connecting", file=sys.stderr)
             except asyncio.TimeoutError:
-                print("Bridge [patch]: 90 s timeout — trying anyway", file=sys.stderr)
+                print("Bridge [patch]: 90s timeout waiting for Chrome — trying anyway", file=sys.stderr)
 
-        # Part 2: reset broken session so next tool call retries
+        print(f"Bridge [patch]: creating BrowserSession(cdp_url={_cdp_url}, is_local=False)", file=sys.stderr)
+
         try:
-            await original(self, allowed_domains=allowed_domains, **kwargs)
+            # Create session with explicit cdp_url + is_local=False.
+            # Passing cdp_url as a kwarg prevents BrowserSession.__init__ line-375
+            # from overriding is_local=True, which would cause start() to dispatch
+            # BrowserLaunchEvent and invoke LocalBrowserWatchdog.
+            session = BrowserSession(
+                cdp_url=_cdp_url,
+                is_local=False,
+                headless=_headless,
+                keep_alive=True,
+                disable_security=True,
+                allowed_domains=allowed_domains or None,
+            )
+            self.browser_session = session
+            await session.start()
+            print("Bridge [patch]: BrowserSession started successfully", file=sys.stderr)
+
+            # Track session for management (same as original)
+            if hasattr(self, '_track_session'):
+                self._track_session(session)
+
         except Exception as exc:
             self.browser_session = None
             print(
-                f"Bridge [patch]: _init_browser_session failed ({exc!r}) — "
+                f"Bridge [patch]: BrowserSession start failed ({exc!r}) — "
                 "reset browser_session=None for retry",
                 file=sys.stderr,
             )
             raise
 
     BrowserUseServer._init_browser_session = _patched_init  # type: ignore[method-assign]
-    print("Bridge: _init_browser_session patched (chrome-wait + retry-on-fail)", file=sys.stderr)
+    print("Bridge: _init_browser_session patched (direct CDP connect, no LocalBrowserWatchdog)", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -217,8 +283,13 @@ async def run_bridge():
         print(f"Bridge: connecting to existing browser at {cdp_url}", file=sys.stderr)
         chrome_ready.set()
 
+    # -- Write browser-use config so _init_browser_session uses our cdp_url ---
+    # Must happen BEFORE main() calls BrowserUseServer.__init__, which reads
+    # the config file once via load_browser_use_config().
+    _write_browser_use_config(cdp_url, headless)
+
     # -- Apply patches --------------------------------------------------------
-    _patch_mcp_server_session_retry(chrome_ready)
+    _patch_mcp_server_session_retry(chrome_ready, cdp_url, headless)
 
     # -- Start browser-use MCP server (blocking) ------------------------------
     try:

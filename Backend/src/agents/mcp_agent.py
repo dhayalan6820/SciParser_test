@@ -18,7 +18,7 @@ class MCPToolManager:
     def stream_manager(self):
         return getattr(self.client, 'stream_manager', None)
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None, cdp_url: Optional[str] = None, port: Optional[int] = None):
+    def __init__(self, config: Dict[str, Any] = None, cdp_url: Optional[str] = None, port: Optional[int] = None):
         if hasattr(self, '_initialized_base') and self._initialized_base:
             return
 
