@@ -143,6 +143,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const toolLogsScrollRef = React.useRef<HTMLDivElement>(null);
+  // Tracks whether the user has scrolled away from the bottom of the chat
+  const userScrolledUpRef = React.useRef(false);
   const browserPanelRef = React.useRef<HTMLDivElement>(null);
   const historyPanelRef = React.useRef<HTMLDivElement>(null);
   const [resizingPanel, setResizingPanel] = React.useState<'browser' | 'history' | null>(null);
@@ -345,11 +347,27 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     }
   }, []);
 
+  // Re-enable auto-scroll whenever the active thread changes (thread switch or new chat)
   React.useEffect(() => {
+    userScrolledUpRef.current = false;
+  }, [activeThreadId]);
+
+  // Detect when user manually scrolls — pause auto-scroll while they read up
+  const handleChatScroll = React.useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    // Re-enable auto-scroll once user scrolls back within 80 px of the bottom
+    userScrolledUpRef.current = distFromBottom > 80;
+  }, []);
+
+  React.useEffect(() => {
+    // Don't hijack the scroll position while the user is reading up
+    if (userScrolledUpRef.current) return;
     if (scrollRef.current) {
       // Use requestAnimationFrame to ensure DOM has updated
       requestAnimationFrame(() => {
-        if (scrollRef.current) {
+        if (scrollRef.current && !userScrolledUpRef.current) {
           scrollRef.current.scrollTo({
             top: scrollRef.current.scrollHeight,
             behavior: "smooth"
@@ -871,6 +889,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     };
 
     setMessages(prev => [...prev, userMsg]);
+    userScrolledUpRef.current = false; // always jump to bottom for own messages
     setTextareaValue("");
     setIsAiTyping(true);
     setShowExecutionPlan(true); // Always show when new process starts
@@ -2249,6 +2268,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               <div className="flex-1 flex flex-row overflow-hidden">
                 <div 
                   ref={scrollRef}
+                  onScroll={handleChatScroll}
                   className="flex-1 overflow-y-auto flex flex-col"
                 >
                   {messages.length === 0 && !isAiTyping ? (

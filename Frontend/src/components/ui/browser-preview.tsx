@@ -174,7 +174,7 @@ export function BrowserPreview({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -8, scale: 0.97 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute right-0 top-full mt-2 w-[min(520px,90vw)] z-50 rounded-2xl border border-white/[0.08] bg-[#0c0e13] shadow-[0_24px_64px_rgba(0,0,0,0.7)] overflow-hidden"
+                  className="fixed right-4 top-16 w-[min(520px,90vw)] z-[500] rounded-2xl border border-white/[0.08] bg-[#0c0e13] shadow-[0_24px_64px_rgba(0,0,0,0.7)] overflow-hidden"
                 >
                   {/* Popup header */}
                   <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] bg-white/[0.02]">
