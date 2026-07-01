@@ -36,369 +36,7 @@ from src.services.ATAG import (
     serialize_state
 )
 
-class DatabaseManager:
-    """Manages transaction-scoped database operations securely to prevent locking connection pools."""
-    
-    async def log_agent_execution(self, user_id: str, chat_id: str, stage: str, name: str, status: str, input_data: Any = None, output_data: Any = None, error: str = None, token_usage: Dict[str, int] = None, cost: float = None):
-        async with AsyncSessionLocal() as db:
-            try:
-                log = AgentExecutionLog(
-                    user_id=user_id,
-                    chat_id=chat_id,
-                    agent_stage=stage,
-                    stage_name=name,
-                    status=status,
-                    input_data=json.dumps(input_data) if input_data else None,
-                    output_data=json.dumps(output_data) if output_data else None,
-                    error_message=error,
-                    token_usage=json.dumps(token_usage) if token_usage else None,
-                    cost=str(cost) if cost is not None else None
-                )
-                db.add(log)
-                await db.commit()
-                return log.id
-            except Exception as e:
-                logger.error(f"Error logging agent execution: {e}")
-
-    async def log_tool_execution(self, chat_id: str, agent_id: str, tool_name: str, status: str, tool_input: Any = None, tool_output: Any = None, error: str = None):
-        async with AsyncSessionLocal() as db:
-            try:
-                log = ToolExecutionLog(
-                    chat_id=chat_id,
-                    agent_id=agent_id,
-                    tool_name=tool_name,
-                    status=status,
-                    tool_input=json.dumps(tool_input) if tool_input else None,
-                    tool_output=json.dumps(tool_output) if tool_output else None,
-                    error_message=error
-                )
-                db.add(log)
-                await db.commit()
-                return log.id
-            except Exception as e:
-                logger.error(f"Error logging tool execution: {e}")
-
-    async def get_or_create_chat_session(self, user_id: str, chat_id: str) -> ChatSession:
-        async with AsyncSessionLocal() as db:
-            try:
-                result = await db.execute(select(ChatSession).where(ChatSession.id == chat_id))
-                session = result.scalar_one_or_none()
-                if session:
-                    db.expunge(session)
-                    return session
-                
-                new_session = ChatSession(
-                    id=chat_id,
-                    user_id=user_id,
-                    title="New Chat",
-                    state_data=json.dumps({})
-                )
-                db.add(new_session)
-                await db.commit()
-                await db.refresh(new_session)
-                db.expunge(new_session)
-                return new_session
-            except IntegrityError:
-                await db.rollback()
-                result = await db.execute(select(ChatSession).where(ChatSession.id == chat_id))
-                session = result.scalar_one_or_none()
-                if session:
-                    db.expunge(session)
-                    return session
-                raise Exception(f"Failed to create or retrieve session for chat_id={chat_id}, user_id={user_id}")
-            except Exception as e:
-                logger.error(f"Error getting/creating session: {e}")
-                raise
-
-
-def _sanitize_browser_observation(observation: Any, tool_call: Dict[str, Any]) -> Any:
-    """
-    Inspect a browser tool observation and replace raw HTML error pages
-    (e.g. Replit proxy "couldn't reach this app") with a clean, actionable
-    error string so the LLM never sees—or echoes back—the raw markup.
-    """
-    text = str(observation)
-
-    # Patterns that identify known error/proxy pages
-    is_html_page = (
-        re.search(r'<!DOCTYPE\s+html', text, re.IGNORECASE) or
-        re.search(r'<html[\s>]', text, re.IGNORECASE) or
-        ('<body' in text and '</html>' in text.lower())
-    )
-
-    if not is_html_page:
-        return observation
-
-    # Extract a short human-readable snippet from the HTML
-    snippet = re.sub(r'<[^>]+>', ' ', text)           # strip tags
-    snippet = re.sub(r'\s+', ' ', snippet).strip()[:200]
-
-    # Determine specific error kind
-    url_attempted = tool_call.get("args", {}).get("url", "")
-
-    if re.search(r"couldn't reach|couldn't reach|We couldn't reach", text, re.IGNORECASE):
-        reason = "Replit proxy blocked the request — this URL is unreachable inside the sandbox."
-    elif re.search(r'ERR_NAME_NOT_RESOLVED|ERR_CONNECTION_REFUSED|ERR_CONNECTION_TIMED_OUT', text):
-        reason = "DNS/connection error — the host could not be reached."
-    elif re.search(r'403\s+Forbidden|Access\s+Denied', text, re.IGNORECASE):
-        reason = "The server returned 403 Forbidden."
-    elif re.search(r'404\s+Not\s+Found', text, re.IGNORECASE):
-        reason = "The server returned 404 Not Found."
-    else:
-        reason = "The page returned unexpected HTML content instead of the expected data."
-
-    clean_error = (
-        f"[Navigation Error] {reason}"
-        + (f" URL attempted: {url_attempted}" if url_attempted else "")
-        + f" Page text: \"{snippet}\""
-        + " — Try a different URL or search for the correct address."
-    )
-
-    logger.warning(f"Browser observation sanitized for tool '{tool_call.get('name')}': {reason}")
-    return clean_error
-
-
-class Brain:
-    """
-    Orchestrates the Multi-Agent System (Agent 1, Agent 2, Agent 3) using LangGraph and LangChain.
-    """
-    def __init__(self, stream_manager=None):
-        self.stream_manager = stream_manager
-        self.session_manager = SessionManager(stream_manager=stream_manager)
-        self.db_manager = DatabaseManager()
-        self.atag_processor: Optional[ATAGProcessor] = None
-        self.llm = None
-        self.search_tool = None
-        self.initialized = False
-        self.checkpointer = MemorySaver()
-        self.active_tasks: Dict[str, asyncio.Task] = {}
-        self.active_plans: Dict[str, List[Dict]] = {}
-        # In-memory tool log buffer: chat_id → list of tool events (capped at 200)
-        self.tool_log_buffer: Dict[str, List[Dict]] = {}
-
-    def buffer_tool_event(self, chat_id: str, event: Dict[str, Any]):
-        """Append a tool event to the in-memory buffer (max 200 per chat)."""
-        if chat_id not in self.tool_log_buffer:
-            self.tool_log_buffer[chat_id] = []
-        self.tool_log_buffer[chat_id].append(event)
-        if len(self.tool_log_buffer[chat_id]) > 200:
-            self.tool_log_buffer[chat_id] = self.tool_log_buffer[chat_id][-200:]
-
-    def get_live_tool_logs(self, chat_id: str) -> List[Dict]:
-        return list(self.tool_log_buffer.get(chat_id, []))
-
-    def clear_live_tool_logs(self, chat_id: str):
-        self.tool_log_buffer.pop(chat_id, None)
-
-    async def initialize(self):
-        """Eagerly initializes execution LLMs, search utilities, and subprocess processors."""
-        if self.initialized:
-            return
-        
-        logger.info("Initializing multi-agent orchestrator system...")
-        api_key = os.getenv("OPENROUTER_API_KEY")
-        if not api_key:
-            raise ValueError("OPENROUTER_API_KEY not found in environment variables")
-
-        self.llm = ChatOpenAI(
-            model="google/gemini-3-flash-preview", # Standardize on Kimi 2.5 for stability
-            openai_api_key=os.getenv("OPENROUTER_API_KEY"),
-            base_url="https://openrouter.ai/api/v1",
-            temperature=0.3, # Lower temperature for more precise tool calling
-            max_tokens=16384
-        )
-        
-        # Specialized model for code generation
-        self.code_llm = ChatOpenAI(
-            model="google/gemini-3-flash-preview",
-            openai_api_key=os.getenv("OPENROUTER_API_KEY"),
-            base_url="https://openrouter.ai/api/v1",
-            temperature=0.1,
-            max_tokens=8192
-        )
-
-        self.search_tool = TavilySearch(max_results=3)
-        self.atag_processor = ATAGProcessor(self.llm)
-        self.code_processor = ATAGProcessor(self.code_llm, tavily_api_key=os.getenv("TAVILY_API_KEY"))
-        
-        self.initialized = True
-        logger.info("Multi-agent orchestrator initialization complete.")
-
-    def _compress_screenshot(self, png_bytes: bytes, max_width: int = 1280, quality: int = 80) -> str:
-        """Resize to max_width and encode as JPEG to keep WS payload within proxy limits."""
-        import io
-        from PIL import Image
-        img = Image.open(io.BytesIO(png_bytes))
-        if img.width > max_width:
-            ratio = max_width / img.width
-            img = img.resize((max_width, int(img.height * ratio)), Image.LANCZOS)
-        buf = io.BytesIO()
-        img.convert("RGB").save(buf, format="JPEG", quality=quality, optimize=True)
-        b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
-        return f"data:image/jpeg;base64,{b64}"
-
-    async def _stream_browser_frames(self, user_id: str, chat_id: str, stop_event: asyncio.Event):
-        """
-        Capture screenshots from Chrome via raw CDP HTTP + WebSocket (aiohttp).
-
-        Replaces the old Playwright connect_over_cdp approach, which only saw
-        contexts created by the *same* Playwright session.  Raw CDP /json lists
-        ALL page targets regardless of which client created them, so we reliably
-        see pages opened by the bridge subprocess's browser-use agent.
-        """
-        import aiohttp
-        import json as json_lib
-        from urllib.parse import urlparse
-
-        session_obj = self.session_manager.get_session(user_id)
-        mcp_manager = session_obj.get("mcp_manager")
-        if not mcp_manager:
-            logger.warning(f"No MCP manager for user {user_id}, live preview disabled.")
-            return
-
-        cdp_url = getattr(mcp_manager, "cdp_url", None)
-        if not cdp_url:
-            logger.warning(f"No CDP URL for user {user_id}, live preview disabled.")
-            return
-
-        parsed = urlparse(cdp_url)
-        host = parsed.hostname or "localhost"
-        port = parsed.port
-        json_endpoint = f"http://{host}:{port}/json"
-
-        logger.info(f"Starting raw-CDP screenshot stream: user={user_id} chat={chat_id} port={port}")
-
-        msg_id_counter = [0]
-
-        async def _get_page_ws_url() -> Optional[str]:
-            """Return the WS debugger URL of the first available page target."""
-            try:
-                async with aiohttp.ClientSession() as http:
-                    async with http.get(
-                        json_endpoint,
-                        timeout=aiohttp.ClientTimeout(total=3),
-                    ) as resp:
-                        targets = await resp.json(content_type=None)
-                for t in targets:
-                    if t.get("type") == "page" and t.get("webSocketDebuggerUrl"):
-                        return t["webSocketDebuggerUrl"]
-            except Exception as exc:
-                logger.debug(f"CDP /json failed for user {user_id}: {exc}")
-            return None
-
-        async def _take_screenshot(ws_url: str) -> Optional[str]:
-            """Issue Page.captureScreenshot over CDP and return base64 JPEG string."""
-            msg_id_counter[0] += 1
-            mid = msg_id_counter[0]
-            cmd = json_lib.dumps({
-                "id": mid,
-                "method": "Page.captureScreenshot",
-                "params": {"format": "jpeg", "quality": 75, "captureBeyondViewport": False},
-            })
-            try:
-                async with aiohttp.ClientSession() as http:
-                    async with http.ws_connect(
-                        ws_url,
-                        timeout=aiohttp.ClientTimeout(total=8),
-                    ) as ws:
-                        await ws.send_str(cmd)
-                        async for msg in ws:
-                            if msg.type == aiohttp.WSMsgType.TEXT:
-                                data = json_lib.loads(msg.data)
-                                if data.get("id") == mid:
-                                    if "result" in data:
-                                        return data["result"].get("data")
-                                    logger.debug(f"CDP screenshot error: {data.get('error')}")
-                                    return None
-                            elif msg.type in (aiohttp.WSMsgType.ERROR, aiohttp.WSMsgType.CLOSE):
-                                break
-            except Exception as exc:
-                logger.debug(f"CDP screenshot WS failed for user {user_id}: {exc}")
-            return None
-
-        async def _broadcast_frame(b64: str):
-            # Ensure the frame has the data-URL prefix the frontend expects
-            if not b64.startswith("data:"):
-                b64 = f"data:image/jpeg;base64,{b64}"
-            logger.info(
-                f"Broadcasting browser frame: user={user_id} chat={chat_id} len={len(b64)}"
-            )
-            if self.stream_manager:
-                await self.stream_manager.broadcast_frame(
-                    {"chat_id": chat_id, "frame": b64}, user_id
-                )
-
-        # ── Main capture loop ─────────────────────────────────────────────────────
-        while not stop_event.is_set():
-            try:
-                ws_url = await _get_page_ws_url()
-                if ws_url:
-                    b64 = await _take_screenshot(ws_url)
-                    if b64:
-                        await _broadcast_frame(b64)
-                # If no page yet, silently wait and retry next tick
-            except Exception as exc:
-                logger.error(f"Error in raw-CDP frame capture for user {user_id}: {exc}")
-
-            try:
-                await asyncio.wait_for(stop_event.wait(), timeout=1.5)
-                break
-            except asyncio.TimeoutError:
-                pass
-
-        # ── Final frame after task completes ─────────────────────────────────────
-        try:
-            ws_url = await _get_page_ws_url()
-            if ws_url:
-                b64 = await _take_screenshot(ws_url)
-                if b64:
-                    await _broadcast_frame(b64)
-                    logger.info(f"Sent final browser frame for user {user_id}")
-        except Exception as exc:
-            logger.debug(f"Could not send final frame for user {user_id}: {exc}")
-
-    def _calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
-        """Calculates the cost of an LLM call based on OpenRouter pricing (approximate)."""
-        # Pricing per 1M tokens (approximate for Gemini 3 Flash Preview)
-        prices = {
-            "google/gemini-3-flash-preview": {"input": 0.1, "output": 0.4},
-            "moonshotai/kimi-k2.7-code": {"input": 0.5, "output": 1.5},
-            "default": {"input": 0.1, "output": 0.4}
-        }
-        
-        p = prices.get(model, prices["default"])
-        cost = (input_tokens / 1_000_000 * p["input"]) + (output_tokens / 1_000_000 * p["output"])
-        return round(cost, 6)
-
-    async def _execute_tool_graph(self, graph_input: Dict[str, Any], tools: List[BaseTool], user_id: str, chat_id: str, task_summary: str, confirmed_inputs: Dict[str, Any], update_ui_func=None) -> Dict[str, Any]:
-        """Executes a LangGraph tool-calling graph for the given input and tools."""
-        
-        # Bind tools to the LLM
-        llm_with_tools = self.llm.bind_tools(tools)
-
-        # Define the logic for the agent node
-        async def call_model(state: AgentState):
-            messages = state["messages"]
-            execution_history = state.get("execution_history", [])
-            
-            # Construct memory summary
-            memory_summary = ""
-            if execution_history:
-                memory_summary = "\nEXECUTION MEMORY (What happened so far):\n"
-                for entry in execution_history:
-                    status_text = "SUCCESS" if entry["status"] == "SUCCESS" else "FAILED"
-                    memory_summary += f"- {status_text} {entry['tool']}: {entry['result'][:100]}...\n"
-
-            # Dynamically construct the system message with expert playbooks
-            system_message_content = f"""
-# AUTONOMOUS BROWSER AGENT — PRODUCTION SYSTEM PROMPT
-
-## TASK CONTEXT
-TASK: {task_summary}
-CONFIRMED INPUTS: {json.dumps(confirmed_inputs)}
-{memory_summary}
-
----
+_AGENT_STATIC_PROMPT = """# AUTONOMOUS BROWSER AGENT — PRODUCTION SYSTEM PROMPT
 
 ## 1. IDENTITY
 
@@ -622,35 +260,401 @@ Adapt your plan as the browser state changes. Prior assumptions may be invalidat
 - Batch compatible read operations (extract multiple pieces of information in one state inspection).
 - Complete the task in as few total steps as possible without sacrificing correctness.
 """
+
+
+class DatabaseManager:
+    """Manages transaction-scoped database operations securely to prevent locking connection pools."""
+    
+    async def log_agent_execution(self, user_id: str, chat_id: str, stage: str, name: str, status: str, input_data: Any = None, output_data: Any = None, error: str = None, token_usage: Dict[str, int] = None, cost: float = None):
+        async with AsyncSessionLocal() as db:
+            try:
+                log = AgentExecutionLog(
+                    user_id=user_id,
+                    chat_id=chat_id,
+                    agent_stage=stage,
+                    stage_name=name,
+                    status=status,
+                    input_data=json.dumps(input_data) if input_data else None,
+                    output_data=json.dumps(output_data) if output_data else None,
+                    error_message=error,
+                    token_usage=json.dumps(token_usage) if token_usage else None,
+                    cost=str(cost) if cost is not None else None
+                )
+                db.add(log)
+                await db.commit()
+                return log.id
+            except Exception as e:
+                logger.error(f"Error logging agent execution: {e}")
+
+    async def log_tool_execution(self, chat_id: str, agent_id: str, tool_name: str, status: str, tool_input: Any = None, tool_output: Any = None, error: str = None):
+        async with AsyncSessionLocal() as db:
+            try:
+                log = ToolExecutionLog(
+                    chat_id=chat_id,
+                    agent_id=agent_id,
+                    tool_name=tool_name,
+                    status=status,
+                    tool_input=json.dumps(tool_input) if tool_input else None,
+                    tool_output=json.dumps(tool_output) if tool_output else None,
+                    error_message=error
+                )
+                db.add(log)
+                await db.commit()
+                return log.id
+            except Exception as e:
+                logger.error(f"Error logging tool execution: {e}")
+
+    async def get_or_create_chat_session(self, user_id: str, chat_id: str) -> ChatSession:
+        async with AsyncSessionLocal() as db:
+            try:
+                result = await db.execute(select(ChatSession).where(ChatSession.id == chat_id))
+                session = result.scalar_one_or_none()
+                if session:
+                    db.expunge(session)
+                    return session
+                
+                new_session = ChatSession(
+                    id=chat_id,
+                    user_id=user_id,
+                    title="New Chat",
+                    state_data=json.dumps({})
+                )
+                db.add(new_session)
+                await db.commit()
+                await db.refresh(new_session)
+                db.expunge(new_session)
+                return new_session
+            except IntegrityError:
+                await db.rollback()
+                result = await db.execute(select(ChatSession).where(ChatSession.id == chat_id))
+                session = result.scalar_one_or_none()
+                if session:
+                    db.expunge(session)
+                    return session
+                raise Exception(f"Failed to create or retrieve session for chat_id={chat_id}, user_id={user_id}")
+            except Exception as e:
+                logger.error(f"Error getting/creating session: {e}")
+                raise
+
+
+def _sanitize_browser_observation(observation: Any, tool_call: Dict[str, Any]) -> Any:
+    """
+    Inspect a browser tool observation and replace raw HTML error pages
+    (e.g. Replit proxy "couldn't reach this app") with a clean, actionable
+    error string so the LLM never sees—or echoes back—the raw markup.
+    """
+    text = str(observation)
+
+    # Patterns that identify known error/proxy pages
+    is_html_page = (
+        re.search(r'<!DOCTYPE\s+html', text, re.IGNORECASE) or
+        re.search(r'<html[\s>]', text, re.IGNORECASE) or
+        ('<body' in text and '</html>' in text.lower())
+    )
+
+    if not is_html_page:
+        return observation
+
+    # Extract a short human-readable snippet from the HTML
+    snippet = re.sub(r'<[^>]+>', ' ', text)           # strip tags
+    snippet = re.sub(r'\s+', ' ', snippet).strip()[:200]
+
+    # Determine specific error kind
+    url_attempted = tool_call.get("args", {}).get("url", "")
+
+    if re.search(r"couldn't reach|couldn't reach|We couldn't reach", text, re.IGNORECASE):
+        reason = "Replit proxy blocked the request — this URL is unreachable inside the sandbox."
+    elif re.search(r'ERR_NAME_NOT_RESOLVED|ERR_CONNECTION_REFUSED|ERR_CONNECTION_TIMED_OUT', text):
+        reason = "DNS/connection error — the host could not be reached."
+    elif re.search(r'403\s+Forbidden|Access\s+Denied', text, re.IGNORECASE):
+        reason = "The server returned 403 Forbidden."
+    elif re.search(r'404\s+Not\s+Found', text, re.IGNORECASE):
+        reason = "The server returned 404 Not Found."
+    else:
+        reason = "The page returned unexpected HTML content instead of the expected data."
+
+    clean_error = (
+        f"[Navigation Error] {reason}"
+        + (f" URL attempted: {url_attempted}" if url_attempted else "")
+        + f" Page text: \"{snippet}\""
+        + " — Try a different URL or search for the correct address."
+    )
+
+    logger.warning(f"Browser observation sanitized for tool '{tool_call.get('name')}': {reason}")
+    return clean_error
+
+
+class Brain:
+    """
+    Orchestrates the Multi-Agent System (Agent 1, Agent 2, Agent 3) using LangGraph and LangChain.
+    """
+    def __init__(self, stream_manager=None):
+        self.stream_manager = stream_manager
+        self.session_manager = SessionManager(stream_manager=stream_manager)
+        self.db_manager = DatabaseManager()
+        self.atag_processor: Optional[ATAGProcessor] = None
+        self.llm = None
+        self.search_tool = None
+        self.initialized = False
+        self.checkpointer = MemorySaver()
+        self.active_tasks: Dict[str, asyncio.Task] = {}
+        self.active_plans: Dict[str, List[Dict]] = {}
+        # In-memory tool log buffer: chat_id → list of tool events (capped at 200)
+        self.tool_log_buffer: Dict[str, List[Dict]] = {}
+
+    def buffer_tool_event(self, chat_id: str, event: Dict[str, Any]):
+        """Append a tool event to the in-memory buffer (max 200 per chat)."""
+        if chat_id not in self.tool_log_buffer:
+            self.tool_log_buffer[chat_id] = []
+        self.tool_log_buffer[chat_id].append(event)
+        if len(self.tool_log_buffer[chat_id]) > 200:
+            self.tool_log_buffer[chat_id] = self.tool_log_buffer[chat_id][-200:]
+
+    def get_live_tool_logs(self, chat_id: str) -> List[Dict]:
+        return list(self.tool_log_buffer.get(chat_id, []))
+
+    def clear_live_tool_logs(self, chat_id: str):
+        self.tool_log_buffer.pop(chat_id, None)
+
+    async def initialize(self):
+        """Eagerly initializes execution LLMs, search utilities, and subprocess processors."""
+        if self.initialized:
+            return
+        
+        logger.info("Initializing multi-agent orchestrator system...")
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        if not api_key:
+            raise ValueError("OPENROUTER_API_KEY not found in environment variables")
+
+        self.llm = ChatOpenAI(
+            model="google/gemini-3-flash-preview",
+            openai_api_key=os.getenv("OPENROUTER_API_KEY"),
+            base_url="https://openrouter.ai/api/v1",
+            temperature=0.3,
+            max_tokens=16384,
+            default_headers={"x-or-cache": "1"},
+        )
+        
+        # Specialized model for code generation
+        self.code_llm = ChatOpenAI(
+            model="google/gemini-3-flash-preview",
+            openai_api_key=os.getenv("OPENROUTER_API_KEY"),
+            base_url="https://openrouter.ai/api/v1",
+            temperature=0.1,
+            max_tokens=8192,
+            default_headers={"x-or-cache": "1"},
+        )
+
+        self.search_tool = TavilySearch(max_results=3)
+        self.atag_processor = ATAGProcessor(self.llm)
+        self.code_processor = ATAGProcessor(self.code_llm, tavily_api_key=os.getenv("TAVILY_API_KEY"))
+        
+        self.initialized = True
+        logger.info("Multi-agent orchestrator initialization complete.")
+
+    def _compress_screenshot(self, png_bytes: bytes, max_width: int = 1280, quality: int = 80) -> str:
+        """Resize to max_width and encode as JPEG to keep WS payload within proxy limits."""
+        import io
+        from PIL import Image
+        img = Image.open(io.BytesIO(png_bytes))
+        if img.width > max_width:
+            ratio = max_width / img.width
+            img = img.resize((max_width, int(img.height * ratio)), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.convert("RGB").save(buf, format="JPEG", quality=quality, optimize=True)
+        b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+        return f"data:image/jpeg;base64,{b64}"
+
+    async def _stream_browser_frames(self, user_id: str, chat_id: str, stop_event: asyncio.Event):
+        """
+        Capture screenshots from Chrome via raw CDP HTTP + WebSocket (aiohttp).
+
+        Replaces the old Playwright connect_over_cdp approach, which only saw
+        contexts created by the *same* Playwright session.  Raw CDP /json lists
+        ALL page targets regardless of which client created them, so we reliably
+        see pages opened by the bridge subprocess's browser-use agent.
+        """
+        import aiohttp
+        import json as json_lib
+        from urllib.parse import urlparse
+
+        session_obj = self.session_manager.get_session(user_id)
+        mcp_manager = session_obj.get("mcp_manager")
+        if not mcp_manager:
+            logger.warning(f"No MCP manager for user {user_id}, live preview disabled.")
+            return
+
+        cdp_url = getattr(mcp_manager, "cdp_url", None)
+        if not cdp_url:
+            logger.warning(f"No CDP URL for user {user_id}, live preview disabled.")
+            return
+
+        parsed = urlparse(cdp_url)
+        host = parsed.hostname or "localhost"
+        port = parsed.port
+        json_endpoint = f"http://{host}:{port}/json"
+
+        logger.info(f"Starting raw-CDP screenshot stream: user={user_id} chat={chat_id} port={port}")
+
+        msg_id_counter = [0]
+
+        async def _get_page_ws_url() -> Optional[str]:
+            """Return the WS debugger URL of the first available page target."""
+            try:
+                async with aiohttp.ClientSession() as http:
+                    async with http.get(
+                        json_endpoint,
+                        timeout=aiohttp.ClientTimeout(total=3),
+                    ) as resp:
+                        targets = await resp.json(content_type=None)
+                for t in targets:
+                    if t.get("type") == "page" and t.get("webSocketDebuggerUrl"):
+                        return t["webSocketDebuggerUrl"]
+            except Exception as exc:
+                logger.debug(f"CDP /json failed for user {user_id}: {exc}")
+            return None
+
+        async def _take_screenshot(ws_url: str) -> Optional[str]:
+            """Issue Page.captureScreenshot over CDP and return base64 JPEG string."""
+            msg_id_counter[0] += 1
+            mid = msg_id_counter[0]
+            cmd = json_lib.dumps({
+                "id": mid,
+                "method": "Page.captureScreenshot",
+                "params": {"format": "jpeg", "quality": 75, "captureBeyondViewport": False},
+            })
+            try:
+                async with aiohttp.ClientSession() as http:
+                    async with http.ws_connect(
+                        ws_url,
+                        timeout=aiohttp.ClientTimeout(total=8),
+                    ) as ws:
+                        await ws.send_str(cmd)
+                        async for msg in ws:
+                            if msg.type == aiohttp.WSMsgType.TEXT:
+                                data = json_lib.loads(msg.data)
+                                if data.get("id") == mid:
+                                    if "result" in data:
+                                        return data["result"].get("data")
+                                    logger.debug(f"CDP screenshot error: {data.get('error')}")
+                                    return None
+                            elif msg.type in (aiohttp.WSMsgType.ERROR, aiohttp.WSMsgType.CLOSE):
+                                break
+            except Exception as exc:
+                logger.debug(f"CDP screenshot WS failed for user {user_id}: {exc}")
+            return None
+
+        async def _broadcast_frame(b64: str):
+            # Ensure the frame has the data-URL prefix the frontend expects
+            if not b64.startswith("data:"):
+                b64 = f"data:image/jpeg;base64,{b64}"
+            logger.info(
+                f"Broadcasting browser frame: user={user_id} chat={chat_id} len={len(b64)}"
+            )
+            if self.stream_manager:
+                await self.stream_manager.broadcast_frame(
+                    {"chat_id": chat_id, "frame": b64}, user_id
+                )
+
+        # ── Main capture loop ─────────────────────────────────────────────────────
+        while not stop_event.is_set():
+            try:
+                ws_url = await _get_page_ws_url()
+                if ws_url:
+                    b64 = await _take_screenshot(ws_url)
+                    if b64:
+                        await _broadcast_frame(b64)
+                # If no page yet, silently wait and retry next tick
+            except Exception as exc:
+                logger.error(f"Error in raw-CDP frame capture for user {user_id}: {exc}")
+
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=1.5)
+                break
+            except asyncio.TimeoutError:
+                pass
+
+        # ── Final frame after task completes ─────────────────────────────────────
+        try:
+            ws_url = await _get_page_ws_url()
+            if ws_url:
+                b64 = await _take_screenshot(ws_url)
+                if b64:
+                    await _broadcast_frame(b64)
+                    logger.info(f"Sent final browser frame for user {user_id}")
+        except Exception as exc:
+            logger.debug(f"Could not send final frame for user {user_id}: {exc}")
+
+    def _calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
+        """Calculates the cost of an LLM call based on OpenRouter pricing (approximate)."""
+        # Pricing per 1M tokens (approximate for Gemini 3 Flash Preview)
+        prices = {
+            "google/gemini-3-flash-preview": {"input": 0.1, "output": 0.4},
+            "moonshotai/kimi-k2.7-code": {"input": 0.5, "output": 1.5},
+            "default": {"input": 0.1, "output": 0.4}
+        }
+        
+        p = prices.get(model, prices["default"])
+        cost = (input_tokens / 1_000_000 * p["input"]) + (output_tokens / 1_000_000 * p["output"])
+        return round(cost, 6)
+
+    async def _execute_tool_graph(self, graph_input: Dict[str, Any], tools: List[BaseTool], user_id: str, chat_id: str, task_summary: str, confirmed_inputs: Dict[str, Any], update_ui_func=None) -> Dict[str, Any]:
+        """Executes a LangGraph tool-calling graph for the given input and tools."""
+        
+        # Bind tools to the LLM
+        llm_with_tools = self.llm.bind_tools(tools)
+
+        # Build the static system message ONCE per execution — never rebuilt per step.
+        # The 20-section prompt (~2500 tokens) is identical on every call, so Google
+        # Gemini's implicit prefix cache hits it after the first step.
+        static_sys_msg = SystemMessage(content=_AGENT_STATIC_PROMPT)
+
+        # Define the logic for the agent node
+        async def call_model(state: AgentState):
+            messages = state["messages"]
+            execution_history = state.get("execution_history", [])
             
-            # Ensure system message is always at the start and not duplicated
-            current_messages = list(messages)
-            
-            # --- NEW: Token Management & Summarization (80% Rule) ---
+            # Build small dynamic context (~200 tokens) — task + memory only.
+            # The 20-section static prompt lives in static_sys_msg and is never rebuilt.
+            memory_summary = ""
+            if execution_history:
+                memory_summary = "\nEXECUTION MEMORY (What happened so far):\n"
+                for entry in execution_history:
+                    status_text = "SUCCESS" if entry["status"] == "SUCCESS" else "FAILED"
+                    memory_summary += f"- {status_text} {entry['tool']}: {entry['result'][:100]}...\n"
+
+            dynamic_context = (
+                f"TASK: {task_summary}\n"
+                f"CONFIRMED INPUTS: {json.dumps(confirmed_inputs)}"
+                f"{memory_summary}"
+            )
+
+            # --- DEAD CODE MARKER START (kept for grep reference only) ---
+            # system_message_content f-string removed; static prompt is in _AGENT_STATIC_PROMPT
+            # --- DEAD CODE MARKER END ---
+
+            # Strip any stale SystemMessages from LangGraph state, then prepend the
+            # cached static system message.  Inject dynamic context as a prefix on the
+            # first HumanMessage so the LLM always has current task info without
+            # polluting the static prefix (maximises provider-level cache hits).
+            raw_messages = [m for m in messages if not isinstance(m, SystemMessage)]
+            if raw_messages and isinstance(raw_messages[0], HumanMessage):
+                raw_messages[0] = HumanMessage(
+                    content=f"## TASK CONTEXT\n{dynamic_context}\n\n---\n\n{raw_messages[0].content}"
+                )
+            current_messages = [static_sys_msg] + raw_messages
+
+            # Token Management & Summarization (80% Rule)
             full_text = "".join([m.content for m in current_messages if isinstance(m.content, str)])
             estimated_tokens = self.atag_processor._estimate_tokens(full_text)
-            
+
             if estimated_tokens > 600000:
-                logger.info(f"Token count ({estimated_tokens}) reached limit in tool graph. Summarizing history...")
-                # Summarize the history (excluding the system message)
+                logger.info(f"Token count ({estimated_tokens}) exceeded limit. Summarizing history...")
                 summary = await self.atag_processor.summarize_context(execution_history, "History summarized due to token limit.")
-                
-                # Replace history with a single summary message
-                # We keep the system message and the last user message if possible
                 summary_msg = HumanMessage(content=f"SUMMARY OF PREVIOUS ACTIONS:\n{summary}")
-                
-                # Reconstruct messages: [System, Summary, Last User Message]
-                new_history = []
-                system_msg = next((m for m in current_messages if isinstance(m, SystemMessage)), None)
-                if system_msg: new_history.append(system_msg)
-                else: new_history.append(SystemMessage(content=system_message_content))
-                
-                new_history.append(summary_msg)
-                
-                # Keep the very last message if it's from the user
+                new_history = [static_sys_msg, summary_msg]
                 if isinstance(current_messages[-1], HumanMessage):
                     new_history.append(current_messages[-1])
-                
                 current_messages = new_history
                 logger.info("Conversation history summarized and compressed.")
 
