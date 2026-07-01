@@ -699,8 +699,8 @@ async def toggle_browser_state(req: Dict[str, Any], current_user: User = Depends
 
 @app.post("/sciparser/v1/browser/close")
 async def close_browser_session(current_user: User = Depends(ChatService.get_current_user)):
-    """Manually close the browser session for the current user."""
-    await brain.session_manager.shutdown_session(current_user.user_id)
+    """Close the browser process for the current user (keeps session alive for reuse)."""
+    await brain.session_manager.close_browser(current_user.user_id)
     return {"status": "success", "message": "Browser session closed."}
 
 @app.get("/sciparser/v1/browser/check")

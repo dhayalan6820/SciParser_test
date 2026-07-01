@@ -341,45 +341,55 @@ class DatabaseManager:
 
 def _sanitize_browser_observation(observation: Any, tool_call: Dict[str, Any]) -> Any:
     """
-    Inspect a browser tool observation and replace raw HTML error pages
-    (e.g. Replit proxy "couldn't reach this app") with a clean, actionable
-    error string so the LLM never sees—or echoes back—the raw markup.
+    Inspect a browser tool observation and replace known error/proxy pages
+    with a clean, actionable error string.
+
+    IMPORTANT: Only flag observations that match SPECIFIC known-bad patterns.
+    Do NOT flag legitimate website HTML — the old approach used `is_html_page`
+    which incorrectly blocked real page content from reaching the agent.
     """
     text = str(observation)
-
-    # Patterns that identify known error/proxy pages
-    is_html_page = (
-        re.search(r'<!DOCTYPE\s+html', text, re.IGNORECASE) or
-        re.search(r'<html[\s>]', text, re.IGNORECASE) or
-        ('<body' in text and '</html>' in text.lower())
-    )
-
-    if not is_html_page:
-        return observation
-
-    # Extract a short human-readable snippet from the HTML
-    snippet = re.sub(r'<[^>]+>', ' ', text)           # strip tags
-    snippet = re.sub(r'\s+', ' ', snippet).strip()[:200]
-
-    # Determine specific error kind
     url_attempted = tool_call.get("args", {}).get("url", "")
 
-    if re.search(r"couldn't reach|couldn't reach|We couldn't reach", text, re.IGNORECASE):
+    # --- Known-bad pattern matching (order matters — most specific first) ---
+
+    # 1. Replit proxy "couldn't reach this app" page
+    if re.search(r"couldn't reach|couldn\u2019t reach|We couldn't reach|couldn\u2019t connect", text, re.IGNORECASE):
         reason = "Replit proxy blocked the request — this URL is unreachable inside the sandbox."
-    elif re.search(r'ERR_NAME_NOT_RESOLVED|ERR_CONNECTION_REFUSED|ERR_CONNECTION_TIMED_OUT', text):
+
+    # 2. Browser-level connection errors (typically in error page text or tool output)
+    elif re.search(r'ERR_NAME_NOT_RESOLVED|ERR_CONNECTION_REFUSED|ERR_CONNECTION_TIMED_OUT|ERR_TUNNEL_CONNECTION_FAILED', text):
         reason = "DNS/connection error — the host could not be reached."
-    elif re.search(r'403\s+Forbidden|Access\s+Denied', text, re.IGNORECASE):
+
+    # 3. Verizon / ISP / enterprise bot-protection "Access denied" pages
+    elif re.search(r'Access\s+denied.*(?:Verizon|Security\s+Policy|Information\s+Security)|(?:Verizon|Security\s+Policy).*Access\s+denied', text, re.IGNORECASE | re.DOTALL):
+        reason = "The website blocked automated browser access (Verizon/enterprise security policy). Try searching for an alternative URL."
+
+    # 4. Cloudflare / generic bot-challenge page (only if it's a full HTML block)
+    elif re.search(r'<!DOCTYPE|<html', text, re.IGNORECASE) and re.search(r'403\s+Forbidden', text, re.IGNORECASE):
         reason = "The server returned 403 Forbidden."
-    elif re.search(r'404\s+Not\s+Found', text, re.IGNORECASE):
+
+    elif re.search(r'<!DOCTYPE|<html', text, re.IGNORECASE) and re.search(r'404\s+Not\s+Found', text, re.IGNORECASE):
         reason = "The server returned 404 Not Found."
+
+    # 5. Replit proxy error page signature (CSS background color used in the Replit error page)
+    elif re.search(r'background:\s*#1c2333', text, re.IGNORECASE):
+        reason = "Replit internal proxy error page returned — this URL is blocked inside the sandbox."
+
     else:
-        reason = "The page returned unexpected HTML content instead of the expected data."
+        # No known error pattern — pass the observation through unchanged.
+        # Legitimate website HTML, accessibility-tree output, etc. must NOT be blocked.
+        return observation
+
+    # Build a short human-readable text snippet from any HTML in the observation
+    snippet = re.sub(r'<[^>]+>', ' ', text)
+    snippet = re.sub(r'\s+', ' ', snippet).strip()[:200]
 
     clean_error = (
         f"[Navigation Error] {reason}"
         + (f" URL attempted: {url_attempted}" if url_attempted else "")
         + f" Page text: \"{snippet}\""
-        + " — Try a different URL or search for the correct address."
+        + " — Try a different URL or use web search to find an accessible alternative."
     )
 
     logger.warning(f"Browser observation sanitized for tool '{tool_call.get('name')}': {reason}")
@@ -862,17 +872,18 @@ class Brain:
         return str(result)
 
     async def stop_process(self, chat_id: str, user_id: str = None):
-        """Stops an active agent process and cleans up the browser session."""
+        """Stops an active agent process and closes the browser (without destroying the session)."""
         task = self.active_tasks.get(chat_id)
         if task:
             task.cancel()
             logger.info(f"Cancellation signal sent to task for chat_id {chat_id}")
-            
-            # Also shutdown the browser session if user_id is provided
+            self.active_tasks.pop(chat_id, None)
+
+            # Close the browser process but keep the session alive for reuse
             if user_id:
-                await self.session_manager.shutdown_session(user_id)
-                logger.info(f"Browser session for user {user_id} closed via stop_process.")
-            
+                await self.session_manager.close_browser(user_id)
+                logger.info(f"Browser closed for user {user_id} via stop_process.")
+
             return True
         return False
 

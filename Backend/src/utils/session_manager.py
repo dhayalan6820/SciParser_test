@@ -44,19 +44,29 @@ class SessionManager:
             return len(self.sessions[user_id]["active_chat_ids"])
         return 0
 
+    async def close_browser(self, user_id: str):
+        """Close the browser/MCP process for a user but keep the session alive for reuse.
+        
+        Use this for the 'Close Browser' button and 'Stop Process' — it stops
+        the browser process and marks mcp_manager as None so it will be
+        re-initialised on the next task, without destroying the whole session.
+        """
+        if user_id not in self.sessions:
+            return
+        session = self.sessions[user_id]
+        mcp = session.get("mcp_manager")
+        if mcp:
+            try:
+                await mcp.close()
+                logger.info(f"[User {user_id}] Browser process closed.")
+            except Exception as e:
+                logger.error(f"[User {user_id}] Error closing browser: {e}")
+            session["mcp_manager"] = None
+
     async def shutdown_session(self, user_id: str):
-        """Cleanly releases and stops processes allocated to a user."""
+        """Fully destroy a user session (called at server shutdown or on explicit full-cleanup)."""
         if user_id in self.sessions:
-            session = self.sessions[user_id]
-            
-            # Close MCP manager if it exists (this stops the browser-use bridge and its browser)
-            if session.get("mcp_manager"):
-                try:
-                    await session["mcp_manager"].close()
-                    logger.info(f"[User {user_id}] MCP manager closed.")
-                except Exception as e:
-                    logger.error(f"[User {user_id}] Error closing MCP manager: {e}")
-            
+            await self.close_browser(user_id)
             del self.sessions[user_id]
             logger.info(f"Session for user {user_id} fully cleaned up.")
 
