@@ -75,7 +75,22 @@ export function BrowserPreview({
   });
 
   const runningCount = toolLogs.filter(l => l.status === 'IN_PROGRESS').length;
-  const currentUrl   = [...toolLogs].reverse().find(l => l.tool_name === 'browser_navigate')?.tool_input?.url || 'https://www.google.com';
+  // Derive the current URL from the most-recent tool call that looks like a navigation.
+  // browser-use names its navigate tool differently across versions (go_to_url,
+  // browser_navigate_to, navigate_to, browser_navigate, etc.) so we do a broad
+  // name-substring check and also fall back to any tool that carried a "url" arg.
+  const currentUrl = (() => {
+    const reversed = [...toolLogs].reverse();
+    const navLog = reversed.find(l => {
+      const n = (l.tool_name || '').toLowerCase();
+      return n.includes('navigate') || n.includes('go_to') || n.includes('goto') || n.includes('open_url') || n.includes('open_tab');
+    });
+    const fromNav = navLog?.tool_input?.url || navLog?.tool_input?.URL || navLog?.tool_input?.href;
+    if (fromNav) return fromNav;
+    // Fallback: any tool that received a URL argument
+    const anyUrl = reversed.find(l => l.tool_input?.url)?.tool_input?.url;
+    return anyUrl || 'about:blank';
+  })();
 
   const formatTime = (iso?: string) => {
     if (!iso) return '';

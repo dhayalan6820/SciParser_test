@@ -581,7 +581,7 @@ class Brain:
                 logger.error(f"Error in raw-CDP frame capture for user {user_id}: {exc}")
 
             try:
-                await asyncio.wait_for(stop_event.wait(), timeout=1.5)
+                await asyncio.wait_for(stop_event.wait(), timeout=1.0)
                 break
             except asyncio.TimeoutError:
                 pass
@@ -1197,12 +1197,16 @@ class Brain:
                 await update_ui(len(current_plan) - 1, "failed", error=error_detail, details=f"Overall task failed: {error_detail}")
             return {"success": False, "message": f"An unexpected error occurred: {error_detail}"}
         finally:
-            # Safely cleanup stream tasks if they were initialized
+            # Safely cleanup stream tasks if they were initialized.
+            # IMPORTANT: give the stream task enough time to finish the final-frame
+            # capture (which takes up to ~11 s: 3 s for CDP /json + 8 s for screenshot).
+            # The old 1.0 s timeout killed the task before the results-page frame
+            # could ever be sent, leaving the preview stuck on the first/homepage frame.
             if 'stop_stream' in locals() and stop_stream:
                 stop_stream.set()
             if 'stream_task' in locals() and stream_task:
                 try:
-                    await asyncio.wait_for(stream_task, timeout=1.0)
+                    await asyncio.wait_for(stream_task, timeout=15.0)
                 except Exception:
                     pass
             self.session_manager.remove_active_chat(user_id, chat_id)
