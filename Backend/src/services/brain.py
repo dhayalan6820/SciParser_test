@@ -660,6 +660,14 @@ class Brain:
         # Gemini's implicit prefix cache hits it after the first step.
         static_sys_msg = SystemMessage(content=_AGENT_STATIC_PROMPT)
 
+        # Domain for the current run (used by CAPTCHA outcome tracking below)
+        _task_domain = self._extract_domain_from_task(task_summary, confirmed_inputs)
+
+        # Mutable dict shared across _call_tool invocations to track the last detected
+        # CAPTCHA so we can evaluate whether it was bypassed on the next observation.
+        # Shape when set: {"captcha_type": str, "skill_name": str}
+        _captcha_state: Dict[str, Any] = {}
+
         # Define the logic for the agent node
         async def call_model(state: AgentState):
             messages = state["messages"]
@@ -809,6 +817,49 @@ class Brain:
                     except Exception as e:
                         observation = f"Error executing tool: {str(e)}"
 
+                # ── CAPTCHA outcome evaluation ────────────────────────────────────────
+                # If the previous observation triggered a CAPTCHA skill, check whether
+                # the current observation shows the CAPTCHA is gone (success) or still
+                # present / errored (failure).  Update procedural confidence accordingly
+                # and write a MemoryReflection lesson on failure so the agent learns.
+                if _captcha_state.get("pending") and self.memory_service:
+                    _prev_captcha = _captcha_state.pop("pending")
+                    _still_has_captcha = bool(_detect_captcha(str(observation)))
+                    _obs_is_error = str(observation)[:500].startswith("Error")
+                    _captcha_resolved = not _still_has_captcha and not _obs_is_error
+                    try:
+                        await self.memory_service._update_procedural(
+                            user_id,
+                            _prev_captcha["skill_name"],
+                            _task_domain,
+                            [],
+                            success=_captcha_resolved,
+                        )
+                        if not _captcha_resolved:
+                            await self.memory_service.store_reflection(
+                                user_id,
+                                _task_domain,
+                                (
+                                    f"CAPTCHA skill '{_prev_captcha['skill_name']}' failed to bypass "
+                                    f"{_prev_captcha['captcha_type']} CAPTCHA on {_task_domain}. "
+                                    f"The CAPTCHA was still present after executing the stored steps. "
+                                    f"Try a different bypass approach or wait longer before retrying."
+                                ),
+                                category="CAPTCHA",
+                                severity="HIGH",
+                            )
+                            logger.info(
+                                f"[CAPTCHA] Recorded FAILURE for skill '{_prev_captcha['skill_name']}' "
+                                f"on domain '{_task_domain}' — confidence decreased."
+                            )
+                        else:
+                            logger.info(
+                                f"[CAPTCHA] Recorded SUCCESS for skill '{_prev_captcha['skill_name']}' "
+                                f"on domain '{_task_domain}' — confidence increased."
+                            )
+                    except Exception as _cap_upd_err:
+                        logger.warning(f"[CAPTCHA] outcome update failed (non-fatal): {_cap_upd_err}")
+
                 # ── CAPTCHA detection (runs after try/except, observation always set) ──
                 try:
                     _captcha_type = _detect_captcha(str(observation))
@@ -824,6 +875,11 @@ class Brain:
                                 f"Execute these steps now to bypass the CAPTCHA before continuing."
                             )
                             observation = str(observation) + _captcha_note
+                            # Track this CAPTCHA so we can evaluate the outcome next turn
+                            _captcha_state["pending"] = {
+                                "captcha_type": _captcha_type,
+                                "skill_name": f"captcha_{_captcha_type}",
+                            }
                         else:
                             observation = str(observation) + (
                                 f"\n\n[CAPTCHA_DETECTED: {_captcha_type}]\n"
