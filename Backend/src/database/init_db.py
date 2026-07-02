@@ -25,7 +25,14 @@ async def init_database():
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS proxy_url TEXT"
             ))
             await conn.execute(text(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS browser_engine VARCHAR(50) DEFAULT 'camoufox'"
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS browser_engine VARCHAR(50) DEFAULT NULL"
+            ))
+            # Reset rows that were seeded with the migration default so env-var override
+            # works correctly for self-hosted deployments. Resetting 'camoufox' → NULL is
+            # safe: the effective engine is unchanged (env fallback also yields camoufox
+            # when BROWSER_ENGINE is unset). Explicit 'chrome' rows are untouched.
+            await conn.execute(text(
+                "UPDATE users SET browser_engine = NULL WHERE browser_engine = 'camoufox'"
             ))
             logger.info("Database tables checked/created successfully.")
     except Exception as e:

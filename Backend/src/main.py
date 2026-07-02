@@ -1,3 +1,4 @@
+import os
 import re
 import sys
 import uuid
@@ -945,13 +946,19 @@ async def test_proxy(req: Dict[str, Any], current_user: User = Depends(ChatServi
 async def get_browser_engine(current_user: User = Depends(ChatService.get_current_user), db: AsyncSession = Depends(get_db)):
     """Return the user's preferred browser engine (camoufox or chrome)."""
     session = brain.session_manager.get_session(current_user.user_id)
-    engine = session.get("browser_engine")
-    if engine is None:
-        result = await db.execute(select(User).where(User.user_id == current_user.user_id))
-        db_user = result.scalar_one_or_none()
-        engine = (db_user.browser_engine if db_user and db_user.browser_engine else "camoufox")
-        session["browser_engine"] = engine
-    return {"engine": engine}
+    session_engine = session.get("browser_engine")
+    if session_engine is not None:
+        return {"engine": session_engine}
+    result = await db.execute(select(User).where(User.user_id == current_user.user_id))
+    db_user = result.scalar_one_or_none()
+    db_engine = db_user.browser_engine if db_user else None
+    if db_engine is not None:
+        # Explicit user choice stored in DB — cache it in session for this run
+        session["browser_engine"] = db_engine
+        return {"engine": db_engine}
+    # No explicit user choice — honour env var, DON'T write to session so
+    # MCPToolManager's own fallback chain (browser_engine → BROWSER_ENGINE env → camoufox) is preserved
+    return {"engine": os.getenv("BROWSER_ENGINE", "camoufox")}
 
 
 @app.post("/sciparser/v1/settings/browser-engine")
