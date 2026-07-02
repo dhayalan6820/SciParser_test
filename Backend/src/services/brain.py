@@ -4,6 +4,7 @@ import os
 import json
 import re
 import uuid
+import httpx
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -1334,6 +1335,56 @@ class Brain:
                 except Exception:
                     pass
                 session_obj["mcp_manager"] = None
+
+            # Pre-flight proxy check — verify the proxy is reachable and show exit IP
+            _proxy_url_preflight = session_obj.get("proxy_url")
+            if _proxy_url_preflight:
+                from urllib.parse import urlparse as _pf_up, urlunparse as _pf_uu
+                def _mask_proxy(url: str) -> str:
+                    try:
+                        _p = _pf_up(url)
+                        if _p.password:
+                            netloc = f"{_p.username}:***@{_p.hostname}"
+                            if _p.port:
+                                netloc += f":{_p.port}"
+                            return _pf_uu((_p.scheme, netloc, _p.path, _p.params, _p.query, _p.fragment))
+                    except Exception:
+                        pass
+                    return url
+
+                try:
+                    async with httpx.AsyncClient(proxy=_proxy_url_preflight, timeout=10) as _pc:
+                        _ip_resp = await _pc.get("https://api.ipify.org?format=json")
+                    _ip_resp.raise_for_status()
+                    _exit_ip = _ip_resp.json().get("ip")
+                    if not _exit_ip:
+                        raise ValueError("No IP in ipify response")
+                    logger.info(f"Proxy pre-flight OK for user {user_id} — exit IP: {_exit_ip}")
+                    if self.stream_manager:
+                        await self.stream_manager.broadcast_thought(
+                            chat_id,
+                            f"Proxy active — exit IP: {_exit_ip}",
+                        )
+                except Exception as _proxy_err:
+                    logger.warning(
+                        f"Proxy pre-flight failed for user {user_id} "
+                        f"({_mask_proxy(_proxy_url_preflight)}): {_proxy_err}. "
+                        "Falling back to direct connection."
+                    )
+                    if self.stream_manager:
+                        await self.stream_manager.broadcast_thought(
+                            chat_id,
+                            f"Proxy unreachable. Falling back to direct datacenter connection.",
+                        )
+                    # Clear proxy and close any existing manager so this run uses a direct connection
+                    session_obj["proxy_url"] = None
+                    _dead_mgr = session_obj.get("mcp_manager")
+                    if _dead_mgr:
+                        try:
+                            await _dead_mgr.close()
+                        except Exception:
+                            pass
+                        session_obj["mcp_manager"] = None
 
             if not session_obj.get("mcp_manager"):
                 logger.info(f"Preparing MCP manager for user {user_id} on port {user_port}...")
