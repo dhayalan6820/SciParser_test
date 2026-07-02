@@ -1410,6 +1410,16 @@ async def run_bridge():
                     if own_browser and chrome_proc is None:
                         try:
                             print("Bridge: camoufox failed — falling back to Chrome", file=sys.stderr)
+                            # Write a flag file so the backend can notify the user
+                            try:
+                                import json as _json
+                                _flag_path = f"/tmp/camoufox_fallback_{port}.json"
+                                Path(_flag_path).write_text(
+                                    _json.dumps({"fallback": True, "reason": str(exc)})
+                                )
+                                print(f"Bridge: wrote camoufox fallback flag → {_flag_path}", file=sys.stderr)
+                            except Exception as _fe:
+                                print(f"Bridge: could not write fallback flag — {_fe!r}", file=sys.stderr)
                             chrome_proc = await _launch_chrome(port, user_data_dir, headless, proxy_url=proxy_url)
                             async def _drain_err():
                                 assert chrome_proc.stderr
@@ -1426,6 +1436,16 @@ async def run_bridge():
             asyncio.create_task(_start_camoufox_background())
         except ImportError:
             print("Bridge: camoufox not installed — falling back to Chrome", file=sys.stderr)
+            # Write a flag file so the backend can notify the user about the fallback
+            try:
+                import json as _json
+                _flag_path = f"/tmp/camoufox_fallback_{port}.json"
+                Path(_flag_path).write_text(
+                    _json.dumps({"fallback": True, "reason": "camoufox not installed"})
+                )
+                print(f"Bridge: wrote camoufox fallback flag → {_flag_path}", file=sys.stderr)
+            except Exception as _fe:
+                print(f"Bridge: could not write fallback flag — {_fe!r}", file=sys.stderr)
             browser_engine = "chrome"
             # The if/elif/else chain entered this branch, so the elif/else below
             # will not execute. Handle Chrome / ready signalling explicitly here.

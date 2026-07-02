@@ -72,6 +72,19 @@ class PlanStreamManager:
                 except Exception:
                     pass
 
+    async def broadcast_notification(self, chat_id: str, notification_type: str, message: str):
+        """Broadcasts a one-time informational notification to the UI."""
+        if chat_id in self.active_connections:
+            for connection in self.active_connections[chat_id]:
+                try:
+                    await connection.send_json({
+                        "type": "notification",
+                        "notification_type": notification_type,
+                        "message": message,
+                    })
+                except Exception:
+                    pass
+
     async def broadcast_plan(self, chat_id: str, plan_data: Any):
         if chat_id in self.active_connections:
             for connection in self.active_connections[chat_id]:

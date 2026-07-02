@@ -1438,6 +1438,21 @@ class Brain:
             
             logger.info(f"Discovered {len(all_tools)} tools for execution.")
 
+            # Check whether the bridge fell back from Camoufox to Chrome and notify the user
+            _fallback_flag = Path(f"/tmp/camoufox_fallback_{user_port}.json")
+            if _fallback_flag.exists():
+                try:
+                    _fallback_flag.unlink()
+                except Exception:
+                    pass
+                logger.warning(f"[brain] Camoufox → Chrome fallback detected for user {user_id}, notifying chat {chat_id}")
+                if self.stream_manager:
+                    await self.stream_manager.broadcast_notification(
+                        chat_id,
+                        "camoufox_fallback",
+                        "Camoufox failed to start — running on Chrome instead",
+                    )
+
             # Start direct-CDP screenshot stream (no MCP tools needed)
             self.clear_live_tool_logs(chat_id)  # fresh slate for this execution
             stop_stream = asyncio.Event()

@@ -153,6 +153,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const [proxyTestResult, setProxyTestResult] = React.useState<string | null>(null);
   const [proxyInputVisible, setProxyInputVisible] = React.useState(false);
 
+  // Camoufox fallback warning banner
+  const [camoufoxFallbackWarning, setCamoufoxFallbackWarning] = React.useState(false);
+
   // CDP (Connect Your Browser) state
   const [cdpConnected, setCdpConnected] = React.useState(false);
   const [cdpConnectedUrl, setCdpConnectedUrl] = React.useState<string | null>(null);
@@ -796,6 +799,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               (t: any) => t.status === "in-progress" || t.status === "running" || t.status === "pending"
             );
             if (stillRunning) setIsAiTyping(true);
+          } else if (msg.type === "notification" && msg.notification_type === "camoufox_fallback") {
+            setCamoufoxFallbackWarning(true);
           } else if (msg.type === "thought_update") {
             setAiThinking(msg.data);
             // Associate thought with the currently running task
@@ -3252,6 +3257,29 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   )}
                 </div>
               </div>
+
+              {/* Camoufox fallback warning banner */}
+              {camoufoxFallbackWarning && (
+                <div className="mx-3 mt-2 flex items-center gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300 shrink-0">
+                  <span className="shrink-0">⚠</span>
+                  <span className="flex-1">
+                    Camoufox failed to start — running on Chrome instead. Bot detection may be less effective.{" "}
+                    <button
+                      onClick={() => handleSwitchView("settings")}
+                      className="underline underline-offset-2 hover:text-amber-200 transition-colors"
+                    >
+                      Open Settings
+                    </button>
+                  </span>
+                  <button
+                    onClick={() => setCamoufoxFallbackWarning(false)}
+                    className="shrink-0 text-amber-400 hover:text-amber-200 transition-colors"
+                    aria-label="Dismiss"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
 
               {/* Messages Container */}
               <div className="flex-1 flex flex-row overflow-hidden">
