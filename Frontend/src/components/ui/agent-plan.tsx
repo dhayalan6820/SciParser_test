@@ -312,7 +312,7 @@ export default function Plan({
                                   </span>
                                 )}
                               </div>
-                              <p className="text-[13px] leading-[1.7] text-white/60 font-normal">
+                              <p className="text-[13px] leading-[1.7] text-white/60 font-normal whitespace-pre-line">
                                 {thought}
                               </p>
                             </motion.div>

@@ -66,9 +66,13 @@ Never assume the page is in the state you expect. Always inspect first, then act
 
 ## 4. REASONING
 
-Think freely and naturally in plain language before every action. Describe what you observe, what you're uncertain about, why you chose this action over alternatives, and what you expect to happen. Write as if explaining your reasoning to a curious user watching over your shoulder — be clear, concise, and human. Do NOT use any rigid format like THOUGHT:/INSTRUCTION:, numbered step labels, or XML tags. Just think, then act.
+Think in plain language before every action. Describe what you observe, why you chose this action, and what you expect to happen next. Write as if explaining to a curious user watching over your shoulder.
 
-This reasoning is shown to the user in real time, so keep it friendly and informative.
+**STRICT REASONING FORMAT RULES (mandatory):**
+- Maximum 4 to 6 lines of text. Never exceed 6 lines.
+- Plain prose only — no markdown headers (`#`, `##`), no bold (`**`), no bullet lists, no numbered lists.
+- No "Execution Summary", "Final Status", or post-action report sections inside reasoning. Those belong in your final response, not your per-step thought.
+- Do NOT use any rigid format like THOUGHT:/INSTRUCTION:, numbered step labels, or XML tags. Just think, then act.
 
 **CRITICAL — Action Commitment Rule:** If you decide to take an action, you MUST call the tool in the SAME response. Never write phrases like "I will now X", "Next I will X", "I am going to X", or "Let me now X" without including the actual tool call for X in that very response. Writing about a future action without executing it causes the task to end immediately with no result. Think → decide → call the tool, all in one turn.
 
@@ -908,11 +912,21 @@ class Brain:
                 clean_content = re.sub(r"<｜tool▁.*?｜>", "", response.content)
                 clean_content = re.sub(r"MMMM+.*", "", clean_content).strip()
                 
-                # Broadcast full reasoning to UI — no format restriction
+                # Broadcast condensed, markdown-free reasoning to UI
                 if self.stream_manager and clean_content:
-                    # Strip any residual THOUGHT:/INSTRUCTION: markers from older model outputs
+                    # Strip THOUGHT:/INSTRUCTION: markers
                     thought_text = re.sub(r"(?i)^THOUGHT\s*:\s*", "", clean_content.strip())
                     thought_text = re.sub(r"(?i)\bINSTRUCTION\s*:.*$", "", thought_text, flags=re.DOTALL).strip()
+                    # Strip markdown formatting characters so the UI renders clean prose
+                    thought_text = re.sub(r"#{1,6}\s+", "", thought_text)           # headers
+                    thought_text = re.sub(r"\*{1,3}([^*\n]+)\*{1,3}", r"\1", thought_text)  # bold/italic
+                    thought_text = re.sub(r"_{1,2}([^_\n]+)_{1,2}", r"\1", thought_text)    # underscores
+                    thought_text = re.sub(r"`{1,3}[^`\n]*`{1,3}", "", thought_text)         # code spans
+                    thought_text = re.sub(r"^[-*+]\s+", "", thought_text, flags=re.MULTILINE) # bullets
+                    thought_text = re.sub(r"^\d+\.\s+", "", thought_text, flags=re.MULTILINE) # numbered lists
+                    # Collapse blank lines and cap at 6 lines
+                    lines = [l.rstrip() for l in thought_text.splitlines() if l.strip()]
+                    thought_text = "\n".join(lines[:6]).strip()
                     if thought_text:
                         await self.stream_manager.broadcast_thought(chat_id, thought_text)
                 
