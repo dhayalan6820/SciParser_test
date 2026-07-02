@@ -727,7 +727,7 @@ def _pick_user_agent() -> str:
     return _USER_AGENTS[idx % len(_USER_AGENTS)]
 
 
-async def _launch_chrome(port: int, user_data_dir: str, headless: bool) -> asyncio.subprocess.Process:
+async def _launch_chrome(port: int, user_data_dir: str, headless: bool, proxy_url: str = "") -> asyncio.subprocess.Process:
     args = [
         CHROME_BINARY,
         f"--remote-debugging-port={port}",
@@ -749,9 +749,9 @@ async def _launch_chrome(port: int, user_data_dir: str, headless: bool) -> async
         "--disable-default-apps",
         "--mute-audio",
         "--lang=en-US,en",
-        # --- Network / proxy fixes -------------------------------------------
-        # Bypass any transparent proxy Replit injects so Chrome connects directly
-        "--no-proxy-server",
+        # --- Network / proxy ---------------------------------------------------
+        # Use user-supplied proxy if configured; otherwise bypass Replit's transparent proxy.
+        f"--proxy-server={proxy_url}" if proxy_url else "--no-proxy-server",
         # Don't fail on self-signed or mismatched TLS certs
         "--ignore-certificate-errors",
         "--ignore-ssl-errors",
@@ -828,7 +828,7 @@ def _write_browser_use_config(cdp_url: str, headless: bool) -> None:
 # Monkey-patch: wait for Chrome + reset browser_session on failure
 # ---------------------------------------------------------------------------
 
-def _patch_mcp_server_session_retry(chrome_ready: asyncio.Event, cdp_url: str, headless: bool) -> None:
+def _patch_mcp_server_session_retry(chrome_ready: asyncio.Event, cdp_url: str, headless: bool, proxy_url: str = "") -> None:
     """
     Full replacement of BrowserUseServer._init_browser_session that:
 
@@ -850,9 +850,10 @@ def _patch_mcp_server_session_retry(chrome_ready: asyncio.Event, cdp_url: str, h
         print("Bridge: _init_browser_session not found — skipping patch", file=sys.stderr)
         return
 
-    # Capture cdp_url and headless in closure
+    # Capture cdp_url, headless, and proxy_url in closure
     _cdp_url = cdp_url
     _headless = headless
+    _proxy_url = proxy_url
 
     async def _patched_init(self, allowed_domains: "list[str] | None" = None, **kwargs):
         # Already connected
@@ -898,6 +899,7 @@ def _patch_mcp_server_session_retry(chrome_ready: asyncio.Event, cdp_url: str, h
                 keep_alive=True,
                 disable_security=True,
                 allowed_domains=allowed_domains or None,
+                **({"proxy": {"server": _proxy_url}} if _proxy_url else {}),
             )
             self.browser_session = session
             await session.start()
@@ -1294,6 +1296,7 @@ async def run_bridge():
     port           = int(port_env) if port_env and port_env not in ("", "0") else find_free_port()
     headless       = os.getenv("BROWSER_USE_HEADLESS", "true").lower() != "false"
     browser_engine = os.getenv("BROWSER_ENGINE", "chrome").lower()
+    proxy_url      = os.getenv("BROWSER_PROXY_URL", "").strip()  # e.g. http://user:pass@host:port
 
     # Persistent profile directory — cookies, localStorage, and history
     # survive between runs so the browser looks like a real returning user.
@@ -1310,7 +1313,7 @@ async def run_bridge():
 
     print(
         f"Bridge: port={port}  headless={headless}  own_browser={own_browser}  "
-        f"cdp_url={cdp_url}  user_data_dir={user_data_dir}",
+        f"cdp_url={cdp_url}  user_data_dir={user_data_dir}  proxy={'<set>' if proxy_url else 'none'}",
         file=sys.stderr,
     )
 
@@ -1340,6 +1343,7 @@ async def run_bridge():
                     # async function that requires a Playwright object, not a CM.
                     async with camoufox.AsyncCamoufox(
                         headless=headless,
+                        **({"proxy": {"server": proxy_url}} if proxy_url else {}),
                     ) as browser_or_ctx:
                         # AsyncCamoufox may yield a Browser or BrowserContext
                         # depending on whether persistent_context is set.
@@ -1406,7 +1410,7 @@ async def run_bridge():
                     if own_browser and chrome_proc is None:
                         try:
                             print("Bridge: camoufox failed — falling back to Chrome", file=sys.stderr)
-                            chrome_proc = await _launch_chrome(port, user_data_dir, headless)
+                            chrome_proc = await _launch_chrome(port, user_data_dir, headless, proxy_url=proxy_url)
                             async def _drain_err():
                                 assert chrome_proc.stderr
                                 while True:
@@ -1429,7 +1433,7 @@ async def run_bridge():
                 async def _camoufox_fallback_chrome() -> None:
                     nonlocal chrome_proc
                     try:
-                        chrome_proc = await _launch_chrome(port, user_data_dir, headless)
+                        chrome_proc = await _launch_chrome(port, user_data_dir, headless, proxy_url=proxy_url)
                         async def _drain():
                             assert chrome_proc.stderr
                             while True:
@@ -1457,7 +1461,7 @@ async def run_bridge():
             nonlocal chrome_proc
             print("Bridge: launching Chrome in background...", file=sys.stderr)
             try:
-                chrome_proc = await _launch_chrome(port, user_data_dir, headless)
+                chrome_proc = await _launch_chrome(port, user_data_dir, headless, proxy_url=proxy_url)
 
                 # Drain stderr in background so the pipe buffer never fills
                 async def _drain_stderr():
@@ -1504,7 +1508,7 @@ async def run_bridge():
     _write_browser_use_config(cdp_url, headless)
 
     # -- Apply patches --------------------------------------------------------
-    _patch_mcp_server_session_retry(chrome_ready, cdp_url, headless)
+    _patch_mcp_server_session_retry(chrome_ready, cdp_url, headless, proxy_url=proxy_url)
     _patch_add_human_tools()  # adds browser_key_press / browser_hover / browser_wait / browser_drag
 
     # -- Start browser-use MCP server (blocking) ------------------------------

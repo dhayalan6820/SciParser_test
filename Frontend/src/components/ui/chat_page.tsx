@@ -49,6 +49,9 @@ import {
   Camera,
   Link,
   Copy,
+  Shield,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import Plan, { Task } from "./agent-plan";
@@ -134,6 +137,18 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
   const [agentHistory, setAgentHistory] = React.useState<any[]>([]);
   const [showHistory, setShowHistory] = React.useState(false);
+
+  // Proxy state
+  const [proxyActive, setProxyActive] = React.useState(false);
+  const [proxyUrlMasked, setProxyUrlMasked] = React.useState<string | null>(null);
+  const [showProxyModal, setShowProxyModal] = React.useState(false);
+  const [proxyInput, setProxyInput] = React.useState("");
+  const [proxySaving, setProxySaving] = React.useState(false);
+  const [proxyDeleting, setProxyDeleting] = React.useState(false);
+  const [proxyError, setProxyError] = React.useState<string | null>(null);
+  const [proxyTesting, setProxyTesting] = React.useState(false);
+  const [proxyTestResult, setProxyTestResult] = React.useState<string | null>(null);
+  const [proxyInputVisible, setProxyInputVisible] = React.useState(false);
 
   // CDP (Connect Your Browser) state
   const [cdpConnected, setCdpConnected] = React.useState(false);
@@ -427,15 +442,68 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     }
   }, []);
 
-  // Load CDP status once user profile is available
+  // Load proxy + CDP status once user profile is available
   React.useEffect(() => {
     if (!userProfile) return;
+    sciparserApi.getProxyStatus().then((s) => {
+      setProxyActive(s.active);
+      setProxyUrlMasked(s.proxy_url_masked);
+    }).catch(() => {});
     sciparserApi.getCdpStatus().then((s) => {
       setCdpConnected(s.connected);
       setCdpConnectedUrl(s.cdp_url);
       if (s.cdp_url) setCdpUrlInput(s.cdp_url);
     }).catch(() => {});
   }, [userProfile]);
+
+  const handleSaveProxy = async () => {
+    if (!proxyInput.trim()) return;
+    setProxySaving(true);
+    setProxyError(null);
+    setProxyTestResult(null);
+    try {
+      await sciparserApi.setProxy(proxyInput.trim());
+      const s = await sciparserApi.getProxyStatus();
+      setProxyActive(s.active);
+      setProxyUrlMasked(s.proxy_url_masked);
+      setProxyInput("");
+      setShowProxyModal(false);
+    } catch (err: any) {
+      setProxyError(err.message || "Failed to save proxy");
+    } finally {
+      setProxySaving(false);
+    }
+  };
+
+  const handleDeleteProxy = async () => {
+    setProxyDeleting(true);
+    setProxyError(null);
+    try {
+      await sciparserApi.deleteProxy();
+      setProxyActive(false);
+      setProxyUrlMasked(null);
+      setProxyInput("");
+      setProxyTestResult(null);
+    } catch (err: any) {
+      setProxyError(err.message || "Failed to remove proxy");
+    } finally {
+      setProxyDeleting(false);
+    }
+  };
+
+  const handleTestProxy = async () => {
+    setProxyTesting(true);
+    setProxyError(null);
+    setProxyTestResult(null);
+    try {
+      const res = await sciparserApi.testProxy(proxyInput.trim() || undefined);
+      setProxyTestResult(`✓ Exit IP: ${res.exit_ip}`);
+    } catch (err: any) {
+      setProxyError(err.message || "Proxy test failed");
+    } finally {
+      setProxyTesting(false);
+    }
+  };
 
   const handleConnectCdp = async () => {
     setCdpConnecting(true);
@@ -2007,6 +2075,123 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
       {/* Form Popup Overlay */}
       {/* Connect Your Browser (CDP) modal */}
+      {showProxyModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowProxyModal(false)}>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-[#1A1A1A] rounded-2xl shadow-2xl border border-[#2A2A2A] overflow-hidden flex flex-col"
+          >
+            <div className="px-5 py-4 border-b border-[#2A2A2A] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Shield className={cn("w-4 h-4", proxyActive ? "text-violet-400" : "text-[#9CA3AF]")} />
+                <h3 className="font-semibold text-[#F8FAFC] text-sm">
+                  {proxyActive ? "Residential Proxy Active" : "Configure Residential Proxy"}
+                </h3>
+              </div>
+              <button onClick={() => setShowProxyModal(false)} className="text-[#6B7280] hover:text-[#F8FAFC] transition-colors">
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-4">
+              {proxyActive ? (
+                <div className="space-y-3">
+                  <div className="bg-violet-900/20 border border-violet-500/30 rounded-lg px-3 py-2.5">
+                    <p className="text-xs text-violet-300 font-medium mb-0.5">Active proxy</p>
+                    <p className="text-xs text-[#9CA3AF] font-mono break-all">{proxyUrlMasked}</p>
+                  </div>
+                  <p className="text-xs text-[#6B7280]">All browser sessions for your account are routed through this proxy. Remove it to go back to the datacenter IP.</p>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 text-xs border-[#2A2A2A] text-[#9CA3AF] hover:text-[#F8FAFC]"
+                      onClick={handleTestProxy}
+                      disabled={proxyTesting}
+                    >
+                      {proxyTesting ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
+                      {proxyTesting ? "Testing…" : "Test Proxy"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 text-xs border-red-900/40 text-red-400 hover:bg-red-900/10"
+                      onClick={handleDeleteProxy}
+                      disabled={proxyDeleting}
+                    >
+                      {proxyDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
+                      {proxyDeleting ? "Removing…" : "Remove Proxy"}
+                    </Button>
+                  </div>
+                  {proxyTestResult && (
+                    <p className="text-xs text-emerald-400 bg-emerald-900/20 border border-emerald-500/20 rounded px-2 py-1.5">{proxyTestResult}</p>
+                  )}
+                  {proxyError && (
+                    <p className="text-xs text-red-400 bg-red-900/20 border border-red-500/20 rounded px-2 py-1.5">{proxyError}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-xs text-[#9CA3AF] leading-relaxed">
+                    Route browser traffic through a residential proxy to bypass WAF blocks on telecom and financial sites (Verizon, Frontier, AT&T, etc.). Works with Brightdata, Oxylabs, Smartproxy, or any HTTP proxy.
+                  </p>
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-[#9CA3AF] font-medium">Proxy URL</label>
+                    <div className="relative">
+                      <input
+                        type={proxyInputVisible ? "text" : "password"}
+                        value={proxyInput}
+                        onChange={(e) => setProxyInput(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleSaveProxy()}
+                        placeholder="http://user:pass@proxy.example.com:22225"
+                        className="w-full bg-[#111] border border-[#2A2A2A] rounded-lg px-3 py-2 text-xs text-[#F8FAFC] placeholder-[#4B5563] focus:outline-none focus:border-violet-500/50 pr-9 font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setProxyInputVisible((v) => !v)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6B7280] hover:text-[#9CA3AF]"
+                      >
+                        {proxyInputVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-[#4B5563]">Credentials are stored in server memory only, not in the database.</p>
+                  </div>
+                  {proxyError && (
+                    <p className="text-xs text-red-400 bg-red-900/20 border border-red-500/20 rounded px-2 py-1.5">{proxyError}</p>
+                  )}
+                  {proxyTestResult && (
+                    <p className="text-xs text-emerald-400 bg-emerald-900/20 border border-emerald-500/20 rounded px-2 py-1.5">{proxyTestResult}</p>
+                  )}
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 text-xs border-[#2A2A2A] text-[#9CA3AF] hover:text-[#F8FAFC]"
+                      onClick={handleTestProxy}
+                      disabled={proxyTesting || !proxyInput.trim()}
+                    >
+                      {proxyTesting ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
+                      {proxyTesting ? "Testing…" : "Test"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="flex-1 text-xs bg-violet-600 hover:bg-violet-500 text-white"
+                      onClick={handleSaveProxy}
+                      disabled={proxySaving || !proxyInput.trim()}
+                    >
+                      {proxySaving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
+                      {proxySaving ? "Saving…" : "Save Proxy"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       {showCdpModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowCdpModal(false)}>
           <motion.div
@@ -2953,6 +3138,23 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     <span className={cn("w-2 h-2 rounded-full shrink-0", cdpConnected ? "bg-emerald-400" : "bg-[#4B5563]")} />
                     <Link className="w-4 h-4" />
                     <span className="hidden md:inline">{cdpConnected ? "Your Browser" : "Connect Browser"}</span>
+                  </Button>
+
+                  {/* Residential Proxy button */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => { setProxyError(null); setProxyTestResult(null); setShowProxyModal(true); }}
+                    title={proxyActive ? `Proxy active: ${proxyUrlMasked}` : "Configure a residential proxy to bypass WAF blocks"}
+                    className={cn(
+                      "gap-1.5 text-xs font-semibold shrink-0 transition-all duration-300",
+                      proxyActive
+                        ? "border-violet-500 text-violet-400 hover:bg-violet-900/20"
+                        : "border-[#2A2A2A] text-[#9CA3AF] hover:text-[#F8FAFC] hover:border-[#3A3A3A]",
+                    )}
+                  >
+                    <Shield className={cn("w-4 h-4", proxyActive && "fill-violet-500/20")} />
+                    <span className="hidden md:inline">{proxyActive ? "Proxy On" : "Proxy"}</span>
                   </Button>
 
                   {browserActive && (

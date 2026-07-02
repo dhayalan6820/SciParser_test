@@ -1339,15 +1339,17 @@ class Brain:
                 logger.info(f"Preparing MCP manager for user {user_id} on port {user_port}...")
                 ua_index = session_obj.get("ua_index", 0)
                 user_cdp_url = session_obj.get("cdp_url")  # set when user connects their own browser
+                user_proxy_url = session_obj.get("proxy_url")  # residential proxy URL
                 if user_cdp_url:
                     logger.info(f"Using user-provided CDP URL for {user_id}: {user_cdp_url}")
                     session_obj["mcp_manager"] = MCPToolManager(
                         cdp_url=user_cdp_url,
                         user_agent_index=ua_index,
                         own_browser=False,
+                        proxy_url=user_proxy_url,
                     )
                 else:
-                    session_obj["mcp_manager"] = MCPToolManager(port=user_port, user_agent_index=ua_index)
+                    session_obj["mcp_manager"] = MCPToolManager(port=user_port, user_agent_index=ua_index, proxy_url=user_proxy_url)
 
             mcp_manager = session_obj["mcp_manager"]
             
@@ -1373,7 +1375,7 @@ class Brain:
                         await mcp_manager.close()
                     except Exception:
                         pass
-                    session_obj["mcp_manager"] = MCPToolManager(port=user_port, user_agent_index=session_obj.get("ua_index", 0))
+                    session_obj["mcp_manager"] = MCPToolManager(port=user_port, user_agent_index=session_obj.get("ua_index", 0), proxy_url=session_obj.get("proxy_url"))
                     mcp_manager = session_obj["mcp_manager"]
                     all_tools = await mcp_manager.get_tools()
                 else:
@@ -1527,7 +1529,7 @@ class Brain:
                         next_ua = (session_obj.get("ua_index", 0) + 1) % 5
                         session_obj["ua_index"] = next_ua
                         logger.info(f"[Retry] Starting fresh browser with user-agent index {next_ua}...")
-                        session_obj["mcp_manager"] = MCPToolManager(port=user_port, user_agent_index=next_ua)
+                        session_obj["mcp_manager"] = MCPToolManager(port=user_port, user_agent_index=next_ua, proxy_url=session_obj.get("proxy_url"))
                         mcp_manager = session_obj["mcp_manager"]
 
                         # Re-discover tools from the fresh session

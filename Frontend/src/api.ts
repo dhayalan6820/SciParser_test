@@ -488,6 +488,62 @@ export const sciparserApi = {
     return res.json() as Promise<{ connected: boolean; cdp_url: string | null }>;
   },
 
+  // Residential Proxy
+  setProxy: async (proxyUrl: string) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/settings/proxy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: formattedToken },
+      body: JSON.stringify({ proxy_url: proxyUrl }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Failed to save proxy");
+    }
+    return res.json();
+  },
+
+  deleteProxy: async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/settings/proxy`, {
+      method: "DELETE",
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  getProxyStatus: async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/settings/proxy`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<{ active: boolean; proxy_url_masked: string | null }>;
+  },
+
+  testProxy: async (proxyUrl?: string) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/settings/proxy/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: formattedToken },
+      body: JSON.stringify({ proxy_url: proxyUrl || "" }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Proxy test failed");
+    }
+    return res.json() as Promise<{ status: string; exit_ip: string }>;
+  },
+
   // Logout
   logout: () => {
     localStorage.removeItem("access_token");

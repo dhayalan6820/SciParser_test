@@ -843,6 +843,85 @@ async def get_cdp_status(current_user: User = Depends(ChatService.get_current_us
     return {"connected": cdp_url is not None, "cdp_url": cdp_url}
 
 
+@app.post("/sciparser/v1/settings/proxy")
+async def set_proxy(req: Dict[str, Any], current_user: User = Depends(ChatService.get_current_user)):
+    """Store a residential proxy URL for the current user's browser sessions."""
+    from urllib.parse import urlparse as _urlparse
+    proxy_url = (req.get("proxy_url") or "").strip()
+    if not proxy_url:
+        raise HTTPException(status_code=400, detail="proxy_url is required")
+    _parsed = _urlparse(proxy_url)
+    if _parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="proxy_url must use http or https scheme")
+    if not _parsed.hostname:
+        raise HTTPException(status_code=400, detail="proxy_url must include a valid hostname")
+    session = brain.session_manager.get_session(current_user.user_id)
+    session["proxy_url"] = proxy_url
+    if session.get("mcp_manager"):
+        try:
+            await session["mcp_manager"].close()
+        except Exception:
+            pass
+        session["mcp_manager"] = None
+    return {"status": "saved"}
+
+
+@app.delete("/sciparser/v1/settings/proxy")
+async def delete_proxy(current_user: User = Depends(ChatService.get_current_user)):
+    """Remove the user's proxy configuration."""
+    session = brain.session_manager.get_session(current_user.user_id)
+    session["proxy_url"] = None
+    if session.get("mcp_manager"):
+        try:
+            await session["mcp_manager"].close()
+        except Exception:
+            pass
+        session["mcp_manager"] = None
+    return {"status": "removed"}
+
+
+@app.get("/sciparser/v1/settings/proxy")
+async def get_proxy_status(current_user: User = Depends(ChatService.get_current_user)):
+    """Return the user's current proxy configuration (password masked)."""
+    from urllib.parse import urlparse as _urlparse, urlunparse as _urlunparse
+    session = brain.session_manager.get_session(current_user.user_id)
+    proxy_url = session.get("proxy_url")
+    masked: str | None = None
+    if proxy_url:
+        try:
+            _p = _urlparse(proxy_url)
+            if _p.password:
+                # Rebuild with password replaced by ***
+                netloc = f"{_p.username}:***@{_p.hostname}"
+                if _p.port:
+                    netloc += f":{_p.port}"
+                masked = _urlunparse((_p.scheme, netloc, _p.path, _p.params, _p.query, _p.fragment))
+            else:
+                masked = proxy_url
+        except Exception:
+            masked = proxy_url
+    return {"active": proxy_url is not None, "proxy_url_masked": masked}
+
+
+@app.post("/sciparser/v1/settings/proxy/test")
+async def test_proxy(req: Dict[str, Any], current_user: User = Depends(ChatService.get_current_user)):
+    """Test a proxy URL by routing a request to an IP-check service through it."""
+    proxy_url = (req.get("proxy_url") or "").strip()
+    if not proxy_url:
+        # Fall back to checking the stored proxy
+        session = brain.session_manager.get_session(current_user.user_id)
+        proxy_url = session.get("proxy_url") or ""
+    if not proxy_url:
+        raise HTTPException(status_code=400, detail="No proxy_url provided or saved")
+    try:
+        async with _httpx.AsyncClient(proxy=proxy_url, timeout=10) as client:
+            resp = await client.get("https://api.ipify.org?format=json")
+        data = resp.json()
+        return {"status": "ok", "exit_ip": data.get("ip", "unknown")}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Proxy test failed: {exc}")
+
+
 @app.post("/sciparser/v1/browser/close")
 async def close_browser_session(current_user: User = Depends(ChatService.get_current_user)):
     """Close the browser process for the current user (keeps session alive for reuse)."""
