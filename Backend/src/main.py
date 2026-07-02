@@ -4,10 +4,18 @@ import sys
 import uuid
 import json
 import asyncio
+import smtplib
+import tempfile
+import subprocess
 import traceback
 import httpx as _httpx
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -138,15 +146,352 @@ plan_stream_manager = PlanStreamManager()
 brain.stream_manager = plan_stream_manager
 brain.session_manager.stream_manager = plan_stream_manager
 
+# ── APScheduler (global) ───────────────────────────────────────────────────
+_scheduler = AsyncIOScheduler(timezone="UTC")
+
+
+def _calculate_next_run(schedule_type: str, schedule_time: Optional[str]) -> Optional[datetime]:
+    """Return the next UTC datetime for a given schedule_type + HH:MM time string."""
+    hour, minute = 9, 0
+    if schedule_time:
+        try:
+            parts = schedule_time.split(":")
+            hour = int(parts[0])
+            minute = int(parts[1]) if len(parts) > 1 else 0
+        except Exception:
+            pass
+
+    now = datetime.now(timezone.utc)
+    candidate = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+    if schedule_type == "daily":
+        if candidate <= now:
+            candidate += timedelta(days=1)
+        return candidate
+    elif schedule_type == "weekly":
+        days_ahead = 0 - candidate.weekday()  # next Monday
+        if days_ahead <= 0:
+            days_ahead += 7
+        candidate += timedelta(days=days_ahead)
+        return candidate
+    elif schedule_type == "monthly":
+        if candidate.day != 1 or candidate <= now:
+            # First of next month
+            if now.month == 12:
+                candidate = candidate.replace(year=now.year + 1, month=1, day=1)
+            else:
+                candidate = candidate.replace(month=now.month + 1, day=1)
+        return candidate
+    return None
+
+
+def _build_cron_trigger(schedule_type: str, schedule_time: Optional[str]) -> Optional[CronTrigger]:
+    """Build an APScheduler CronTrigger from schedule_type and HH:MM time."""
+    hour, minute = 9, 0
+    if schedule_time:
+        try:
+            parts = schedule_time.split(":")
+            hour = int(parts[0])
+            minute = int(parts[1]) if len(parts) > 1 else 0
+        except Exception:
+            pass
+
+    if schedule_type == "daily":
+        return CronTrigger(hour=hour, minute=minute, timezone="UTC")
+    elif schedule_type == "weekly":
+        return CronTrigger(day_of_week="mon", hour=hour, minute=minute, timezone="UTC")
+    elif schedule_type == "monthly":
+        return CronTrigger(day=1, hour=hour, minute=minute, timezone="UTC")
+    return None
+
+
+def _register_schedule_job(schedule_id: str, schedule_type: str, schedule_time: Optional[str]) -> None:
+    """Register (or replace) an APScheduler cron job for a schedule."""
+    trigger = _build_cron_trigger(schedule_type, schedule_time)
+    if trigger is None:
+        return
+    job_id = f"sched_{schedule_id}"
+    if _scheduler.get_job(job_id):
+        _scheduler.remove_job(job_id)
+    _scheduler.add_job(
+        _auto_run_schedule,
+        trigger=trigger,
+        id=job_id,
+        args=[schedule_id],
+        misfire_grace_time=600,
+    )
+    logger.info(f"Registered APScheduler job {job_id} ({schedule_type} @ {schedule_time or '09:00'})")
+
+
+async def _auto_run_schedule(schedule_id: str) -> None:
+    """APScheduler callback — creates a run record then executes the task."""
+    from src.database.chat_db import Schedule as ScheduleModel, ScheduleRun
+    async with AsyncSessionLocal() as db:
+        stmt = select(ScheduleModel).where(ScheduleModel.schedule_id == schedule_id)
+        res = await db.execute(stmt)
+        sched = res.scalar_one_or_none()
+        if not sched or sched.status != "active":
+            return
+        run = ScheduleRun(
+            run_id=str(uuid.uuid4()),
+            schedule_id=schedule_id,
+            status="running",
+            engine="playwright",
+            attempt=1,
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(run)
+        await db.commit()
+        run_id = run.run_id
+
+    logger.info(f"Auto-run triggered for schedule {schedule_id}, run {run_id}")
+    await _run_schedule_task(schedule_id, run_id)
+
+
+def _sync_send_email(smtp_host: str, smtp_port: int, smtp_user: str, smtp_pass: str,
+                     from_addr: str, to_addr: str, subject: str, html_body: str) -> None:
+    """Synchronous email sender — must be called via run_in_executor."""
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = from_addr
+    msg["To"] = to_addr
+    msg.attach(MIMEText(html_body, "html"))
+    with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
+        server.ehlo()
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(from_addr, [to_addr], msg.as_string())
+
+
+async def _send_result_email(recipient: str, schedule_title: str, output: str) -> None:
+    """Send a completion email if SMTP env-vars are configured."""
+    smtp_host = os.getenv("SMTP_HOST", "")
+    smtp_user = os.getenv("SMTP_USER", "")
+    smtp_pass = os.getenv("SMTP_PASS", "")
+    if not (smtp_host and smtp_user and smtp_pass):
+        logger.info("SMTP not configured — skipping email notification.")
+        return
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    from_addr = os.getenv("SMTP_FROM", smtp_user)
+
+    html_body = f"""
+<html><body style="font-family:sans-serif;background:#0a0f1a;color:#e2e8f0;padding:32px;">
+  <div style="max-width:600px;margin:0 auto;background:#111827;border-radius:16px;border:1px solid #1f2937;padding:32px;">
+    <h2 style="color:#818cf8;margin-top:0;">&#128295; SciParser AI — Automation Complete</h2>
+    <p style="color:#94a3b8;">Your scheduled automation <strong style="color:#e2e8f0;">{schedule_title}</strong> has completed successfully.</p>
+    <div style="background:#05070a;border:1px solid #1f2937;border-radius:12px;padding:20px;margin:20px 0;font-family:monospace;font-size:13px;color:#cbd5e1;white-space:pre-wrap;max-height:400px;overflow:hidden;">{output[:3000]}</div>
+    <p style="color:#64748b;font-size:12px;margin-bottom:0;">Powered by SciParser AI</p>
+  </div>
+</body></html>
+"""
+    subject = f"[SciParser] Automation complete: {schedule_title}"
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None,
+            _sync_send_email,
+            smtp_host, smtp_port, smtp_user, smtp_pass, from_addr, recipient, subject, html_body,
+        )
+        logger.info(f"Result email sent to {recipient}")
+    except Exception as e:
+        logger.warning(f"Failed to send result email to {recipient}: {e}")
+
+
+async def _run_schedule_task(schedule_id: str, run_id: str) -> None:
+    """
+    Core execution coroutine shared by manual runs and APScheduler auto-runs.
+    Runs the stored script, retries up to 3 times with script regeneration, then
+    updates last_run / next_run and sends a result email on completion.
+    """
+    from src.database.chat_db import Schedule as ScheduleModel, ScheduleRun
+
+    # Load schedule once
+    async with AsyncSessionLocal() as db:
+        stmt = select(ScheduleModel).where(ScheduleModel.schedule_id == schedule_id)
+        res = await db.execute(stmt)
+        sched = res.scalar_one_or_none()
+        if not sched:
+            return
+        title           = sched.title
+        current_script  = sched.generated_script or ""
+        email_recipient = sched.email_recipient or ""
+        schedule_type   = sched.schedule_type or "manual"
+        schedule_time   = sched.schedule_time or ""
+        # Mark last_run immediately
+        sched.last_run = datetime.now(timezone.utc)
+        await db.commit()
+
+    start_time       = datetime.now(timezone.utc)
+    max_tries        = 3
+    current_try      = 0
+    last_error       = ""
+    current_framework = "playwright"
+
+    while current_try < max_tries:
+        current_try += 1
+
+        await plan_stream_manager.broadcast_schedule_update(schedule_id, {
+            "type": "pipeline_update",
+            "step_id": 4,
+            "status": "running",
+            "details": f"Attempt {current_try} using {current_framework}...",
+        })
+
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w", encoding="utf-8") as f:
+                f.write(current_script)
+                temp_path = f.name
+
+            process = subprocess.Popen(
+                [sys.executable, "-u", temp_path],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+
+            full_output: List[str] = []
+            if process.stdout:
+                for line in process.stdout:
+                    clean_line = line.strip()
+                    if clean_line:
+                        full_output.append(clean_line)
+                        await plan_stream_manager.broadcast_schedule_update(schedule_id, {
+                            "type": "log",
+                            "time": datetime.now(timezone.utc).strftime("%H:%M:%S"),
+                            "engine": current_framework,
+                            "message": clean_line,
+                        })
+                        if "[SCREENSHOT]" in clean_line:
+                            match = re.search(r'\[SCREENSHOT\](.*?)\[/SCREENSHOT\]', clean_line, re.DOTALL)
+                            if match:
+                                await plan_stream_manager.broadcast_schedule_update(schedule_id, {
+                                    "type": "screenshot",
+                                    "frame": match.group(1).strip(),
+                                })
+
+            process.wait(timeout=300)
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+            if process.returncode == 0:
+                # ── Success ──────────────────────────────────────────────
+                output_text = "\n".join(full_output)
+                duration    = int((datetime.now(timezone.utc) - start_time).total_seconds())
+                next_run_dt = _calculate_next_run(schedule_type, schedule_time)
+
+                async with AsyncSessionLocal() as db:
+                    stmt = select(ScheduleRun).where(ScheduleRun.run_id == run_id)
+                    res  = await db.execute(stmt)
+                    run_db = res.scalar_one()
+                    run_db.status           = "completed"
+                    run_db.output           = output_text
+                    run_db.duration_seconds = duration
+                    run_db.finished_at      = datetime.now(timezone.utc)
+                    await db.commit()
+
+                async with AsyncSessionLocal() as db:
+                    stmt = select(ScheduleModel).where(ScheduleModel.schedule_id == schedule_id)
+                    res  = await db.execute(stmt)
+                    sch_db = res.scalar_one()
+                    sch_db.extracted_content = output_text
+                    sch_db.next_run          = next_run_dt
+                    await db.commit()
+
+                await plan_stream_manager.broadcast_schedule_update(schedule_id, {
+                    "type": "pipeline_update",
+                    "step_id": 6,
+                    "status": "completed",
+                    "details": "Automation completed successfully.",
+                })
+
+                # Send email if recipient configured
+                if email_recipient:
+                    await _send_result_email(email_recipient, title, output_text)
+                return
+
+            else:
+                last_error = "\n".join(full_output)
+                logger.warning(f"Schedule {schedule_id} attempt {current_try} failed: {last_error[:200]}")
+                if current_try < max_tries:
+                    if current_try == 2:
+                        current_framework = "browser-use"
+                    current_script = await brain.code_processor.run_script_generation(
+                        title + " (FIXING ERROR: " + last_error[:100] + ")",
+                        [],
+                        framework=current_framework,
+                    )
+                    async with AsyncSessionLocal() as db:
+                        stmt = select(ScheduleRun).where(ScheduleRun.run_id == run_id)
+                        res  = await db.execute(stmt)
+                        run_db = res.scalar_one()
+                        run_db.attempt = current_try + 1
+                        run_db.engine  = current_framework
+                        await db.commit()
+
+        except Exception as e:
+            last_error = str(e)
+            logger.error(f"Schedule {schedule_id} execution error (attempt {current_try}): {e}")
+            if current_try >= max_tries:
+                break
+            async with AsyncSessionLocal() as db:
+                stmt = select(ScheduleRun).where(ScheduleRun.run_id == run_id)
+                res  = await db.execute(stmt)
+                run_db = res.scalar_one()
+                run_db.attempt = current_try + 1
+                await db.commit()
+
+    # All attempts failed
+    async with AsyncSessionLocal() as db:
+        stmt = select(ScheduleRun).where(ScheduleRun.run_id == run_id)
+        res  = await db.execute(stmt)
+        run_db = res.scalar_one()
+        run_db.status     = "failed"
+        run_db.error_log  = last_error
+        run_db.finished_at = datetime.now(timezone.utc)
+        await db.commit()
+
+    await plan_stream_manager.broadcast_schedule_update(schedule_id, {
+        "type": "pipeline_update",
+        "step_id": 4,
+        "status": "failed",
+        "details": f"Automation failed after {max_tries} attempts.",
+    })
+
+
+async def _load_and_schedule_all() -> None:
+    """Load all non-manual active schedules from DB and register APScheduler jobs."""
+    from src.database.chat_db import Schedule as ScheduleModel
+    try:
+        async with AsyncSessionLocal() as db:
+            stmt = select(ScheduleModel).where(
+                ScheduleModel.schedule_type != "manual",
+                ScheduleModel.status == "active",
+            )
+            res = await db.execute(stmt)
+            schedules = res.scalars().all()
+            for s in schedules:
+                _register_schedule_job(s.schedule_id, s.schedule_type, s.schedule_time)
+                next_run = _calculate_next_run(s.schedule_type, s.schedule_time)
+                if next_run and not s.next_run:
+                    s.next_run = next_run
+            await db.commit()
+            logger.info(f"APScheduler: registered {len(schedules)} active schedule(s).")
+    except Exception as e:
+        logger.error(f"_load_and_schedule_all error: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_database()
-    # Initialize brain (LLMs, Browser, MCP) on startup
     try:
         await brain.initialize()
     except Exception as e:
         logger.error(f"Failed to initialize brain during startup: {e}")
+    _scheduler.start()
+    asyncio.create_task(_load_and_schedule_all())
     yield
+    _scheduler.shutdown(wait=False)
     await brain.shutdown()
 
 app = FastAPI(title="SciParser AI API", lifespan=lifespan)
@@ -380,284 +725,172 @@ async def get_tool_logs(chat_id: str, db: AsyncSession = Depends(get_db), curren
 
 @app.post("/sciparser/v1/scheduler/create", response_model=ScheduleResponse)
 async def create_schedule(req: ScheduleRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_user)):
-    # 1. Fetch the selected tool logs to build the script
-    from src.database.chat_db import ToolExecutionLog
+    from src.database.chat_db import ToolExecutionLog, Schedule as ScheduleModel
+
+    # 1. Create schedule first so ChatService populates user_prompt/plan_data/assistant_response
+    schedule = await ChatService.create_schedule(db, current_user.user_id, req)
+
+    # 2. Fetch the selected tool logs to build the script
     stmt = select(ToolExecutionLog).where(ToolExecutionLog.id.in_(req.selected_tool_ids))
     res = await db.execute(stmt)
     tool_logs = res.scalars().all()
-    
+
     execution_history = [
         {
             "tool": log.tool_name,
             "input": json.loads(log.tool_input) if log.tool_input else {},
             "output": log.tool_output[:1000] if log.tool_output else "",
             "status": log.status,
-            "error": log.error_message
+            "error": log.error_message,
         }
         for log in tool_logs
     ]
-    
-    # 2. Build tool_context list from request (frontend-supplied summaries of successful tools)
+
+    # 3. Build tool_context list from request (frontend-supplied summaries of successful tools)
     tool_context = [
         {"tool_name": item.tool_name, "output": item.output}
         for item in (req.tool_context or [])
     ]
 
-    # 3. Auto-detect the best script framework from the tools that were actually used.
-    #    Tavily-only sessions → generate a Tavily search script (no browser needed).
-    #    Any browser tool present → use Playwright (default).
-    _TAVILY_TOOLS = {"tavily_search_results_json", "ai_parser_dynamic_search"}
+    # 4. Auto-detect the best script framework from the tools that were actually used.
+    _TAVILY_TOOLS    = {"tavily_search_results_json", "ai_parser_dynamic_search"}
     _BROWSER_PREFIXES = ("browser_", "navigate", "click", "type", "scroll", "fill", "select", "playwright")
 
-    all_tool_names = {(item.get("tool_name") or item.get("tool") or "").lower()
-                      for item in (tool_context or []) + execution_history}
+    all_tool_names = {
+        (item.get("tool_name") or item.get("tool") or "").lower()
+        for item in (tool_context or []) + execution_history
+    }
     all_tool_names.discard("")
 
-    has_browser = any(
-        name.startswith(prefix) for name in all_tool_names for prefix in _BROWSER_PREFIXES
-    )
+    has_browser = any(name.startswith(p) for name in all_tool_names for p in _BROWSER_PREFIXES)
     has_tavily  = any(name in _TAVILY_TOOLS for name in all_tool_names)
-
-    if has_tavily and not has_browser:
-        framework = "tavily"
-    else:
-        framework = "playwright"
+    framework   = "tavily" if (has_tavily and not has_browser) else "playwright"
 
     logger.info(f"Script generation framework selected: {framework} "
                 f"(tools: {all_tool_names or 'none from context'})")
 
-    # 4. Generate the Python script using the specialized code model
-    generated_script = await brain.code_processor.run_script_generation(
-        req.title, execution_history, framework=framework, tool_context=tool_context
-    )
-    
-    # 3. Create the schedule with the generated script
-    schedule = await ChatService.create_schedule(db, current_user.user_id, req)
-    
-    # Update the schedule with the generated script
-    from src.database.chat_db import Schedule as ScheduleModel
+    # 5. Reload the freshly created schedule to get user_prompt / plan_data
     stmt = select(ScheduleModel).where(ScheduleModel.schedule_id == schedule.schedule_id)
-    res = await db.execute(stmt)
+    res  = await db.execute(stmt)
     schedule_db = res.scalar_one()
+
+    # 6. Generate script with full context (user goal + agent plan)
+    generated_script = await brain.code_processor.run_script_generation(
+        req.title,
+        execution_history,
+        framework=framework,
+        tool_context=tool_context,
+        user_goal=schedule_db.user_prompt or "",
+        plan_context=schedule_db.plan_data or "",
+    )
+
+    # 7. Save generated script + compute next_run
+    schedule_time = getattr(req, "schedule_time", None)
     schedule_db.generated_script = generated_script
+    schedule_db.next_run = _calculate_next_run(req.schedule_type, schedule_time)
     await db.commit()
-    
+
+    # 8. Register APScheduler job for non-manual schedules
+    if req.schedule_type not in ("manual", None):
+        _register_schedule_job(schedule.schedule_id, req.schedule_type, schedule_time)
+
     return {
         "schedule_id": schedule.schedule_id,
         "status": schedule.status,
-        "created_at": schedule.created_at
+        "created_at": schedule.created_at,
     }
 
 @app.get("/sciparser/v1/scheduler/list")
 async def get_schedules(db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_user)):
-    return await ChatService.get_user_schedules(db, current_user.user_id)
+    from src.database.chat_db import Schedule as ScheduleModel
+    stmt = select(ScheduleModel).where(ScheduleModel.user_id == current_user.user_id).order_by(ScheduleModel.created_at.desc())
+    res = await db.execute(stmt)
+    schedules = res.scalars().all()
+    return [
+        {
+            "schedule_id":       s.schedule_id,
+            "title":             s.title,
+            "schedule_type":     s.schedule_type,
+            "schedule_time":     s.schedule_time,
+            "email_recipient":   s.email_recipient,
+            "status":            s.status,
+            "generated_script":  s.generated_script,
+            "extracted_content": s.extracted_content,
+            "assistant_response": s.assistant_response,
+            "plan_data":         s.plan_data,
+            "user_prompt":       s.user_prompt,
+            "next_run":          s.next_run.isoformat() if s.next_run else None,
+            "last_run":          s.last_run.isoformat() if s.last_run else None,
+            "created_at":        s.created_at.isoformat() if s.created_at else None,
+            "updated_at":        s.updated_at.isoformat() if s.updated_at else None,
+        }
+        for s in schedules
+    ]
 
 @app.delete("/sciparser/v1/scheduler/{schedule_id}")
 async def delete_schedule(schedule_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_user)):
-    """Delete a schedule."""
+    """Delete a schedule and remove its APScheduler job."""
     from src.database.chat_db import Schedule as ScheduleModel
     stmt = delete(ScheduleModel).where(ScheduleModel.schedule_id == schedule_id, ScheduleModel.user_id == current_user.user_id)
     await db.execute(stmt)
     await db.commit()
+    job_id = f"sched_{schedule_id}"
+    if _scheduler.get_job(job_id):
+        _scheduler.remove_job(job_id)
     return {"status": "success"}
 
 @app.patch("/sciparser/v1/scheduler/{schedule_id}")
 async def update_schedule(schedule_id: str, req: Dict[str, Any], db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_user)):
-    """Update schedule details (title, type, recipient)."""
+    """Update schedule details and re-register APScheduler job if timing changed."""
     from src.database.chat_db import Schedule as ScheduleModel
     stmt = select(ScheduleModel).where(ScheduleModel.schedule_id == schedule_id, ScheduleModel.user_id == current_user.user_id)
     res = await db.execute(stmt)
     schedule = res.scalar_one_or_none()
     if not schedule:
         raise HTTPException(status_code=404, detail="Schedule not found")
-    
-    if "title" in req: schedule.title = req["title"]
-    if "schedule_type" in req: schedule.schedule_type = req["schedule_type"]
+
+    if "title" in req:          schedule.title          = req["title"]
+    if "schedule_type" in req:  schedule.schedule_type  = req["schedule_type"]
+    if "schedule_time" in req:  schedule.schedule_time  = req["schedule_time"]
     if "email_recipient" in req: schedule.email_recipient = req["email_recipient"]
-    if "status" in req: schedule.status = req["status"]
-    
+    if "status" in req:         schedule.status         = req["status"]
+
+    # Recalculate next_run whenever schedule type/time changes
+    if "schedule_type" in req or "schedule_time" in req:
+        schedule.next_run = _calculate_next_run(schedule.schedule_type, schedule.schedule_time)
+        if schedule.schedule_type not in ("manual", None):
+            _register_schedule_job(schedule_id, schedule.schedule_type, schedule.schedule_time)
+        else:
+            job_id = f"sched_{schedule_id}"
+            if _scheduler.get_job(job_id):
+                _scheduler.remove_job(job_id)
+
     await db.commit()
     return {"status": "success"}
 
 @app.post("/sciparser/v1/scheduler/{schedule_id}/run")
 async def run_schedule(schedule_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_user)):
     """Manually trigger a schedule execution."""
-    # 1. Fetch the schedule
     from src.database.chat_db import Schedule as ScheduleModel, ScheduleRun
     stmt = select(ScheduleModel).where(ScheduleModel.schedule_id == schedule_id, ScheduleModel.user_id == current_user.user_id)
     res = await db.execute(stmt)
-    schedule = res.scalar_one_or_none()
-    if not schedule:
+    if not res.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Schedule not found")
-    
-    # 2. Create a run record
+
     run = ScheduleRun(
         run_id=str(uuid.uuid4()),
         schedule_id=schedule_id,
         status="running",
         engine="playwright",
         attempt=1,
-        created_at=datetime.now(timezone.utc)
+        created_at=datetime.now(timezone.utc),
     )
     db.add(run)
     await db.commit()
-    
-    # 3. Execute the script in a background task
-    async def execute_task():
-        import subprocess
-        import tempfile
-        import os
-        import re
-        
-        start_time = datetime.now(timezone.utc)
-        max_tries = 3
-        current_try = 0
-        last_error = ""
-        current_script = schedule.generated_script
-        current_framework = "playwright"
-        execution_summary = ""
+    run_id = run.run_id
 
-        while current_try < max_tries:
-            current_try += 1
-            
-            # Broadcast start of attempt
-            await plan_stream_manager.broadcast_schedule_update(schedule_id, {
-                "type": "pipeline_update",
-                "step_id": 4,
-                "status": "running",
-                "details": f"Attempt {current_try} using {current_framework}..."
-            })
-
-            try:
-                with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode='w', encoding='utf-8') as f:
-                    f.write(current_script)
-                    temp_path = f.name
-
-                # Run the script and capture output line by line
-                process = subprocess.Popen(
-                    [sys.executable, "-u", temp_path], # -u for unbuffered output
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    bufsize=1
-                )
-                
-                full_output = []
-                if process.stdout:
-                    for line in process.stdout:
-                        clean_line = line.strip()
-                        if clean_line:
-                            full_output.append(clean_line)
-                            # Broadcast log line to UI
-                            await plan_stream_manager.broadcast_schedule_update(schedule_id, {
-                                "type": "log",
-                                "time": datetime.now(timezone.utc).strftime("%H:%M:%S"),
-                                "engine": current_framework,
-                                "message": clean_line
-                            })
-                            
-                            # Check for screenshot markers in output (if script is configured to emit them)
-                            if "[SCREENSHOT]" in clean_line:
-                                match = re.search(r'\[SCREENSHOT\](.*?)\s*\[/SCREENSHOT\]', clean_line, re.DOTALL)
-                                if match:
-                                    await plan_stream_manager.broadcast_schedule_update(schedule_id, {
-                                        "type": "screenshot",
-                                        "frame": match.group(1).strip()
-                                    })
-
-                process.wait(timeout=300)
-                if os.path.exists(temp_path):
-                    os.unlink(temp_path)
-
-                if process.returncode == 0:
-                    # Success!
-                    async with AsyncSessionLocal() as task_db:
-                        stmt = select(ScheduleRun).where(ScheduleRun.run_id == run.run_id)
-                        res = await task_db.execute(stmt)
-                        run_db = res.scalar_one()
-                        run_db.status = "completed"
-                        run_db.output = "\n".join(full_output)
-                        run_db.duration_seconds = int((datetime.now(timezone.utc) - start_time).total_seconds())
-                        run_db.finished_at = datetime.now(timezone.utc)
-                        await task_db.commit()
-                        
-                        stmt = select(ScheduleModel).where(ScheduleModel.schedule_id == schedule_id)
-                        res = await task_db.execute(stmt)
-                        sch_db = res.scalar_one()
-                        sch_db.extracted_content = run_db.output
-                        await task_db.commit()
-                        
-                        # Broadcast completion
-                        await plan_stream_manager.broadcast_schedule_update(schedule_id, {
-                            "type": "pipeline_update",
-                            "step_id": 6,
-                            "status": "completed",
-                            "details": "Automation completed successfully."
-                        })
-                        return
-                else:
-                    last_error = "\n".join(full_output)
-                    logger.warning(f"Attempt {current_try} failed: {last_error}")
-                    
-                    if current_try < max_tries:
-                        # Rectify and regenerate
-                        if current_try == 2:
-                            current_framework = "browser-use"
-                        
-                        logger.info(f"Regenerating script for {current_framework} due to error.")
-                        current_script = await brain.code_processor.run_script_generation(
-                            schedule.title + " (FIXING ERROR: " + last_error[:100] + ")", 
-                            [], 
-                            framework=current_framework
-                        )
-                        
-                        # Update run record for retry
-                        async with AsyncSessionLocal() as task_db:
-                            stmt = select(ScheduleRun).where(ScheduleRun.run_id == run.run_id)
-                            res = await task_db.execute(stmt)
-                            run_db = res.scalar_one()
-                            run_db.attempt = current_try + 1
-                            run_db.engine = current_framework
-                            await task_db.commit()
-                    else:
-                        # Final failure handled outside the loop
-                        pass
-            
-            except Exception as e:
-                last_error = str(e)
-                logger.error(f"Error during execution attempt {current_try}: {e}")
-                if current_try >= max_tries:
-                    break
-                
-                # Update run record for retry on exception
-                async with AsyncSessionLocal() as task_db:
-                    stmt = select(ScheduleRun).where(ScheduleRun.run_id == run.run_id)
-                    res = await task_db.execute(stmt)
-                    run_db = res.scalar_one()
-                    run_db.attempt = current_try + 1
-                    await task_db.commit()
-            
-        # If we reach here, all attempts failed
-        async with AsyncSessionLocal() as task_db:
-            stmt = select(ScheduleRun).where(ScheduleRun.run_id == run.run_id)
-            res = await task_db.execute(stmt)
-            run_db = res.scalar_one()
-            run_db.status = "failed"
-            run_db.error_log = last_error
-            run_db.finished_at = datetime.now(timezone.utc)
-            await task_db.commit()
-            
-            # Broadcast failure
-            await plan_stream_manager.broadcast_schedule_update(schedule_id, {
-                "type": "pipeline_update",
-                "step_id": 4,
-                "status": "failed",
-                "details": f"Automation failed after {max_tries} attempts."
-            })
-            return
-
-    asyncio.create_task(execute_task())
-    return {"status": "success", "run_id": run.run_id}
+    asyncio.create_task(_run_schedule_task(schedule_id, run_id))
+    return {"status": "success", "run_id": run_id}
 
 
 # --- WebSocket Endpoints ---

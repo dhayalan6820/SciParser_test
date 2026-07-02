@@ -34,6 +34,13 @@ async def init_database():
             await conn.execute(text(
                 "UPDATE users SET browser_engine = NULL WHERE browser_engine = 'camoufox'"
             ))
+            # Schedule auto-run and email columns
+            await conn.execute(text(
+                "ALTER TABLE schedules ADD COLUMN IF NOT EXISTS next_run TIMESTAMPTZ"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE schedules ADD COLUMN IF NOT EXISTS last_run TIMESTAMPTZ"
+            ))
             logger.info("Database tables checked/created successfully.")
     except Exception as e:
         logger.error(f"Error creating tables: {e}")

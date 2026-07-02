@@ -494,6 +494,8 @@ class ATAGProcessor:
         execution_history: List[Dict[str, Any]],
         framework: str = "playwright",
         tool_context: Optional[List[Dict[str, Any]]] = None,
+        user_goal: str = "",
+        plan_context: str = "",
     ) -> str:
         """
         Generates a production-ready automation script from the execution history.
@@ -503,6 +505,8 @@ class ATAGProcessor:
              injected into the LLM prompt so the script targets live endpoints.
           2. Tool-context log              → verified output from successful tool
              runs (supplied by frontend) so the LLM can replicate real values.
+          3. user_goal / plan_context      → user's original request and agent
+             plan injected so the LLM understands the intent behind the tool calls.
 
         The system prompt also instructs the LLM that it MAY embed a Tavily
         search step inside the generated script itself for tasks that require
@@ -677,10 +681,24 @@ BROWSER-USE CONFIGURATION
 
         # ── 3. Assemble prompt ────────────────────────────────────────────────
         history_str = json.dumps(execution_history, indent=2)
+
+        # Build enrichment block from saved schedule context
+        user_context_section = ""
+        if user_goal:
+            user_context_section += f"\nORIGINAL USER REQUEST: {user_goal}\n"
+        if plan_context:
+            try:
+                plan_tasks = json.loads(plan_context) if isinstance(plan_context, str) else plan_context
+                user_context_section += "\nAGENT EXECUTION PLAN:\n"
+                for i, task in enumerate(plan_tasks, 1):
+                    user_context_section += f"  {i}. {task.get('title', str(task))}\n"
+            except Exception:
+                user_context_section += f"\nAGENT PLAN: {plan_context[:600]}\n"
+
         if framework == "tavily":
             USER_PROMPT = f"""
 USER INTENT: {task_summary}
-{tool_context_section}
+{user_context_section}{tool_context_section}
 SEARCH EXECUTION LOG (original Tavily tool calls):
 {history_str}
 
@@ -691,7 +709,7 @@ Derive the search query directly from the USER INTENT and the tool execution log
         else:
             USER_PROMPT = f"""
 USER INTENT: {task_summary}
-{web_research_section}{tool_context_section}
+{user_context_section}{web_research_section}{tool_context_section}
 EXECUTION TRACE (Tool Calls):
 {history_str}
 

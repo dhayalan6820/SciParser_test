@@ -145,6 +145,8 @@ class Schedule(Base):
     schedule_time = Column(String(50), nullable=True)
     cron_expression = Column(String(50), nullable=True)
     email_recipient = Column(String(255), nullable=True)
+    next_run = Column(TIMESTAMP(timezone=True), nullable=True)
+    last_run = Column(TIMESTAMP(timezone=True), nullable=True)
 
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

@@ -21,12 +21,16 @@ interface Schedule {
   schedule_id: string;
   title: string;
   schedule_type: string;
+  schedule_time?: string;
   email_recipient: string;
   status: string;
   generated_script: string;
   extracted_content: string;
   assistant_response?: string;
   plan_data?: string;
+  user_prompt?: string;
+  next_run?: string | null;
+  last_run?: string | null;
   created_at: string;
   updated_at?: string;
 }
@@ -122,36 +126,59 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
     }
   };
 
-  // WebSocket for real-time monitoring
+  // WebSocket for real-time monitoring — reconnects if dropped while running
   React.useEffect(() => {
     if (!selectedSchedule || !isRunning) return;
 
-    const token = localStorage.getItem("access_token");
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/sciparser/v1/ws/schedule/${selectedSchedule.schedule_id}?token=${token}`;
-    const ws = new WebSocket(wsUrl);
+    let ws: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
 
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === 'log') {
-          setLiveLogs(prev => [...prev, msg]);
-        } else if (msg.type === 'pipeline_update') {
-          setPipelineSteps(prev => prev.map(step => 
-            step.id === msg.step_id ? { ...step, status: msg.status, time: msg.time || step.time } : step
-          ));
-          // Update progress based on step
-          setCurrentProgress(Math.round((msg.step_id / 6) * 100));
-        } else if (msg.type === 'screenshot') {
-          setLiveScreenshot(msg.frame);
+    const connect = () => {
+      if (cancelled) return;
+      const token = localStorage.getItem("access_token");
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/sciparser/v1/ws/schedule/${selectedSchedule.schedule_id}?token=${token}`;
+      ws = new WebSocket(wsUrl);
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'log') {
+            setLiveLogs(prev => [...prev, msg]);
+          } else if (msg.type === 'pipeline_update') {
+            setPipelineSteps(prev => prev.map(step =>
+              step.id === msg.step_id ? { ...step, status: msg.status, time: msg.time || step.time } : step
+            ));
+            setCurrentProgress(Math.round((msg.step_id / 6) * 100));
+            // Mark done when final step completes or any step fails
+            if ((msg.step_id === 6 && msg.status === 'completed') || msg.status === 'failed') {
+              setIsRunning(false);
+              setTimeout(fetchSchedules, 1500);
+            }
+          } else if (msg.type === 'screenshot') {
+            setLiveScreenshot(msg.frame);
+          }
+        } catch (err) {
+          console.error("Schedule WS error:", err);
         }
-      } catch (err) {
-        console.error("Schedule WS error:", err);
-      }
+      };
+
+      ws.onclose = () => {
+        if (!cancelled && isRunning) {
+          reconnectTimer = setTimeout(connect, 2000);
+        }
+      };
     };
 
-    return () => ws.close();
-  }, [selectedSchedule, isRunning]);
+    connect();
+
+    return () => {
+      cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      ws?.close();
+    };
+  }, [selectedSchedule?.schedule_id, isRunning]);
 
   const fetchSchedules = async () => {
     try {
@@ -212,12 +239,11 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
       setPipelineSteps(prev => prev.map(s => ({ ...s, status: 'pending', time: '--' })));
       
       await sciparserApi.runSchedule(selectedSchedule.schedule_id);
-      
-      setTimeout(fetchSchedules, 10000);
+      // isRunning is cleared by WS completion event; fallback after 10 min
+      setTimeout(() => setIsRunning(false), 600_000);
     } catch (err) {
       console.error("Failed to run schedule:", err);
-    } finally {
-      setTimeout(() => setIsRunning(false), 2000);
+      setIsRunning(false);
     }
   };
 
@@ -387,10 +413,10 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
                     {[
-                      { label: 'Next Run', val: 'Tomorrow, 09:00 AM', icon: Calendar },
-                      { label: 'Last Run', val: '2 hours ago', icon: History },
-                      { label: 'Current Engine', val: 'Playwright', icon: Cpu },
-                      { label: 'Attempt', val: '1 / 3', icon: RefreshCw }
+                      { label: 'Next Run', val: selectedSchedule.next_run ? formatDate(selectedSchedule.next_run) : (selectedSchedule.schedule_type === 'manual' ? 'Manual only' : '—'), icon: Calendar },
+                      { label: 'Last Run', val: selectedSchedule.last_run ? formatDate(selectedSchedule.last_run) : 'Never', icon: History },
+                      { label: 'Frequency', val: (selectedSchedule.schedule_type || 'manual') + (selectedSchedule.schedule_time ? ` @ ${selectedSchedule.schedule_time}` : ''), icon: Cpu },
+                      { label: 'Email', val: selectedSchedule.email_recipient ? 'Configured' : 'Not set', icon: Mail }
                     ].map((item, i) => (
                       <div key={i} className="space-y-1.5">
                         <div className="flex items-center gap-2 text-[9px] font-black text-[#64748B] uppercase tracking-[0.2em]">
@@ -602,27 +628,44 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                             exit={{ opacity: 0 }}
                             className="space-y-6"
                           >
+                            {/* User Goal */}
+                            {selectedSchedule.user_prompt && (
+                              <div className="p-5 rounded-2xl bg-[#05070A] border border-indigo-500/20 space-y-3">
+                                <div className="flex items-center gap-2.5">
+                                  <UserIcon className="w-4 h-4 text-indigo-400" />
+                                  <h4 className="text-[11px] font-black text-white uppercase tracking-widest">User Goal</h4>
+                                </div>
+                                <p className="text-sm text-[#CBD5E1] leading-relaxed">{selectedSchedule.user_prompt}</p>
+                              </div>
+                            )}
+
+                            {/* Execution Strategy */}
                             <div className="p-6 rounded-2xl bg-[#05070A] border border-[#1F2937] space-y-4">
                               <div className="flex items-center gap-2.5">
                                 <Target className="w-4 h-4 text-purple-500" />
                                 <h4 className="text-[11px] font-black text-white uppercase tracking-widest">Execution Strategy</h4>
                               </div>
                               <p className="text-sm text-[#CBD5E1] leading-relaxed">
-                                {selectedSchedule.assistant_response || "The agent will use Playwright to navigate to the target URL, perform a visual check of the page content, and extract the required data points. If Playwright fails due to complex UI or anti-bot measures, the system will automatically fallback to the Browser Use engine for a more resilient interaction."}
+                                {selectedSchedule.assistant_response || "No strategy recorded for this schedule."}
                               </p>
                             </div>
-                            
+
                             {/* Rehydrated Plan */}
                             <div className="space-y-3">
                               <div className="text-[10px] font-black text-[#64748B] uppercase tracking-widest ml-1">Original Agent Plan</div>
-                              {selectedSchedule.plan_data ? (
-                                (JSON.parse(selectedSchedule.plan_data) as any[]).map((task: any, i: number) => (
-                                  <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-[#05070A] border border-[#1F2937]">
-                                    <div className="w-5 h-5 rounded-md bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-[9px] font-black text-indigo-500">{i + 1}</div>
-                                    <span className="text-xs text-[#CBD5E1] font-medium">{task.title}</span>
-                                  </div>
-                                ))
-                              ) : (
+                              {selectedSchedule.plan_data ? (() => {
+                                try {
+                                  const tasks = JSON.parse(selectedSchedule.plan_data) as any[];
+                                  return tasks.map((task: any, i: number) => (
+                                    <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-[#05070A] border border-[#1F2937]">
+                                      <div className="w-5 h-5 rounded-md bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-[9px] font-black text-indigo-500">{i + 1}</div>
+                                      <span className="text-xs text-[#CBD5E1] font-medium">{task.title || String(task)}</span>
+                                    </div>
+                                  ));
+                                } catch {
+                                  return <p className="text-xs text-[#CBD5E1] ml-1 leading-relaxed">{selectedSchedule.plan_data}</p>;
+                                }
+                              })() : (
                                 <p className="text-[10px] text-[#374151] italic ml-1">No plan data stored for this schedule.</p>
                               )}
                             </div>
@@ -803,23 +846,31 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                     </div>
                   </div>
 
-                  {/* Final Result Card (If completed) */}
+                  {/* Final Result Card */}
                   <div className="bg-gradient-to-br from-indigo-600/20 to-purple-600/20 rounded-[32px] border border-indigo-500/30 p-8 space-y-6 relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-6 opacity-10">
                       <Shield className="w-20 h-20 text-white" />
                     </div>
                     <div className="relative z-10 space-y-4">
-                      <div className="flex items-center gap-3">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                        <h3 className="text-xs font-black text-white uppercase tracking-[0.2em]">Final Result</h3>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                          <h3 className="text-xs font-black text-white uppercase tracking-[0.2em]">Final Result</h3>
+                        </div>
+                        {selectedSchedule.email_recipient && selectedSchedule.extracted_content && (
+                          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                            <Mail className="w-3 h-3 text-emerald-400" />
+                            <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Email Sent</span>
+                          </div>
+                        )}
                       </div>
-                      <div className="p-5 rounded-2xl bg-[#05070A]/60 border border-white/5 backdrop-blur-sm">
-                        <p className="text-xs text-[#CBD5E1] leading-relaxed font-medium">
+                      <div className="p-5 rounded-2xl bg-[#05070A]/60 border border-white/5 backdrop-blur-sm max-h-48 overflow-y-auto hide-scrollbar">
+                        <p className="text-xs text-[#CBD5E1] leading-relaxed font-medium whitespace-pre-wrap">
                           {selectedSchedule.extracted_content || "No results available yet. Run the schedule to see data."}
                         </p>
                       </div>
                       {selectedSchedule.extracted_content && (
-                        <Button 
+                        <Button
                           onClick={() => {
                             const blob = new Blob([selectedSchedule.extracted_content], { type: 'text/plain' });
                             const url = URL.createObjectURL(blob);
