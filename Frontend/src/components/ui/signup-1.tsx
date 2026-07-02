@@ -56,15 +56,6 @@ const Signup1 = ({
     title: "SciParser",
   };
 
-  const handleGuestLogin = () => {
-    setUsername("sciparser_demo");
-    setPassword("password123");
-    setLocalError("");
-    if (onSubmit) {
-      onSubmit({ username: "sciparser_demo", email: "", password: "password123" });
-    }
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setLocalError("");
@@ -195,17 +186,6 @@ const Signup1 = ({
               isLoginMode ? "Sign In" : "Create account"
             )}
           </Button>
-
-          {isLoginMode && (
-            <Button 
-              type="button" 
-              onClick={handleGuestLogin}
-              className="w-full h-10 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-md text-sm shadow-sm transition-colors cursor-pointer flex items-center justify-center gap-2 mt-2"
-              disabled={loading}
-            >
-              🔓 Instant Guest Access
-            </Button>
-          )}
 
           {/* Divider styled according to Professional Polish Design rules */}
           <div className="relative py-2">
