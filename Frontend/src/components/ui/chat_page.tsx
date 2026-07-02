@@ -5,6 +5,7 @@ import atomIcon from "@/assets/atom-icon.png";
 import { Signup1 } from "./signup-1";
 import { Button } from "./button";
 import { sciparserApi, ChatMessage, UploadedFile, User } from "../../api";
+import { DEFAULT_CDP_URL, WS_BASE_URL } from "../../config";
 import { useTheme } from "../../contexts/ThemeContext";
 import { cn } from "../../../lib/utils";
 import { Component as AiLoader } from "./ai-loader";
@@ -159,7 +160,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const [cdpConnected, setCdpConnected] = React.useState(false);
   const [cdpConnectedUrl, setCdpConnectedUrl] = React.useState<string | null>(null);
   const [showCdpModal, setShowCdpModal] = React.useState(false);
-  const [cdpUrlInput, setCdpUrlInput] = React.useState("http://localhost:9222");
+  const [cdpUrlInput, setCdpUrlInput] = React.useState(DEFAULT_CDP_URL);
   const [cdpConnecting, setCdpConnecting] = React.useState(false);
   const [cdpError, setCdpError] = React.useState<string | null>(null);
   const [cdpCopied, setCdpCopied] = React.useState(false);
@@ -512,7 +513,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     } catch (_) {}
     setCdpConnected(false);
     setCdpConnectedUrl(null);
-    setCdpUrlInput("http://localhost:9222");
+    setCdpUrlInput(DEFAULT_CDP_URL);
   };
 
   const handleCdpCopy = (text: string) => {
@@ -559,9 +560,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     isFirstFrame.current = true;
 
     const token = localStorage.getItem("access_token");
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const buildUrl = () =>
-      `${protocol}//${window.location.host}/sciparser/v1/browser/stream?chat_id=${activeThreadId}&token=${token}`;
+      `${WS_BASE_URL}/sciparser/v1/browser/stream?chat_id=${activeThreadId}&token=${token}`;
 
     let ws: WebSocket;
     let heartbeatTimer: ReturnType<typeof setInterval>;
@@ -744,9 +744,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     }
 
     const token = localStorage.getItem("access_token");
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const buildUrl = () =>
-      `${protocol}//${window.location.host}/sciparser/v1/ws/plan/${activeThreadId}?token=${token}`;
+      `${WS_BASE_URL}/sciparser/v1/ws/plan/${activeThreadId}?token=${token}`;
 
     let ws: WebSocket;
     let heartbeatTimer: ReturnType<typeof setInterval>;

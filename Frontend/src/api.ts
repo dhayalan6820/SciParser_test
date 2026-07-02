@@ -1,6 +1,8 @@
 // api.ts
+import { API_BASE_URL } from "./config";
+
 const TOKEN_KEY = "access_token";
-const BASE_URL = "";
+const BASE_URL = API_BASE_URL;
 
 export function getStoredToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);

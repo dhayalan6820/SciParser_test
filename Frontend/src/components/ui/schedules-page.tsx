@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Button } from "./button";
 import { sciparserApi } from "../../api";
+import { WS_BASE_URL } from "../../config";
 import { useTheme } from "../../contexts/ThemeContext";
 import { cn } from "../../../lib/utils";
 import { 
@@ -139,8 +140,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
     const connect = () => {
       if (cancelled) return;
       const token = localStorage.getItem("access_token");
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/sciparser/v1/ws/schedule/${selectedSchedule.schedule_id}?token=${token}`;
+      const wsUrl = `${WS_BASE_URL}/sciparser/v1/ws/schedule/${selectedSchedule.schedule_id}?token=${token}`;
       ws = new WebSocket(wsUrl);
 
       ws.onmessage = (event) => {

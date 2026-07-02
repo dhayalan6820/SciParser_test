@@ -1,4 +1,6 @@
-const BASE_URL = "";
+import { API_BASE_URL, WS_BASE_URL } from "../config";
+
+const BASE_URL = API_BASE_URL;
 
 export interface AgentHistory {
   id: string;
@@ -55,7 +57,7 @@ export const agentApi = {
   },
 
   connectWebSocket(chatId: string, onMessage: (data: any) => void) {
-    const ws = new WebSocket(`${BASE_URL.replace('http', 'ws')}/sciparser/v1/agent/stream/${chatId}`);
+    const ws = new WebSocket(`${WS_BASE_URL}/sciparser/v1/agent/stream/${chatId}`);
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       onMessage(data);
