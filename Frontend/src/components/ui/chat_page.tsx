@@ -1054,6 +1054,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     isFirstFrame.current = true; // Reset for new message
     setToolLogs([]); // Clear tool logs for the new live process
     setAiThinking(null); // Clear thinking for new process
+    setCurrentPlan(null); // Clear old plan steps immediately
+    setTaskThoughts({}); // Clear old per-task reasoning immediately
 
     try {
       const response = await sciparserApi.sendChatMessage(
