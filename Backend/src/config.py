@@ -13,9 +13,13 @@ fails fast on missing required secrets, instead of silently falling back to
 an insecure development default.
 """
 import os
+import secrets
+import logging
 from dotenv import load_dotenv
 
 load_dotenv()
+
+_logger = logging.getLogger("sciparser")
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development").strip().lower()
 IS_PRODUCTION = ENVIRONMENT == "production"
@@ -74,10 +78,24 @@ def _list(name: str, default: list) -> list:
 # ---------------------------------------------------------------------------
 # Security / Auth
 # ---------------------------------------------------------------------------
-JWT_SECRET_KEY = _secret(
-    "JWT_SECRET_KEY",
-    dev_default="dev-only-insecure-jwt-secret-do-not-use-in-production",
-)
+# No hardcoded fallback secret is ever used. In production JWT_SECRET_KEY
+# must be set (Replit Secrets) or startup fails. In development, if it's not
+# set in .env, a random secret is generated fresh for this process only —
+# it is never written to disk or logged, so it changes on every restart
+# (existing sessions will need to log in again after a restart without a
+# persisted JWT_SECRET_KEY). Set JWT_SECRET_KEY in Backend/.env to keep
+# dev sessions stable across restarts.
+if IS_PRODUCTION:
+    JWT_SECRET_KEY = _require("JWT_SECRET_KEY")
+else:
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+    if not JWT_SECRET_KEY:
+        JWT_SECRET_KEY = secrets.token_hex(32)
+        _logger.warning(
+            "JWT_SECRET_KEY is not set — generated a random, process-local secret for "
+            "this development session. Sessions will not survive a restart. Set "
+            "JWT_SECRET_KEY in Backend/.env to keep sessions stable."
+        )
 JWT_ALGORITHM = _str("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = _int("ACCESS_TOKEN_EXPIRE_MINUTES", 15 * 60)
 
@@ -134,6 +152,8 @@ BROWSER_DEFAULT_CDP_HOST = _str("BROWSER_DEFAULT_CDP_HOST", "localhost")
 BROWSER_DEFAULT_CDP_PORT = _int("BROWSER_DEFAULT_CDP_PORT", 9222)
 BROWSER_CDP_READY_TIMEOUT_SECONDS = _float("BROWSER_CDP_READY_TIMEOUT_SECONDS", 90)
 BROWSER_NAVIGATION_TIMEOUT_MS = _int("BROWSER_NAVIGATION_TIMEOUT_MS", 30000)
+BROWSER_USE_HEADLESS_DEFAULT = _bool("BROWSER_USE_HEADLESS", True)
+BROWSER_USER_AGENT_INDEX_DEFAULT = _int("BROWSER_USER_AGENT_INDEX", 0)
 
 # ---------------------------------------------------------------------------
 # Third-party check endpoints / defaults

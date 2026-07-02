@@ -725,9 +725,9 @@ _USER_AGENTS = [
 def _pick_user_agent() -> str:
     """Return a user agent string selected by the BROWSER_USER_AGENT_INDEX env var."""
     try:
-        idx = int(os.getenv("BROWSER_USER_AGENT_INDEX", "0"))
+        idx = int(os.getenv("BROWSER_USER_AGENT_INDEX", str(config.BROWSER_USER_AGENT_INDEX_DEFAULT)))
     except (ValueError, TypeError):
-        idx = 0
+        idx = config.BROWSER_USER_AGENT_INDEX_DEFAULT
     return _USER_AGENTS[idx % len(_USER_AGENTS)]
 
 
@@ -1298,7 +1298,7 @@ async def run_bridge():
     own_browser    = os.getenv("MCP_BROWSER_USE_OWN_BROWSER", "false").lower() == "true"
     port_env       = os.getenv("BROWSER_USE_CDP_PORT")
     port           = int(port_env) if port_env and port_env not in ("", "0") else find_free_port()
-    headless       = os.getenv("BROWSER_USE_HEADLESS", "true").lower() != "false"
+    headless       = os.getenv("BROWSER_USE_HEADLESS", str(config.BROWSER_USE_HEADLESS_DEFAULT)).lower() != "false"
     browser_engine = os.getenv("BROWSER_ENGINE", config.BROWSER_ENGINE).lower()
     proxy_url      = os.getenv("BROWSER_PROXY_URL", "").strip()  # e.g. http://user:pass@host:port
 
