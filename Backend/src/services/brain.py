@@ -1023,6 +1023,9 @@ class Brain:
             logger.info(f"Cancellation signal sent to task for chat_id {chat_id}")
             self.active_tasks.pop(chat_id, None)
 
+            # Clear the stale plan so reconnecting clients don't rehydrate a "running" plan
+            self.active_plans.pop(chat_id, None)
+
             # Close the browser process but keep the session alive for reuse
             if user_id:
                 try:
@@ -1033,6 +1036,8 @@ class Brain:
 
             return True
         # Even if no active task found, flag was set (guards stale tasks)
+        # Also clear stale plan so reconnect doesn't rehydrate it
+        self.active_plans.pop(chat_id, None)
         return False
 
     async def process_message(self, user_id: str, user_message: str, chat_id: str) -> Dict[str, Any]:

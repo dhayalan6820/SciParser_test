@@ -644,7 +644,12 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           const msg = JSON.parse(event.data);
           if (msg.type === "plan_update") {
             setCurrentPlan(msg.data);
-            setIsAiTyping(true);
+            // Only mark as typing if the plan has a task that is actually still running.
+            // Rehydrated plans from stopped/completed runs must not restart the polling loop.
+            const stillRunning = Array.isArray(msg.data) && msg.data.some(
+              (t: any) => t.status === "in-progress" || t.status === "running" || t.status === "pending"
+            );
+            if (stillRunning) setIsAiTyping(true);
           } else if (msg.type === "thought_update") {
             setAiThinking(msg.data);
             // Associate thought with the currently running task
