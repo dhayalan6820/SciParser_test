@@ -607,6 +607,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
       ws.onclose = () => {
         clearInterval(heartbeatTimer);
+        setMousePos(null);
         console.log("Browser stream disconnected — reconnecting in 3s");
         if (!destroyed) {
           reconnectTimer = setTimeout(connect, 3000);
@@ -625,6 +626,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       clearInterval(heartbeatTimer);
       clearTimeout(reconnectTimer);
       ws?.close();
+      setMousePos(null);
     };
   }, [activeThreadId, userProfile?.user_id]);
 

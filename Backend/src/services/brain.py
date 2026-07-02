@@ -686,24 +686,21 @@ class Brain:
                 return b64_raw
 
         async def _broadcast_frame(b64: str):
-            # Composite agent cursor dot onto the raw JPEG before broadcasting
+            # At screenshot cadence, also emit a mouse event so the frontend
+            # overlay stays in sync even when the 150ms loop is behind.
             mouse_state = _read_mouse_state()
-            if mouse_state:
-                b64 = _composite_cursor(b64, mouse_state)
-                # Also send a lightweight mouse-position event so the frontend
-                # can show a smooth animated overlay between screenshot updates.
-                if self.stream_manager:
-                    await self.stream_manager.broadcast_mouse(
-                        {
-                            "chat_id": chat_id,
-                            "x": mouse_state["x"],
-                            "y": mouse_state["y"],
-                            "event": mouse_state.get("event", "move"),
-                            "vpW": mouse_state.get("vpW", 1280),
-                            "vpH": mouse_state.get("vpH", 800),
-                        },
-                        user_id,
-                    )
+            if mouse_state and self.stream_manager:
+                await self.stream_manager.broadcast_mouse(
+                    {
+                        "chat_id": chat_id,
+                        "x": mouse_state["x"],
+                        "y": mouse_state["y"],
+                        "event": mouse_state.get("event", "move"),
+                        "vpW": mouse_state.get("vpW", 1280),
+                        "vpH": mouse_state.get("vpH", 800),
+                    },
+                    user_id,
+                )
             # Ensure the frame has the data-URL prefix the frontend expects
             if not b64.startswith("data:"):
                 b64 = f"data:image/jpeg;base64,{b64}"

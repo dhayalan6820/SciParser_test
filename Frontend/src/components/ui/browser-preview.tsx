@@ -58,7 +58,7 @@ export function BrowserPreview({
   const popupRef      = useRef<HTMLDivElement>(null);
   const viewportRef   = useRef<HTMLDivElement>(null);
 
-  // Recompute cursor pixel position whenever mousePos or viewport size changes
+  // Recompute cursor pixel position whenever mousePos, zoom, or viewport size changes
   useEffect(() => {
     if (!mousePos || !viewportRef.current) { setCursorPx(null); return; }
     const el = viewportRef.current;
@@ -66,21 +66,24 @@ export function BrowserPreview({
     const ch = el.clientHeight;
     const vpW = mousePos.vpW || 1280;
     const vpH = mousePos.vpH || 800;
+    // CSS transform:scale(zoom/100) shrinks/grows the image around its centre
+    // without changing layout dimensions, so we factor zoom into display size.
+    const z = zoom / 100;
     const scale = Math.min(cw / vpW, ch / vpH);
-    const displayW = vpW * scale;
-    const displayH = vpH * scale;
+    const displayW = vpW * scale * z;
+    const displayH = vpH * scale * z;
     const offsetX = (cw - displayW) / 2;
     const offsetY = (ch - displayH) / 2;
     setCursorPx({
-      x: mousePos.x * scale + offsetX,
-      y: mousePos.y * scale + offsetY,
+      x: mousePos.x * scale * z + offsetX,
+      y: mousePos.y * scale * z + offsetY,
     });
     if (mousePos.event === 'click') {
       setClickPulse(true);
       const t = setTimeout(() => setClickPulse(false), 350);
       return () => clearTimeout(t);
     }
-  }, [mousePos]);
+  }, [mousePos, zoom]);
 
   useEffect(() => {
     if (autoScroll && logsEndRef.current && showToolLog) {
