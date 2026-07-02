@@ -150,8 +150,14 @@ brain.session_manager.stream_manager = plan_stream_manager
 _scheduler = AsyncIOScheduler(timezone="UTC")
 
 
-def _calculate_next_run(schedule_type: str, schedule_time: Optional[str]) -> Optional[datetime]:
-    """Return the next UTC datetime for a given schedule_type + HH:MM time string."""
+def _calculate_next_run(
+    schedule_type: str,
+    schedule_time: Optional[str],
+    tz: str = "UTC",
+) -> Optional[datetime]:
+    """Return the next UTC datetime for a given schedule_type + HH:MM time string in the given IANA timezone."""
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
     hour, minute = 9, 0
     if schedule_time:
         try:
@@ -161,32 +167,40 @@ def _calculate_next_run(schedule_type: str, schedule_time: Optional[str]) -> Opt
         except Exception:
             pass
 
-    now = datetime.now(timezone.utc)
-    candidate = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    try:
+        user_tz = ZoneInfo(tz or "UTC")
+    except ZoneInfoNotFoundError:
+        user_tz = ZoneInfo("UTC")
+
+    now_local = datetime.now(user_tz)
+    candidate = now_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
     if schedule_type == "daily":
-        if candidate <= now:
+        if candidate <= now_local:
             candidate += timedelta(days=1)
-        return candidate
+        return candidate.astimezone(timezone.utc)
     elif schedule_type == "weekly":
         days_ahead = 0 - candidate.weekday()  # next Monday
         if days_ahead <= 0:
             days_ahead += 7
         candidate += timedelta(days=days_ahead)
-        return candidate
+        return candidate.astimezone(timezone.utc)
     elif schedule_type == "monthly":
-        if candidate.day != 1 or candidate <= now:
-            # First of next month
-            if now.month == 12:
-                candidate = candidate.replace(year=now.year + 1, month=1, day=1)
+        if candidate.day != 1 or candidate <= now_local:
+            if now_local.month == 12:
+                candidate = candidate.replace(year=now_local.year + 1, month=1, day=1)
             else:
-                candidate = candidate.replace(month=now.month + 1, day=1)
-        return candidate
+                candidate = candidate.replace(month=now_local.month + 1, day=1)
+        return candidate.astimezone(timezone.utc)
     return None
 
 
-def _build_cron_trigger(schedule_type: str, schedule_time: Optional[str]) -> Optional[CronTrigger]:
-    """Build an APScheduler CronTrigger from schedule_type and HH:MM time."""
+def _build_cron_trigger(
+    schedule_type: str,
+    schedule_time: Optional[str],
+    tz: str = "UTC",
+) -> Optional[CronTrigger]:
+    """Build an APScheduler CronTrigger from schedule_type, HH:MM time, and IANA timezone."""
     hour, minute = 9, 0
     if schedule_time:
         try:
@@ -196,18 +210,24 @@ def _build_cron_trigger(schedule_type: str, schedule_time: Optional[str]) -> Opt
         except Exception:
             pass
 
+    safe_tz = tz or "UTC"
     if schedule_type == "daily":
-        return CronTrigger(hour=hour, minute=minute, timezone="UTC")
+        return CronTrigger(hour=hour, minute=minute, timezone=safe_tz)
     elif schedule_type == "weekly":
-        return CronTrigger(day_of_week="mon", hour=hour, minute=minute, timezone="UTC")
+        return CronTrigger(day_of_week="mon", hour=hour, minute=minute, timezone=safe_tz)
     elif schedule_type == "monthly":
-        return CronTrigger(day=1, hour=hour, minute=minute, timezone="UTC")
+        return CronTrigger(day=1, hour=hour, minute=minute, timezone=safe_tz)
     return None
 
 
-def _register_schedule_job(schedule_id: str, schedule_type: str, schedule_time: Optional[str]) -> None:
+def _register_schedule_job(
+    schedule_id: str,
+    schedule_type: str,
+    schedule_time: Optional[str],
+    tz: str = "UTC",
+) -> None:
     """Register (or replace) an APScheduler cron job for a schedule."""
-    trigger = _build_cron_trigger(schedule_type, schedule_time)
+    trigger = _build_cron_trigger(schedule_type, schedule_time, tz)
     if trigger is None:
         return
     job_id = f"sched_{schedule_id}"
@@ -220,7 +240,7 @@ def _register_schedule_job(schedule_id: str, schedule_type: str, schedule_time: 
         args=[schedule_id],
         misfire_grace_time=600,
     )
-    logger.info(f"Registered APScheduler job {job_id} ({schedule_type} @ {schedule_time or '09:00'})")
+    logger.info(f"Registered APScheduler job {job_id} ({schedule_type} @ {schedule_time or '09:00'} {tz})")
 
 
 async def _auto_run_schedule(schedule_id: str) -> None:
@@ -317,6 +337,7 @@ async def _run_schedule_task(schedule_id: str, run_id: str) -> None:
         email_recipient = sched.email_recipient or ""
         schedule_type   = sched.schedule_type or "manual"
         schedule_time   = sched.schedule_time or ""
+        schedule_tz     = sched.timezone or "UTC"
         headless        = sched.headless if sched.headless is not None else True
         # Mark last_run immediately
         sched.last_run = datetime.now(timezone.utc)
@@ -381,7 +402,7 @@ async def _run_schedule_task(schedule_id: str, run_id: str) -> None:
                 # ── Success ──────────────────────────────────────────────
                 output_text = "\n".join(full_output)
                 duration    = int((datetime.now(timezone.utc) - start_time).total_seconds())
-                next_run_dt = _calculate_next_run(schedule_type, schedule_time)
+                next_run_dt = _calculate_next_run(schedule_type, schedule_time, schedule_tz)
 
                 async with AsyncSessionLocal() as db:
                     stmt = select(ScheduleRun).where(ScheduleRun.run_id == run_id)
@@ -474,8 +495,8 @@ async def _load_and_schedule_all() -> None:
             res = await db.execute(stmt)
             schedules = res.scalars().all()
             for s in schedules:
-                _register_schedule_job(s.schedule_id, s.schedule_type, s.schedule_time)
-                next_run = _calculate_next_run(s.schedule_type, s.schedule_time)
+                _register_schedule_job(s.schedule_id, s.schedule_type, s.schedule_time, s.timezone or "UTC")
+                next_run = _calculate_next_run(s.schedule_type, s.schedule_time, s.timezone or "UTC")
                 if next_run and not s.next_run:
                     s.next_run = next_run
             await db.commit()
@@ -789,13 +810,14 @@ async def create_schedule(req: ScheduleRequest, db: AsyncSession = Depends(get_d
 
     # 7. Save generated script + compute next_run
     schedule_time = getattr(req, "schedule_time", None)
+    schedule_tz   = getattr(req, "timezone", None) or "UTC"
     schedule_db.generated_script = generated_script
-    schedule_db.next_run = _calculate_next_run(req.schedule_type, schedule_time)
+    schedule_db.next_run = _calculate_next_run(req.schedule_type, schedule_time, schedule_tz)
     await db.commit()
 
     # 8. Register APScheduler job for non-manual schedules
     if req.schedule_type not in ("manual", None):
-        _register_schedule_job(schedule.schedule_id, req.schedule_type, schedule_time)
+        _register_schedule_job(schedule.schedule_id, req.schedule_type, schedule_time, schedule_tz)
 
     return {
         "schedule_id": schedule.schedule_id,
@@ -859,10 +881,11 @@ async def update_schedule(schedule_id: str, req: Dict[str, Any], db: AsyncSessio
     if "status" in req:         schedule.status         = req["status"]
 
     # Recalculate next_run whenever schedule type/time changes
-    if "schedule_type" in req or "schedule_time" in req:
-        schedule.next_run = _calculate_next_run(schedule.schedule_type, schedule.schedule_time)
+    if "schedule_type" in req or "schedule_time" in req or "timezone" in req:
+        sched_tz = schedule.timezone or "UTC"
+        schedule.next_run = _calculate_next_run(schedule.schedule_type, schedule.schedule_time, sched_tz)
         if schedule.schedule_type not in ("manual", None):
-            _register_schedule_job(schedule_id, schedule.schedule_type, schedule.schedule_time)
+            _register_schedule_job(schedule_id, schedule.schedule_type, schedule.schedule_time, sched_tz)
         else:
             job_id = f"sched_{schedule_id}"
             if _scheduler.get_job(job_id):

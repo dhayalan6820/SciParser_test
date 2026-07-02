@@ -33,25 +33,26 @@ const TIME_OPTIONS = Array.from({ length: 24 }, (_, h) => {
   };
 });
 
-function computeNextRun(scheduleType: string, scheduleTime: string): string {
+function computeNextRun(scheduleType: string, scheduleTime: string, tz: string): string {
   const [h, m] = scheduleTime.split(":").map(Number);
-  const now = new Date();
-  let next = new Date(now);
+  // Represent "now" in the selected IANA timezone using the toLocaleString trick
+  const nowInTz = new Date(new Date().toLocaleString("en-US", { timeZone: tz }));
+  let next = new Date(nowInTz);
   next.setHours(h, m || 0, 0, 0);
 
   if (scheduleType === "daily") {
-    if (next <= now) next.setDate(next.getDate() + 1);
+    if (next <= nowInTz) next.setDate(next.getDate() + 1);
   } else if (scheduleType === "weekly") {
     const dow = next.getDay(); // 0=Sun
-    const toMonday = dow === 1 && next > now ? 0 : ((8 - dow) % 7) || 7;
+    const toMonday = dow === 1 && next > nowInTz ? 0 : ((8 - dow) % 7) || 7;
     next.setDate(next.getDate() + toMonday);
   } else if (scheduleType === "monthly") {
-    next = new Date(now.getFullYear(), now.getMonth() + 1, 1, h, m || 0, 0, 0);
+    next = new Date(nowInTz.getFullYear(), nowInTz.getMonth() + 1, 1, h, m || 0, 0, 0);
   }
 
   return next.toLocaleDateString("en-US", {
-    weekday: "short", month: "short", day: "numeric", year: "numeric",
-  }) + " at " + next.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+    weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone: tz,
+  }) + " at " + next.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: tz });
 }
 
 interface Schedule {
@@ -313,9 +314,9 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                 <div className="flex items-center gap-4">
                   <Calendar className="w-5 h-5 text-indigo-500" />
                   <div>
-                    <div className="text-sm font-bold text-white">{computeNextRun(scheduleType, scheduleTime).split(" at ")[0]}</div>
+                    <div className="text-sm font-bold text-white">{computeNextRun(scheduleType, scheduleTime, timezone).split(" at ")[0]}</div>
                     <div className="text-[11px] text-[#64748B] font-bold uppercase tracking-wider">
-                      at {computeNextRun(scheduleType, scheduleTime).split(" at ")[1]} ({TIMEZONE_OPTIONS.find(t => t.value === timezone)?.abbr || timezone})
+                      at {computeNextRun(scheduleType, scheduleTime, timezone).split(" at ")[1]} ({TIMEZONE_OPTIONS.find(t => t.value === timezone)?.abbr || timezone})
                     </div>
                   </div>
                 </div>
@@ -705,7 +706,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                        {selectedToolLogs.map((log, i) => {
+                        {successSelectedTools.map((log, i) => {
                           const isSuccess = log.status === 'SUCCESS' || log.status === 'COMPLETED';
                           const isFailed  = log.status === 'FAILED'  || log.status === 'ERROR';
                           return (
@@ -898,7 +899,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                         <div className="flex items-center gap-2 text-[10px] font-bold text-[#64748B] uppercase tracking-widest">
                           <Calendar className="w-3.5 h-3.5" /> Next Run
                         </div>
-                        <span className="text-xs font-black text-white uppercase text-right">{computeNextRun(scheduleType, scheduleTime)}</span>
+                        <span className="text-xs font-black text-white uppercase text-right">{computeNextRun(scheduleType, scheduleTime, timezone)}</span>
                       </div>
                       <div className="pt-4">
                         <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 flex items-center gap-3">
