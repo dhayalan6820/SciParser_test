@@ -588,7 +588,12 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                     </div>
 
                     <div className="space-y-4">
-                      {displayPlan && displayPlan.length > 0 ? (
+                      {!selectedAiMsg ? (
+                        <div className="py-20 flex flex-col items-center justify-center bg-[#111827] border border-[#1F2937] rounded-[32px] border-dashed">
+                          <Workflow className="w-10 h-10 text-[#374151] mb-4" />
+                          <p className="text-xs font-black text-[#64748B] uppercase tracking-widest">Select a chat message to see AI plan</p>
+                        </div>
+                      ) : displayPlan && displayPlan.length > 0 ? (
                         displayPlan.map((task, i) => (
                           <div key={task.id || i} className="p-5 rounded-2xl bg-[#111827] border border-[#1F2937] space-y-3">
                             <div className="flex items-center justify-between gap-3">
@@ -641,11 +646,18 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                       </div>
                     </div>
 
-                    <div className="p-8 rounded-[32px] bg-[#111827] border border-[#1F2937] min-h-[400px] overflow-y-auto hide-scrollbar">
-                      <p className="text-[#CBD5E1] leading-relaxed whitespace-pre-wrap text-sm">
-                        {aiResponse || "No AI response selected"}
-                      </p>
-                    </div>
+                    {!selectedAiMsg ? (
+                      <div className="py-20 flex flex-col items-center justify-center bg-[#111827] border border-[#1F2937] rounded-[32px] border-dashed min-h-[400px]">
+                        <MessageSquare className="w-10 h-10 text-[#374151] mb-4" />
+                        <p className="text-xs font-black text-[#64748B] uppercase tracking-widest">Select a chat message to see AI response</p>
+                      </div>
+                    ) : (
+                      <div className="p-8 rounded-[32px] bg-[#111827] border border-[#1F2937] min-h-[400px] overflow-y-auto hide-scrollbar">
+                        <p className="text-[#CBD5E1] leading-relaxed whitespace-pre-wrap text-sm">
+                          {aiResponse || "No AI response available"}
+                        </p>
+                      </div>
+                    )}
                   </motion.div>
                 )}
 
@@ -664,7 +676,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                         </div>
                         <div>
                           <h4 className="text-sm font-black text-white uppercase tracking-widest">
-                            MCP Tools ({successTools.length} / {allTools.length})
+                            MCP Tools ({successSelectedTools.length} / {selectedToolLogs.length})
                           </h4>
                           <p className="text-[10px] text-[#64748B] font-bold uppercase tracking-widest">
                             Success tools included in script generation
@@ -675,7 +687,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                       <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                         <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">
-                          {successTools.length} will be sent
+                          {successSelectedTools.length} will be sent
                         </span>
                       </div>
                     </div>

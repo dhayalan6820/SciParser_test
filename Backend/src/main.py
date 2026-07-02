@@ -874,13 +874,14 @@ async def update_schedule(schedule_id: str, req: Dict[str, Any], db: AsyncSessio
     if not schedule:
         raise HTTPException(status_code=404, detail="Schedule not found")
 
-    if "title" in req:          schedule.title          = req["title"]
-    if "schedule_type" in req:  schedule.schedule_type  = req["schedule_type"]
-    if "schedule_time" in req:  schedule.schedule_time  = req["schedule_time"]
+    if "title" in req:           schedule.title           = req["title"]
+    if "schedule_type" in req:   schedule.schedule_type   = req["schedule_type"]
+    if "schedule_time" in req:   schedule.schedule_time   = req["schedule_time"]
+    if "timezone" in req:        schedule.timezone        = req["timezone"]
     if "email_recipient" in req: schedule.email_recipient = req["email_recipient"]
-    if "status" in req:         schedule.status         = req["status"]
+    if "status" in req:          schedule.status          = req["status"]
 
-    # Recalculate next_run whenever schedule type/time changes
+    # Recalculate next_run whenever schedule type/time/timezone changes
     if "schedule_type" in req or "schedule_time" in req or "timezone" in req:
         sched_tz = schedule.timezone or "UTC"
         schedule.next_run = _calculate_next_run(schedule.schedule_type, schedule.schedule_time, sched_tz)
