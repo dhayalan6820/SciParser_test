@@ -103,6 +103,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   >(undefined);
   const [browserActive, setBrowserActive] = React.useState(false);
   const [browserFrame, setBrowserFrame] = React.useState<string | null>(null);
+  const [activeBrowserEngine, setActiveBrowserEngine] = React.useState<"camoufox" | "chrome" | null>(null);
   const [mousePos, setMousePos] = React.useState<{ x: number; y: number; event: string; vpW: number; vpH: number } | null>(null);
   const [lastManualToggle, setLastManualToggle] = React.useState<number>(0);
   const [browserBlink, setBrowserBlink] = React.useState<
@@ -455,6 +456,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       setCdpConnected(s.connected);
       setCdpConnectedUrl(s.cdp_url);
       if (s.cdp_url) setCdpUrlInput(s.cdp_url);
+    }).catch(() => {});
+    sciparserApi.getBrowserEngine().then((r) => {
+      setActiveBrowserEngine((r.engine as "camoufox" | "chrome") || "camoufox");
     }).catch(() => {});
   }, [userProfile]);
 
@@ -3478,6 +3482,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                       );
                     }}
                     onClearLogs={() => setToolLogs([])}
+                    browserEngine={activeBrowserEngine}
                   />
                 </div>
               </>

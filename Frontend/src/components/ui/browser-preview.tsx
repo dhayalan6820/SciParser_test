@@ -30,6 +30,7 @@ interface BrowserPreviewProps {
   mousePos?: MousePos | null;
   onToggleToolSelection?: (id: string) => void;
   onClearLogs?: () => void;
+  browserEngine?: "camoufox" | "chrome" | null;
 }
 
 export function BrowserPreview({ 
@@ -43,7 +44,8 @@ export function BrowserPreview({
   selectedTools = [],
   mousePos,
   onToggleToolSelection,
-  onClearLogs
+  onClearLogs,
+  browserEngine,
 }: BrowserPreviewProps) {
   const [isFullSize, setIsFullSize]       = useState(false);
   const [zoom, setZoom]                   = useState(100);
@@ -162,6 +164,18 @@ export function BrowserPreview({
               </div>
             </div>
           </div>
+
+          {/* Engine badge */}
+          {browserEngine && (
+            <div className={cn(
+              "hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-md border text-[9px] font-bold uppercase tracking-wider shrink-0",
+              browserEngine === "camoufox"
+                ? "bg-[#22D3EE]/8 border-[#22D3EE]/20 text-[#22D3EE]/70"
+                : "bg-white/4 border-white/10 text-white/35"
+            )}>
+              {browserEngine === "camoufox" ? "Firefox · Camoufox" : "Chrome · Headless"}
+            </div>
+          )}
 
           {/* Nav buttons */}
           <div className="flex items-center gap-0.5 shrink-0">

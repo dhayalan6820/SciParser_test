@@ -52,7 +52,7 @@ class MCPToolManager:
                     "BROWSER_USER_DATA_DIR": user_data_dir, # Pass unique profile dir
                     "MCP_BROWSER_USE_OWN_BROWSER": "true" if own_browser else "false",
                     "BROWSER_PROXY_URL": proxy_url or "",
-                    "BROWSER_ENGINE": browser_engine or "camoufox",
+                    "BROWSER_ENGINE": browser_engine or os.getenv("BROWSER_ENGINE", "camoufox"),
                     "BROWSER_USE_HEADLESS": os.getenv("BROWSER_USE_HEADLESS", "false"),
                     "BROWSER_USE_DISABLE_SECURITY": "true",
                     "BROWSER_USER_AGENT_INDEX": str(user_agent_index),
