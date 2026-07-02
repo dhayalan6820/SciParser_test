@@ -26,9 +26,10 @@ class SessionManager:
             self.sessions[user_id] = {
                 "mcp_manager": None,
                 "port": find_free_port(),
-                "cdp_url": None,   # Can be set externally to connect to existing browser
-                "proxy_url": None, # Residential/HTTP proxy URL (http://user:pass@host:port)
-                "active_chat_ids": set() # Track active chat IDs for this user
+                "cdp_url": None,          # Can be set externally to connect to existing browser
+                "proxy_url": None,        # Residential/HTTP proxy URL (http://user:pass@host:port)
+                "browser_engine": None,   # "camoufox" or "chrome" (None = use default)
+                "active_chat_ids": set()  # Track active chat IDs for this user
             }
         return self.sessions[user_id]
 

@@ -24,6 +24,9 @@ async def init_database():
             await conn.execute(text(
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS proxy_url TEXT"
             ))
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS browser_engine VARCHAR(50) DEFAULT 'camoufox'"
+            ))
             logger.info("Database tables checked/created successfully.")
     except Exception as e:
         logger.error(f"Error creating tables: {e}")

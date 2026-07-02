@@ -20,6 +20,7 @@ import {
   Wifi,
   WifiOff,
   Server,
+  Zap,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -53,6 +54,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile 
   const [loadingStatus, setLoadingStatus] = React.useState(true);
   const [copiedProvider, setCopiedProvider] = React.useState<string | null>(null);
 
+  const [browserEngine, setBrowserEngine] = React.useState<"camoufox" | "chrome">("camoufox");
+  const [engineLoading, setEngineLoading] = React.useState(true);
+  const [engineSaving, setEngineSaving] = React.useState(false);
+  const [engineSaved, setEngineSaved] = React.useState(false);
+
   React.useEffect(() => {
     setLoadingStatus(true);
     sciparserApi.getProxyStatus()
@@ -62,7 +68,27 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile 
       })
       .catch(() => {})
       .finally(() => setLoadingStatus(false));
+
+    sciparserApi.getBrowserEngine()
+      .then((r) => setBrowserEngine((r.engine as "camoufox" | "chrome") || "camoufox"))
+      .catch(() => {})
+      .finally(() => setEngineLoading(false));
   }, []);
+
+  const handleSetEngine = async (engine: "camoufox" | "chrome") => {
+    if (engine === browserEngine) return;
+    setEngineSaving(true);
+    try {
+      await sciparserApi.setBrowserEngine(engine);
+      setBrowserEngine(engine);
+      setEngineSaved(true);
+      setTimeout(() => setEngineSaved(false), 3000);
+    } catch {
+      // silently ignore — engine stays unchanged
+    } finally {
+      setEngineSaving(false);
+    }
+  };
 
   const handleSaveProxy = async () => {
     if (!proxyInput.trim()) return;
@@ -369,26 +395,115 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile 
           </div>
         </section>
 
-        {/* ── Browser Engine Section (future) ────────────────── */}
+        {/* ── Browser Engine Section ─────────────────────────── */}
         <section>
           <div className="flex items-center gap-2 mb-3">
             <Globe className="h-4 w-4 text-[#22D3EE]" />
             <h2 className="text-sm font-bold text-[#F8FAFC] uppercase tracking-widest">Browser Engine</h2>
           </div>
-          <div className="rounded-2xl border border-[#1A2030] bg-[#0C1018] px-5 py-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold text-[#D1D5DB]">Chromium (default)</p>
-                <p className="text-xs text-[#6B7280] mt-0.5">Standard Chrome with stealth patches applied</p>
+          <div className="rounded-2xl border border-[#1A2030] bg-[#0C1018] overflow-hidden">
+            {/* Info banner */}
+            <div className="px-5 py-4 border-b border-[#141920]">
+              <div className="flex gap-3">
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#22D3EE]/10 border border-[#22D3EE]/20">
+                  <Zap className="h-3.5 w-3.5 text-[#22D3EE]" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-[#D1D5DB] mb-1">Why does this matter?</p>
+                  <p className="text-xs text-[#6B7280] leading-relaxed">
+                    Headless Chrome is the #1 bot-detection signal. Camoufox spoofs over 10 fingerprint vectors (GPU, fonts, canvas, WebGL) and runs as Firefox — nearly indistinguishable from a real desktop browser.
+                  </p>
+                </div>
               </div>
-              <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-1 rounded-lg bg-[#22D3EE]/10 border border-[#22D3EE]/20 text-[#22D3EE]">Active</span>
             </div>
-            <div className="mt-3 pt-3 border-t border-[#141920] flex items-center justify-between opacity-50">
-              <div>
-                <p className="text-xs font-semibold text-[#D1D5DB]">Camoufox (Firefox)</p>
-                <p className="text-xs text-[#6B7280] mt-0.5">Advanced fingerprint spoofing — coming soon</p>
-              </div>
-              <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-1 rounded-lg bg-[#232B36] border border-[#2A3340] text-[#4B5563]">Soon</span>
+
+            {/* Engine options */}
+            <div className="px-5 py-4 space-y-3">
+              {engineLoading ? (
+                <div className="flex items-center gap-2 text-[#6B7280]">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span className="text-xs">Loading…</span>
+                </div>
+              ) : (
+                <>
+                  {/* Camoufox option */}
+                  <button
+                    onClick={() => handleSetEngine("camoufox")}
+                    disabled={engineSaving}
+                    className={cn(
+                      "w-full flex items-center justify-between rounded-xl border px-4 py-3 transition-all text-left",
+                      browserEngine === "camoufox"
+                        ? "border-[#22D3EE]/40 bg-[#22D3EE]/5"
+                        : "border-[#1E2835] bg-[#080C12] hover:border-[#22D3EE]/20 hover:bg-[#22D3EE]/5"
+                    )}
+                  >
+                    <div>
+                      <p className="text-xs font-semibold text-[#D1D5DB]">Camoufox – stealth Firefox</p>
+                      <p className="text-xs text-[#6B7280] mt-0.5">Deep fingerprint spoofing, recommended for most sites</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-3">
+                      {browserEngine === "camoufox" && (
+                        <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-lg bg-[#22D3EE]/10 border border-[#22D3EE]/20 text-[#22D3EE]">Active</span>
+                      )}
+                      <div className={cn(
+                        "h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0",
+                        browserEngine === "camoufox" ? "border-[#22D3EE]" : "border-[#374151]"
+                      )}>
+                        {browserEngine === "camoufox" && <div className="h-2 w-2 rounded-full bg-[#22D3EE]" />}
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Chrome option */}
+                  <button
+                    onClick={() => handleSetEngine("chrome")}
+                    disabled={engineSaving}
+                    className={cn(
+                      "w-full flex items-center justify-between rounded-xl border px-4 py-3 transition-all text-left",
+                      browserEngine === "chrome"
+                        ? "border-[#F59E0B]/40 bg-[#F59E0B]/5"
+                        : "border-[#1E2835] bg-[#080C12] hover:border-[#374151]"
+                    )}
+                  >
+                    <div>
+                      <p className="text-xs font-semibold text-[#D1D5DB]">Chrome – headless Chromium</p>
+                      <p className="text-xs text-[#6B7280] mt-0.5">Standard browser with stealth patches — more likely to be detected</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-3">
+                      {browserEngine === "chrome" && (
+                        <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-lg bg-[#F59E0B]/10 border border-[#F59E0B]/20 text-[#F59E0B]">Active</span>
+                      )}
+                      <div className={cn(
+                        "h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0",
+                        browserEngine === "chrome" ? "border-[#F59E0B]" : "border-[#374151]"
+                      )}>
+                        {browserEngine === "chrome" && <div className="h-2 w-2 rounded-full bg-[#F59E0B]" />}
+                      </div>
+                    </div>
+                  </button>
+
+                  <AnimatePresence>
+                    {engineSaving && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                        className="flex items-center gap-2 text-[#6B7280]"
+                      >
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span className="text-xs">Switching engine… browser will restart on next run.</span>
+                      </motion.div>
+                    )}
+                    {engineSaved && !engineSaving && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                        className="flex items-center gap-2 rounded-xl bg-emerald-900/20 border border-emerald-500/20 px-3.5 py-2.5"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                        <p className="text-xs text-emerald-300">Engine saved — takes effect on the next automation run.</p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </>
+              )}
             </div>
           </div>
         </section>

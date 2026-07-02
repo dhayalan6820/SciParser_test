@@ -544,6 +544,34 @@ export const sciparserApi = {
     return res.json() as Promise<{ status: string; exit_ip: string }>;
   },
 
+  // Browser Engine
+  getBrowserEngine: async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/settings/browser-engine`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<{ engine: string }>;
+  },
+
+  setBrowserEngine: async (engine: "camoufox" | "chrome") => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/settings/browser-engine`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: formattedToken },
+      body: JSON.stringify({ engine }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as any).detail || "Failed to save browser engine");
+    }
+    return res.json() as Promise<{ status: string; engine: string }>;
+  },
+
   // Logout
   logout: () => {
     localStorage.removeItem("access_token");

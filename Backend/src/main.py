@@ -941,6 +941,41 @@ async def test_proxy(req: Dict[str, Any], current_user: User = Depends(ChatServi
         raise HTTPException(status_code=400, detail=f"Proxy test failed: {exc}")
 
 
+@app.get("/sciparser/v1/settings/browser-engine")
+async def get_browser_engine(current_user: User = Depends(ChatService.get_current_user), db: AsyncSession = Depends(get_db)):
+    """Return the user's preferred browser engine (camoufox or chrome)."""
+    session = brain.session_manager.get_session(current_user.user_id)
+    engine = session.get("browser_engine")
+    if engine is None:
+        result = await db.execute(select(User).where(User.user_id == current_user.user_id))
+        db_user = result.scalar_one_or_none()
+        engine = (db_user.browser_engine if db_user and db_user.browser_engine else "camoufox")
+        session["browser_engine"] = engine
+    return {"engine": engine}
+
+
+@app.post("/sciparser/v1/settings/browser-engine")
+async def set_browser_engine(req: Dict[str, Any], current_user: User = Depends(ChatService.get_current_user), db: AsyncSession = Depends(get_db)):
+    """Set the user's preferred browser engine (camoufox or chrome)."""
+    engine = (req.get("engine") or "camoufox").strip().lower()
+    if engine not in ("camoufox", "chrome"):
+        raise HTTPException(status_code=400, detail="engine must be 'camoufox' or 'chrome'")
+    result = await db.execute(select(User).where(User.user_id == current_user.user_id))
+    db_user = result.scalar_one_or_none()
+    if db_user:
+        db_user.browser_engine = engine
+        await db.commit()
+    session = brain.session_manager.get_session(current_user.user_id)
+    session["browser_engine"] = engine
+    if session.get("mcp_manager"):
+        try:
+            await session["mcp_manager"].close()
+        except Exception:
+            pass
+        session["mcp_manager"] = None
+    return {"status": "saved", "engine": engine}
+
+
 @app.post("/sciparser/v1/browser/close")
 async def close_browser_session(current_user: User = Depends(ChatService.get_current_user)):
     """Close the browser process for the current user (keeps session alive for reuse)."""

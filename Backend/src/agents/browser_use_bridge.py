@@ -1295,7 +1295,7 @@ async def run_bridge():
     port_env       = os.getenv("BROWSER_USE_CDP_PORT")
     port           = int(port_env) if port_env and port_env not in ("", "0") else find_free_port()
     headless       = os.getenv("BROWSER_USE_HEADLESS", "true").lower() != "false"
-    browser_engine = os.getenv("BROWSER_ENGINE", "chrome").lower()
+    browser_engine = os.getenv("BROWSER_ENGINE", "camoufox").lower()
     proxy_url      = os.getenv("BROWSER_PROXY_URL", "").strip()  # e.g. http://user:pass@host:port
 
     # Persistent profile directory — cookies, localStorage, and history

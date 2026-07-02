@@ -1391,6 +1391,7 @@ class Brain:
                 ua_index = session_obj.get("ua_index", 0)
                 user_cdp_url = session_obj.get("cdp_url")  # set when user connects their own browser
                 user_proxy_url = session_obj.get("proxy_url")  # residential proxy URL
+                user_browser_engine = session_obj.get("browser_engine") or "camoufox"
                 if user_cdp_url:
                     logger.info(f"Using user-provided CDP URL for {user_id}: {user_cdp_url}")
                     session_obj["mcp_manager"] = MCPToolManager(
@@ -1398,9 +1399,10 @@ class Brain:
                         user_agent_index=ua_index,
                         own_browser=False,
                         proxy_url=user_proxy_url,
+                        browser_engine=user_browser_engine,
                     )
                 else:
-                    session_obj["mcp_manager"] = MCPToolManager(port=user_port, user_agent_index=ua_index, proxy_url=user_proxy_url)
+                    session_obj["mcp_manager"] = MCPToolManager(port=user_port, user_agent_index=ua_index, proxy_url=user_proxy_url, browser_engine=user_browser_engine)
 
             mcp_manager = session_obj["mcp_manager"]
             
