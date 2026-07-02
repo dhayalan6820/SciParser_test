@@ -350,6 +350,33 @@ async def test_captcha_skill_floor_holds_and_recovers_after_success_streak(
     )
 
 
+# ── Test 6: _update_procedural raises → pending entry is restored ─────────────
+
+@pytest.mark.asyncio
+async def test_update_procedural_exception_restores_pending_entry():
+    """When _update_procedural raises, the pending entry must be put back so the
+    outcome is not silently lost on the next agent step."""
+    brain = _make_brain()
+    brain.memory_service._update_procedural.side_effect = RuntimeError("DB unavailable")
+    captcha_state = {"pending": dict(PENDING_RECAPTCHA)}
+
+    await brain._evaluate_captcha_outcome(
+        captcha_state,
+        observation=CLEAN_OBS,
+        user_id="user-6",
+        task_domain="example.com",
+    )
+
+    assert "pending" in captcha_state, (
+        "pending entry must be restored when _update_procedural raises, "
+        "so the outcome is not permanently lost"
+    )
+    assert captcha_state["pending"] == PENDING_RECAPTCHA, (
+        "restored pending entry must match the original"
+    )
+    brain.memory_service.store_reflection.assert_not_awaited()
+
+
 # ── Test 9: no memory_service → silently skipped ──────────────────────────────
 
 @pytest.mark.asyncio

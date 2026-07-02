@@ -508,6 +508,7 @@ class Brain:
                     f"on domain '{task_domain}' — confidence increased."
                 )
         except Exception as _cap_upd_err:
+            captcha_state["pending"] = _prev_captcha
             logger.warning(f"[CAPTCHA] outcome update failed (non-fatal): {_cap_upd_err}")
 
     async def initialize(self):
