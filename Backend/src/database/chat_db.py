@@ -143,6 +143,7 @@ class Schedule(Base):
     status = Column(String(20), default="completed")
     schedule_type = Column(String(20), default="manual")
     schedule_time = Column(String(50), nullable=True)
+    schedule_day_of_week = Column(String(10), nullable=True)
     timezone = Column(String(100), nullable=True)
     headless = Column(Boolean, default=True, nullable=False)
     cron_expression = Column(String(50), nullable=True)

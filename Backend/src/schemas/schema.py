@@ -90,6 +90,7 @@ class ScheduleRequest(BaseModel):
     selected_tool_ids: List[str]
     schedule_type: str # daily, weekly, monthly
     schedule_time: Optional[str] = "09:00"  # HH:MM 24-hour
+    schedule_day_of_week: Optional[str] = "mon"  # mon, tue, wed, thu, fri, sat, sun (used when schedule_type == "weekly")
     timezone: Optional[str] = "America/New_York"  # IANA timezone
     email_recipient: Optional[str] = None
     status: Optional[Literal["active", "draft"]] = "active"

@@ -48,6 +48,10 @@ async def init_database():
             await conn.execute(text(
                 "ALTER TABLE schedules ADD COLUMN IF NOT EXISTS headless BOOLEAN NOT NULL DEFAULT TRUE"
             ))
+            # Weekly schedule day-of-week picker
+            await conn.execute(text(
+                "ALTER TABLE schedules ADD COLUMN IF NOT EXISTS schedule_day_of_week VARCHAR(10) DEFAULT 'mon'"
+            ))
             logger.info("Database tables checked/created successfully.")
     except Exception as e:
         logger.error(f"Error creating tables: {e}")

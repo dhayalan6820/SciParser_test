@@ -24,6 +24,16 @@ const TIMEZONE_OPTIONS = [
   { label: "(GMT+00:00) UTC", value: "UTC", abbr: "UTC" },
 ];
 
+const DAY_OF_WEEK_OPTIONS = [
+  { label: "Mon", value: "mon" },
+  { label: "Tue", value: "tue" },
+  { label: "Wed", value: "wed" },
+  { label: "Thu", value: "thu" },
+  { label: "Fri", value: "fri" },
+  { label: "Sat", value: "sat" },
+  { label: "Sun", value: "sun" },
+];
+
 const TIME_OPTIONS = Array.from({ length: 24 }, (_, h) => {
   const ampm = h < 12 ? "AM" : "PM";
   const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
@@ -33,7 +43,9 @@ const TIME_OPTIONS = Array.from({ length: 24 }, (_, h) => {
   };
 });
 
-function computeNextRun(scheduleType: string, scheduleTime: string, tz: string): string {
+const DOW_TO_INDEX: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+
+function computeNextRun(scheduleType: string, scheduleTime: string, tz: string, dayOfWeek: string = "mon"): string {
   const [h, m] = scheduleTime.split(":").map(Number);
   // Represent "now" in the selected IANA timezone using the toLocaleString trick
   const nowInTz = new Date(new Date().toLocaleString("en-US", { timeZone: tz }));
@@ -43,9 +55,11 @@ function computeNextRun(scheduleType: string, scheduleTime: string, tz: string):
   if (scheduleType === "daily") {
     if (next <= nowInTz) next.setDate(next.getDate() + 1);
   } else if (scheduleType === "weekly") {
+    const targetDow = DOW_TO_INDEX[dayOfWeek] ?? 1;
     const dow = next.getDay(); // 0=Sun
-    const toMonday = dow === 1 && next > nowInTz ? 0 : ((8 - dow) % 7) || 7;
-    next.setDate(next.getDate() + toMonday);
+    let daysAhead = targetDow - dow;
+    if (daysAhead < 0 || (daysAhead === 0 && next <= nowInTz)) daysAhead += 7;
+    next.setDate(next.getDate() + daysAhead);
   } else if (scheduleType === "monthly") {
     next = new Date(nowInTz.getFullYear(), nowInTz.getMonth() + 1, 1, h, m || 0, 0, 0);
   }
@@ -100,6 +114,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
   
   // Schedule time & timezone
   const [scheduleTime, setScheduleTime] = React.useState("09:00");
+  const [scheduleDayOfWeek, setScheduleDayOfWeek] = React.useState("mon");
   const [timezone, setTimezone] = React.useState("America/New_York");
 
   // Advanced Options
@@ -149,6 +164,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
         title: taskName || "New Automation Task",
         schedule_type: scheduleType,
         schedule_time: scheduleTime,
+        schedule_day_of_week: scheduleDayOfWeek,
         timezone: timezone,
         email_recipient: emailRecipient,
         selected_message_ids: selectedMessages,
@@ -185,6 +201,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
         title: taskName || "New Automation Task",
         schedule_type: scheduleType,
         schedule_time: scheduleTime,
+        schedule_day_of_week: scheduleDayOfWeek,
         timezone: timezone,
         email_recipient: emailRecipient || null,
         selected_message_ids: selectedMessages,
@@ -313,6 +330,29 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                 </div>
               </div>
 
+              {scheduleType === 'weekly' && (
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-[#64748B] uppercase tracking-widest ml-1">Day of Week</label>
+                  <div className="grid grid-cols-7 gap-1.5">
+                    {DAY_OF_WEEK_OPTIONS.map((day) => (
+                      <button
+                        key={day.value}
+                        type="button"
+                        onClick={() => setScheduleDayOfWeek(day.value)}
+                        className={cn(
+                          "py-2.5 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-all",
+                          scheduleDayOfWeek === day.value
+                            ? "bg-indigo-500 border-indigo-500 text-white shadow-[0_0_12px_rgba(99,102,241,0.25)]"
+                            : "bg-[#111827] border-[#1F2937] text-[#64748B] hover:border-[#374151] hover:text-[#CBD5E1]"
+                        )}
+                      >
+                        {day.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-[#64748B] uppercase tracking-widest ml-1">Time of Day</label>
@@ -353,9 +393,9 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                 <div className="flex items-center gap-4">
                   <Calendar className="w-5 h-5 text-indigo-500" />
                   <div>
-                    <div className="text-sm font-bold text-white">{computeNextRun(scheduleType, scheduleTime, timezone).split(" at ")[0]}</div>
+                    <div className="text-sm font-bold text-white">{computeNextRun(scheduleType, scheduleTime, timezone, scheduleDayOfWeek).split(" at ")[0]}</div>
                     <div className="text-[11px] text-[#64748B] font-bold uppercase tracking-wider">
-                      at {computeNextRun(scheduleType, scheduleTime, timezone).split(" at ")[1]} ({TIMEZONE_OPTIONS.find(t => t.value === timezone)?.abbr || timezone})
+                      at {computeNextRun(scheduleType, scheduleTime, timezone, scheduleDayOfWeek).split(" at ")[1]} ({TIMEZONE_OPTIONS.find(t => t.value === timezone)?.abbr || timezone})
                     </div>
                   </div>
                 </div>
@@ -950,7 +990,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                         <div className="flex items-center gap-2 text-[10px] font-bold text-[#64748B] uppercase tracking-widest">
                           <Calendar className="w-3.5 h-3.5" /> Next Run
                         </div>
-                        <span className="text-xs font-black text-white uppercase text-right">{computeNextRun(scheduleType, scheduleTime, timezone)}</span>
+                        <span className="text-xs font-black text-white uppercase text-right">{computeNextRun(scheduleType, scheduleTime, timezone, scheduleDayOfWeek)}</span>
                       </div>
                       <div className="pt-4">
                         <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 flex items-center gap-3">

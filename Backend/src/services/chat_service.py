@@ -213,6 +213,7 @@ class ChatService:
             plan_data=ai_msg.plan_data if ai_msg else None,
             schedule_type=req.schedule_type,
             schedule_time=req.schedule_time or "09:00",
+            schedule_day_of_week=getattr(req, "schedule_day_of_week", None) or "mon",
             timezone=req.timezone or "America/New_York",
             headless=(req.advanced_options.headless if req.advanced_options else True),
             email_recipient=req.email_recipient,
