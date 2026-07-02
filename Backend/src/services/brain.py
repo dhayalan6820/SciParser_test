@@ -715,22 +715,60 @@ class Brain:
                     {"chat_id": chat_id, "frame": b64}, user_id
                 )
 
-        # ── Main capture loop ─────────────────────────────────────────────────────
-        while not stop_event.is_set():
-            try:
-                ws_url = await _get_page_ws_url()
-                if ws_url:
-                    b64 = await _take_screenshot(ws_url)
-                    if b64:
-                        await _broadcast_frame(b64)
-                # If no page yet, silently wait and retry next tick
-            except Exception as exc:
-                logger.error(f"Error in raw-CDP frame capture for user {user_id}: {exc}")
+        # ── High-frequency mouse event loop (~7 fps, independent of screenshots) ──
+        async def _mouse_event_loop() -> None:
+            """Poll mouse state at ~150 ms intervals; broadcast on any change."""
+            last_ts: float = 0.0
+            while not stop_event.is_set():
+                try:
+                    ms = _read_mouse_state()
+                    if ms and ms.get("ts", 0.0) != last_ts:
+                        last_ts = ms["ts"]
+                        if self.stream_manager:
+                            await self.stream_manager.broadcast_mouse(
+                                {
+                                    "chat_id": chat_id,
+                                    "x":       ms["x"],
+                                    "y":       ms["y"],
+                                    "event":   ms.get("event", "move"),
+                                    "vpW":     ms.get("vpW", 1280),
+                                    "vpH":     ms.get("vpH", 800),
+                                },
+                                user_id,
+                            )
+                except Exception as exc:
+                    logger.debug(f"Mouse event loop error for user {user_id}: {exc}")
+                try:
+                    await asyncio.wait_for(stop_event.wait(), timeout=0.15)
+                    break
+                except asyncio.TimeoutError:
+                    pass
 
+        mouse_loop_task = asyncio.create_task(_mouse_event_loop())
+
+        # ── Main capture loop ─────────────────────────────────────────────────────
+        try:
+            while not stop_event.is_set():
+                try:
+                    ws_url = await _get_page_ws_url()
+                    if ws_url:
+                        b64 = await _take_screenshot(ws_url)
+                        if b64:
+                            await _broadcast_frame(b64)
+                    # If no page yet, silently wait and retry next tick
+                except Exception as exc:
+                    logger.error(f"Error in raw-CDP frame capture for user {user_id}: {exc}")
+
+                try:
+                    await asyncio.wait_for(stop_event.wait(), timeout=1.0)
+                    break
+                except asyncio.TimeoutError:
+                    pass
+        finally:
+            mouse_loop_task.cancel()
             try:
-                await asyncio.wait_for(stop_event.wait(), timeout=1.0)
-                break
-            except asyncio.TimeoutError:
+                await mouse_loop_task
+            except asyncio.CancelledError:
                 pass
 
         # ── Final frame after task completes ─────────────────────────────────────
@@ -739,6 +777,11 @@ class Brain:
             if ws_url:
                 b64 = await _take_screenshot(ws_url)
                 if b64:
+                    # Delete the mouse state file so the final frame has no cursor dot
+                    try:
+                        Path(f"/tmp/agent_mouse_{port}.json").unlink(missing_ok=True)
+                    except Exception:
+                        pass
                     await _broadcast_frame(b64)
                     logger.info(f"Sent final browser frame for user {user_id}")
         except Exception as exc:

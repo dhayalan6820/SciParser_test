@@ -12,10 +12,13 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 _MOUSE_STATE_PATH: str = ""  # set once in run_bridge() from CDP port
+_last_mouse_xy: tuple = (0.0, 0.0)  # updated on every write for mouse.down() tracking
 
 
 def _write_mouse_state(x: float, y: float, event: str, vp_w: int = 1280, vp_h: int = 800) -> None:
     """Write current mouse position to a temp file so brain.py can composite it."""
+    global _last_mouse_xy
+    _last_mouse_xy = (x, y)
     if not _MOUSE_STATE_PATH:
         return
     try:
@@ -25,6 +28,88 @@ def _write_mouse_state(x: float, y: float, event: str, vp_w: int = 1280, vp_h: i
         }))
     except Exception:
         pass
+
+
+def _write_mouse_click_at_last_pos() -> None:
+    """Write a 'click' event at the last known mouse position (used for mouse.down)."""
+    x, y = _last_mouse_xy
+    _write_mouse_state(x, y, "click")
+
+
+def _apply_mouse_patch(mouse: object) -> None:
+    """Monkey-patch move/click/down on a Playwright Mouse object for cursor tracking."""
+    if getattr(mouse, "_cursor_patched", False):
+        return
+    orig_move  = mouse.move   # type: ignore[attr-defined]
+    orig_click = mouse.click  # type: ignore[attr-defined]
+    orig_down  = mouse.down   # type: ignore[attr-defined]
+
+    async def _m_move(x: float, y: float, **kw):
+        _write_mouse_state(float(x), float(y), "move")
+        return await orig_move(x, y, **kw)
+
+    async def _m_click(x: float, y: float, **kw):
+        _write_mouse_state(float(x), float(y), "click")
+        return await orig_click(x, y, **kw)
+
+    async def _m_down(**kw):
+        _write_mouse_click_at_last_pos()
+        return await orig_down(**kw)
+
+    mouse.move  = _m_move   # type: ignore[attr-defined]
+    mouse.click = _m_click  # type: ignore[attr-defined]
+    mouse.down  = _m_down   # type: ignore[attr-defined]
+    mouse._cursor_patched = True  # type: ignore[attr-defined]
+    print("Bridge: Playwright page.mouse patched for cursor tracking", file=sys.stderr)
+
+
+async def _patch_page_mouse(page: object) -> None:
+    """Extract mouse from a page (handles both property and async-method patterns)."""
+    try:
+        mouse = None
+        # browser_use may wrap page.mouse as an async method
+        raw_mouse = getattr(page, "mouse", None)
+        if raw_mouse is not None:
+            if callable(raw_mouse) and not hasattr(raw_mouse, "move"):
+                # Looks like an async method — await it
+                try:
+                    mouse = await raw_mouse()
+                except Exception:
+                    mouse = None
+            elif hasattr(raw_mouse, "move"):
+                mouse = raw_mouse
+        if mouse:
+            _apply_mouse_patch(mouse)
+    except Exception as exc:
+        print(f"Bridge: _patch_page_mouse failed: {exc}", file=sys.stderr)
+
+
+async def _patch_session_mouse(session: object) -> None:
+    """
+    After BrowserSession.start(), patch the active page's mouse and hook
+    the browser context so future pages are patched automatically.
+    """
+    try:
+        # Patch the current page
+        get_page = getattr(session, "get_current_page", None)
+        if callable(get_page):
+            page = await get_page()
+            if page:
+                await _patch_page_mouse(page)
+
+        # Hook context so every new page is also patched
+        ctx = (
+            getattr(session, "context", None)
+            or getattr(session, "browser_context", None)
+            or getattr(session, "_context", None)
+        )
+        if ctx and hasattr(ctx, "on"):
+            def _on_new_page(pg):
+                asyncio.create_task(_patch_page_mouse(pg))
+            ctx.on("page", _on_new_page)
+            print("Bridge: page-creation hook registered for cursor tracking", file=sys.stderr)
+    except Exception as exc:
+        print(f"Bridge: _patch_session_mouse failed: {exc}", file=sys.stderr)
 
 # ---------------------------------------------------------------------------
 # Chrome binary (Playwright-managed Chromium in the Replit sandbox)
@@ -245,6 +330,9 @@ def _patch_mcp_server_session_retry(chrome_ready: asyncio.Event, cdp_url: str, h
             self.browser_session = session
             await session.start()
             print("Bridge [patch]: BrowserSession started successfully", file=sys.stderr)
+
+            # Patch page.mouse so ALL Playwright mouse ops emit cursor events
+            asyncio.create_task(_patch_session_mouse(session))
 
             # Track session for management (same as original)
             if hasattr(self, '_track_session'):
