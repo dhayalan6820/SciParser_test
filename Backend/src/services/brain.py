@@ -453,6 +453,63 @@ class Brain:
     def clear_live_tool_logs(self, chat_id: str):
         self.tool_log_buffer.pop(chat_id, None)
 
+    async def _evaluate_captcha_outcome(
+        self,
+        captcha_state: Dict[str, Any],
+        observation: Any,
+        user_id: str,
+        task_domain: str,
+    ) -> None:
+        """Evaluate whether the previous CAPTCHA bypass attempt succeeded.
+
+        Pops the ``captcha_state["pending"]`` entry (if present), inspects
+        *observation* for lingering CAPTCHA signals, and updates procedural
+        memory accordingly.  A MemoryReflection lesson is written on failure.
+
+        This is extracted from the ``_call_tool`` closure so that it can be
+        unit-tested independently of the full agent graph.
+        """
+        if not captcha_state.get("pending") or not self.memory_service:
+            return
+
+        _prev_captcha = captcha_state.pop("pending")
+        _still_has_captcha = bool(_detect_captcha(str(observation)))
+        _obs_is_error = str(observation)[:500].startswith("Error")
+        _captcha_resolved = not _still_has_captcha and not _obs_is_error
+
+        try:
+            await self.memory_service._update_procedural(
+                user_id,
+                _prev_captcha["skill_name"],
+                task_domain,
+                [],
+                success=_captcha_resolved,
+            )
+            if not _captcha_resolved:
+                await self.memory_service.store_reflection(
+                    user_id,
+                    task_domain,
+                    (
+                        f"CAPTCHA skill '{_prev_captcha['skill_name']}' failed to bypass "
+                        f"{_prev_captcha['captcha_type']} CAPTCHA on {task_domain}. "
+                        f"The CAPTCHA was still present after executing the stored steps. "
+                        f"Try a different bypass approach or wait longer before retrying."
+                    ),
+                    category="CAPTCHA",
+                    severity="HIGH",
+                )
+                logger.info(
+                    f"[CAPTCHA] Recorded FAILURE for skill '{_prev_captcha['skill_name']}' "
+                    f"on domain '{task_domain}' — confidence decreased."
+                )
+            else:
+                logger.info(
+                    f"[CAPTCHA] Recorded SUCCESS for skill '{_prev_captcha['skill_name']}' "
+                    f"on domain '{task_domain}' — confidence increased."
+                )
+        except Exception as _cap_upd_err:
+            logger.warning(f"[CAPTCHA] outcome update failed (non-fatal): {_cap_upd_err}")
+
     async def initialize(self):
         """Eagerly initializes execution LLMs, search utilities, and subprocess processors."""
         if self.initialized:
@@ -819,47 +876,10 @@ class Brain:
                         observation = f"Error executing tool: {str(e)}"
 
                 # ── CAPTCHA outcome evaluation ────────────────────────────────────────
-                # If the previous observation triggered a CAPTCHA skill, check whether
-                # the current observation shows the CAPTCHA is gone (success) or still
-                # present / errored (failure).  Update procedural confidence accordingly
-                # and write a MemoryReflection lesson on failure so the agent learns.
-                if _captcha_state.get("pending") and self.memory_service:
-                    _prev_captcha = _captcha_state.pop("pending")
-                    _still_has_captcha = bool(_detect_captcha(str(observation)))
-                    _obs_is_error = str(observation)[:500].startswith("Error")
-                    _captcha_resolved = not _still_has_captcha and not _obs_is_error
-                    try:
-                        await self.memory_service._update_procedural(
-                            user_id,
-                            _prev_captcha["skill_name"],
-                            _task_domain,
-                            [],
-                            success=_captcha_resolved,
-                        )
-                        if not _captcha_resolved:
-                            await self.memory_service.store_reflection(
-                                user_id,
-                                _task_domain,
-                                (
-                                    f"CAPTCHA skill '{_prev_captcha['skill_name']}' failed to bypass "
-                                    f"{_prev_captcha['captcha_type']} CAPTCHA on {_task_domain}. "
-                                    f"The CAPTCHA was still present after executing the stored steps. "
-                                    f"Try a different bypass approach or wait longer before retrying."
-                                ),
-                                category="CAPTCHA",
-                                severity="HIGH",
-                            )
-                            logger.info(
-                                f"[CAPTCHA] Recorded FAILURE for skill '{_prev_captcha['skill_name']}' "
-                                f"on domain '{_task_domain}' — confidence decreased."
-                            )
-                        else:
-                            logger.info(
-                                f"[CAPTCHA] Recorded SUCCESS for skill '{_prev_captcha['skill_name']}' "
-                                f"on domain '{_task_domain}' — confidence increased."
-                            )
-                    except Exception as _cap_upd_err:
-                        logger.warning(f"[CAPTCHA] outcome update failed (non-fatal): {_cap_upd_err}")
+                # Delegated to Brain._evaluate_captcha_outcome for testability.
+                await self._evaluate_captcha_outcome(
+                    _captcha_state, observation, user_id, _task_domain
+                )
 
                 # ── CAPTCHA detection (runs after try/except, observation always set) ──
                 try:
