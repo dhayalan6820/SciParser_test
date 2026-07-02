@@ -1,9 +1,11 @@
 import * as React from "react";
 import { FcGoogle } from "react-icons/fc";
-import logoImage from "@/assets/logo.png";
+import logoLight from "@/assets/logo-light.png";
+import logoDark from "@/assets/logo-dark.png";
 
 import { Button } from "./button";
 import { Input } from "./input";
+import { useTheme } from "../../contexts/ThemeContext";
 
 interface Signup1Props {
   heading?: string;
@@ -29,12 +31,7 @@ interface Signup1Props {
 
 const Signup1 = ({
   heading,
-  logo = {
-    url: "#",
-    src: logoImage,
-    alt: "SciParser Logo",
-    title: "SciParser",
-  },
+  logo,
   googleText = "Sign up with Google",
   signupText = "Create an account",
   loginText = "Already have an account?",
@@ -51,6 +48,13 @@ const Signup1 = ({
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [localError, setLocalError] = React.useState("");
+  const { theme } = useTheme();
+  const resolvedLogo = logo ?? {
+    url: "#",
+    src: theme === "dark" ? logoDark : logoLight,
+    alt: "SciParser Logo",
+    title: "SciParser",
+  };
 
   const handleGuestLogin = () => {
     setUsername("sciparser_demo");
@@ -93,11 +97,11 @@ const Signup1 = ({
         {/* Logo and Greeting Section */}
         <div className="space-y-2 text-center mb-6">
           <div className="flex justify-center mb-3">
-            <a href={logo.url} className="inline-flex items-center">
+            <a href={resolvedLogo.url} className="inline-flex items-center">
               <img
-                src={logo.src}
-                alt={logo.alt}
-                title={logo.title}
+                src={resolvedLogo.src}
+                alt={resolvedLogo.alt}
+                title={resolvedLogo.title}
                 className="h-12 w-auto object-contain hover:scale-105 transition-transform"
               />
             </a>

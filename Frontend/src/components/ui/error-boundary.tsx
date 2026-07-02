@@ -26,14 +26,14 @@ export class ErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="w-screen h-screen flex items-center justify-center bg-[#05070A]">
+        <div className="w-screen h-screen flex items-center justify-center bg-background">
           <div className="flex flex-col items-center gap-6 max-w-md text-center px-8">
             <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
               <AlertTriangle className="w-8 h-8 text-red-400" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-lg font-black text-white uppercase tracking-wider">Something went wrong</h2>
-              <p className="text-sm text-[#64748B] font-medium">
+              <h2 className="text-lg font-black text-foreground uppercase tracking-wider">Something went wrong</h2>
+              <p className="text-sm text-muted-foreground font-medium">
                 {this.state.error?.message || "An unexpected error occurred."}
               </p>
             </div>

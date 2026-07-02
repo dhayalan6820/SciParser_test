@@ -1,6 +1,7 @@
 // ChatPage.tsx
 import * as React from "react";
-import logo from "@/assets/logo.png";
+import logoLight from "@/assets/logo-light.png";
+import logoDark from "@/assets/logo-dark.png";
 import atomIcon from "@/assets/atom-icon.png";
 import { Signup1 } from "./signup-1";
 import { Button } from "./button";
@@ -1303,11 +1304,11 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             <div className="flex items-center gap-3 mb-3 px-1">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                <span className="text-[10px] font-black text-[#F8FAFC] uppercase tracking-[0.2em]">
+                <span className="text-[10px] font-black text-foreground uppercase tracking-[0.2em]">
                   Execution Trace
                 </span>
               </div>
-              <div className="h-px flex-1 bg-[#2A2A2A]" />
+              <div className="h-px flex-1 bg-border" />
             </div>
             <Plan tasks={msg.plan} />
           </div>
@@ -1326,7 +1327,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 "absolute -top-2 -right-2 z-10 h-6 w-6 rounded-full border-2 flex items-center justify-center transition-all shadow-lg",
                 isSelected
                   ? "bg-indigo-600 border-indigo-500 text-white"
-                  : "bg-slate-900 border-slate-700 text-transparent",
+                  : "bg-background border-border text-transparent",
               )}
             >
               <Check className="h-3.5 w-3.5" />
@@ -1339,7 +1340,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-lg transition-transform duration-300 group-hover:scale-110",
               isUser
                 ? "bg-emerald-600 text-white"
-                : "bg-[#1E1E1E] border border-[#2A2A2A] text-white",
+                : "bg-muted border border-border text-foreground",
             )}
           >
             {isUser ? (
@@ -1356,7 +1357,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 "px-5 py-3.5 rounded-2xl shadow-sm border transition-all duration-200",
                 isUser
                   ? "bg-emerald-600 border-emerald-500 text-white rounded-tr-none shadow-emerald-500/10"
-                  : "bg-[#1a1a1a] border-[#343434] text-slate-100 rounded-tl-none hover:border-[#4a4a4a]",
+                  : "bg-card border-border text-card-foreground rounded-tl-none hover:border-accent",
                 isSelectionMode &&
                   isSelected &&
                   "ring-2 ring-indigo-500 border-indigo-500",
@@ -1365,7 +1366,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               <div
                 className={cn(
                   "text-sm leading-relaxed font-medium whitespace-pre-wrap break-words",
-                  isUser ? "text-white" : "text-slate-100",
+                  isUser ? "text-white" : "text-foreground",
                 )}
               >
                 {renderFormattedContent(msg.content, isUser)}
@@ -1378,11 +1379,11 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 {msg.screenshots.map((src, i) => (
                   <div
                     key={i}
-                    className="rounded-xl overflow-hidden border border-[#2A2A2A] shadow-lg max-w-xl"
+                    className="rounded-xl overflow-hidden border border-border shadow-lg max-w-xl"
                   >
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-[#1e1e1e] border-b border-[#2A2A2A] select-none">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-muted border-b border-border select-none">
                       <Camera className="w-3.5 h-3.5 text-cyan-400" />
-                      <span className="text-[10px] font-black uppercase tracking-widest text-[#9CA3AF]">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                         Screenshot
                       </span>
                     </div>
@@ -1393,7 +1394,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                           : `data:image/jpeg;base64,${src}`
                       }
                       alt="Browser screenshot"
-                      className="w-full h-auto object-contain max-h-96 bg-[#111]"
+                      className="w-full h-auto object-contain max-h-96 bg-black"
                     />
                   </div>
                 ))}
@@ -1429,22 +1430,22 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               return (
                 <div className="flex items-center gap-3 flex-wrap mt-0.5 px-1">
                   {processingMs !== null && processingMs > 0 && (
-                    <div className="flex items-center gap-1 text-[10px] text-[#6B7280]">
-                      <Clock className="w-3 h-3 text-[#4B5563]" />
+                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <Clock className="w-3 h-3 text-muted-foreground/80" />
                       <span>{fmtTime(processingMs)}</span>
                     </div>
                   )}
-                  <div className="flex items-center gap-1 text-[10px] text-[#6B7280]">
-                    <span className="text-[#374151]">↑</span>
+                  <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <span className="text-muted-foreground/60">↑</span>
                     <span>{fmtTokens(totalInput)}</span>
-                    <span className="text-[#374151] mx-0.5">/</span>
-                    <span className="text-[#374151]">↓</span>
+                    <span className="text-muted-foreground/60 mx-0.5">/</span>
+                    <span className="text-muted-foreground/60">↓</span>
                     <span>{fmtTokens(totalOutput)}</span>
-                    <span className="text-[#4B5563] ml-0.5">tok</span>
+                    <span className="text-muted-foreground/70 ml-0.5">tok</span>
                   </div>
                   {totalCost > 0 && (
-                    <div className="flex items-center gap-1 text-[10px] text-[#6B7280]">
-                      <span className="text-[#374151]">$</span>
+                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <span className="text-muted-foreground/60">$</span>
                       <span>{totalCost < 0.001 ? totalCost.toExponential(1) : totalCost.toFixed(4)}</span>
                     </div>
                   )}
@@ -1459,7 +1460,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 isUser ? "flex-row-reverse" : "flex-row",
               )}
             >
-              <span className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                 {new Date(msg.timestamp).toLocaleTimeString([], {
                   hour: "2-digit",
                   minute: "2-digit",
@@ -1633,13 +1634,13 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             <span className="text-amber-400 font-semibold shrink-0">
               ⚠ HTML Response
             </span>
-            <span className="text-[#9CA3AF]">
+            <span className="text-muted-foreground">
               The server returned a web page instead of data — this may be a
               Replit hosting or proxy page.
             </span>
           </div>
           {text && (
-            <p className="text-[13px] text-[#9CA3AF] leading-relaxed line-clamp-3 px-1">
+            <p className="text-[13px] text-muted-foreground leading-relaxed line-clamp-3 px-1">
               {text.slice(0, 400)}
             </p>
           )}
@@ -1659,17 +1660,17 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         return (
           <div
             key={partIdx}
-            className="my-3.5 rounded-xl border border-[#2A2A2A] bg-[#111111] overflow-hidden font-mono text-[13px] shadow-md"
+            className="my-3.5 rounded-xl border border-border bg-card overflow-hidden font-mono text-[13px] shadow-md"
           >
-            <div className="flex justify-between items-center px-4 py-1.5 bg-[#1e1e1e] border-b border-[#2A2A2A] select-none">
-              <span className="uppercase text-[10px] font-black tracking-widest text-[#9CA3AF]">
+            <div className="flex justify-between items-center px-4 py-1.5 bg-muted border-b border-border select-none">
+              <span className="uppercase text-[10px] font-black tracking-widest text-muted-foreground">
                 {lang || "text"}
               </span>
-              <span className="text-[10px] text-[#6B7280] font-medium">
+              <span className="text-[10px] text-muted-foreground/60 font-medium">
                 ready
               </span>
             </div>
-            <pre className="p-4 overflow-x-auto text-[#E5E7EB] leading-relaxed whitespace-pre">
+            <pre className="p-4 overflow-x-auto text-foreground leading-relaxed whitespace-pre">
               {code}
             </pre>
           </div>
@@ -1709,9 +1710,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               {nonTableText && (
                 <div>{renderFormattedContent(nonTableText, isUser)}</div>
               )}
-              <div className="my-3 overflow-hidden rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] shadow-lg">
-                <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-[#1e1e1e] border-b border-[#2A2A2A]">
-                  <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#9CA3AF]">
+              <div className="my-3 overflow-hidden rounded-2xl border border-border bg-card shadow-lg">
+                <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-muted border-b border-border">
+                  <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                     <TableIcon className="w-3.5 h-3.5 text-indigo-500" />
                     Data Table
                   </div>
@@ -1730,11 +1731,11 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-[13px] border-collapse">
                     <thead>
-                      <tr className="bg-[#1e1e1e]">
+                      <tr className="bg-muted">
                         {header.map((h, i) => (
                           <th
                             key={i}
-                            className="px-4 py-3 font-black text-white border-b border-[#2A2A2A] whitespace-nowrap"
+                            className="px-4 py-3 font-black text-foreground border-b border-border whitespace-nowrap"
                           >
                             {parseTableCellContent(h, isUser)}
                           </th>
@@ -1746,14 +1747,14 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                         <tr
                           key={ri}
                           className={cn(
-                            "border-b border-[#2A2A2A] transition-colors hover:bg-[#242424]",
-                            ri % 2 === 0 ? "bg-[#1A1A1A]" : "bg-[#1d1d1d]",
+                            "border-b border-border transition-colors hover:bg-muted/50",
+                            ri % 2 === 0 ? "bg-card" : "bg-muted/20",
                           )}
                         >
                           {row.map((cell, ci) => (
                             <td
                               key={ci}
-                              className="px-4 py-3 text-[#D1D5DB] align-top"
+                              className="px-4 py-3 text-card-foreground align-top"
                             >
                               {parseTableCellContent(cell, isUser)}
                             </td>
@@ -1787,7 +1788,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         // Horizontal rule
         if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
           rendered.push(
-            <hr key={i} className="my-3 border-t border-[#2A2A2A]" />,
+            <hr key={i} className="my-3 border-t border-border" />,
           );
           i++;
           continue;
@@ -1801,7 +1802,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           rendered.push(
             <h2
               key={i}
-              className="mt-4 mb-1 text-[18px] font-black text-white tracking-tight leading-snug"
+              className="mt-4 mb-1 text-[18px] font-black text-foreground tracking-tight leading-snug"
             >
               {parseInlineFormatting(h1[1], isUser)}
             </h2>,
@@ -1813,7 +1814,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           rendered.push(
             <h3
               key={i}
-              className="mt-3 mb-1 text-[15px] font-black text-[#E5E7EB] tracking-tight"
+              className="mt-3 mb-1 text-[15px] font-black text-foreground tracking-tight"
             >
               {parseInlineFormatting(h2[1], isUser)}
             </h3>,
@@ -1825,7 +1826,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           rendered.push(
             <h4
               key={i}
-              className="mt-2 mb-0.5 text-[13px] font-black text-[#CBD5E1] uppercase tracking-wider"
+              className="mt-2 mb-0.5 text-[13px] font-black text-muted-foreground uppercase tracking-wider"
             >
               {parseInlineFormatting(h3[1], isUser)}
             </h4>,
@@ -1839,7 +1840,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           rendered.push(
             <p
               key={i}
-              className="mt-3 mb-0.5 text-[13px] font-black text-[#22D3EE] uppercase tracking-wider"
+              className="mt-3 mb-0.5 text-[13px] font-black text-sky-500 uppercase tracking-wider"
             >
               {trimmed}
             </p>,
@@ -1873,9 +1874,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               {items.map((item, idx) => (
                 <li
                   key={idx}
-                  className="flex gap-2 leading-relaxed text-[14px] text-[#CBD5E1]"
+                  className="flex gap-2 leading-relaxed text-[14px] text-muted-foreground"
                 >
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#22D3EE]/70" />
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500/70" />
                   <span>{parseInlineFormatting(item, isUser)}</span>
                 </li>
               ))}
@@ -1902,9 +1903,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               {items.map((item, idx) => (
                 <li
                   key={idx}
-                  className="flex gap-2.5 leading-relaxed text-[14px] text-[#CBD5E1]"
+                  className="flex gap-2.5 leading-relaxed text-[14px] text-muted-foreground"
                 >
-                  <span className="shrink-0 text-[12px] font-black text-[#22D3EE] mt-0.5 w-4 text-right">
+                  <span className="shrink-0 text-[12px] font-black text-sky-500 mt-0.5 w-4 text-right">
                     {item.n}.
                   </span>
                   <span>{parseInlineFormatting(item.text, isUser)}</span>
@@ -1921,7 +1922,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             key={i}
             className={cn(
               "leading-relaxed text-[14px]",
-              isUser ? "text-white" : "text-[#D1D5DB]",
+              isUser ? "text-white" : "text-muted-foreground",
             )}
           >
             {parseInlineFormatting(line, isUser)}
@@ -1968,7 +1969,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const sidebarItemBase =
     "group flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-colors text-sm font-medium";
   const sidebarItemInactive =
-    "text-[#D1D5DB] hover:text-white hover:bg-[#232323]";
+    "text-muted-foreground hover:text-foreground hover:bg-accent";
   const sidebarItemActive =
     "bg-emerald-600 text-white shadow-lg shadow-emerald-500/20";
 
@@ -2076,16 +2077,16 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             initial={{ opacity: 0, scale: 0.95, y: 16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md bg-[#1A1A1A] rounded-2xl shadow-2xl border border-[#2A2A2A] overflow-hidden flex flex-col"
+            className="w-full max-w-md bg-card rounded-2xl shadow-2xl border border-border overflow-hidden flex flex-col"
           >
-            <div className="px-5 py-4 border-b border-[#2A2A2A] flex items-center justify-between">
+            <div className="px-5 py-4 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Shield className={cn("w-4 h-4", proxyActive ? "text-violet-400" : "text-[#9CA3AF]")} />
-                <h3 className="font-semibold text-[#F8FAFC] text-sm">
+                <Shield className={cn("w-4 h-4", proxyActive ? "text-violet-400" : "text-muted-foreground")} />
+                <h3 className="font-semibold text-foreground text-sm">
                   {proxyActive ? "Residential Proxy Active" : "Configure Residential Proxy"}
                 </h3>
               </div>
-              <button onClick={() => setShowProxyModal(false)} className="text-[#6B7280] hover:text-[#F8FAFC] transition-colors">
+              <button onClick={() => setShowProxyModal(false)} className="text-muted-foreground hover:text-foreground transition-colors">
                 <XIcon className="w-4 h-4" />
               </button>
             </div>
@@ -2095,14 +2096,14 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 <div className="space-y-3">
                   <div className="bg-violet-900/20 border border-violet-500/30 rounded-lg px-3 py-2.5">
                     <p className="text-xs text-violet-300 font-medium mb-0.5">Active proxy</p>
-                    <p className="text-xs text-[#9CA3AF] font-mono break-all">{proxyUrlMasked}</p>
+                    <p className="text-xs text-muted-foreground font-mono break-all">{proxyUrlMasked}</p>
                   </div>
-                  <p className="text-xs text-[#6B7280]">All browser sessions for your account are routed through this proxy. Remove it to go back to the datacenter IP.</p>
+                  <p className="text-xs text-muted-foreground/80">All browser sessions for your account are routed through this proxy. Remove it to go back to the datacenter IP.</p>
                   <div className="flex gap-2">
                     <Button
                       size="sm"
                       variant="outline"
-                      className="flex-1 text-xs border-[#2A2A2A] text-[#9CA3AF] hover:text-[#F8FAFC]"
+                      className="flex-1 text-xs border-border text-muted-foreground hover:text-foreground"
                       onClick={handleTestProxy}
                       disabled={proxyTesting}
                     >
@@ -2129,11 +2130,11 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <p className="text-xs text-[#9CA3AF] leading-relaxed">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
                     Route browser traffic through a residential proxy to bypass WAF blocks on telecom and financial sites (Verizon, Frontier, AT&T, etc.). Works with Brightdata, Oxylabs, Smartproxy, or any HTTP proxy.
                   </p>
                   <div className="space-y-1.5">
-                    <label className="text-xs text-[#9CA3AF] font-medium">Proxy URL</label>
+                    <label className="text-xs text-muted-foreground font-medium">Proxy URL</label>
                     <div className="relative">
                       <input
                         type={proxyInputVisible ? "text" : "password"}
@@ -2141,17 +2142,17 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                         onChange={(e) => setProxyInput(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && handleSaveProxy()}
                         placeholder="http://user:pass@proxy.example.com:22225"
-                        className="w-full bg-[#111] border border-[#2A2A2A] rounded-lg px-3 py-2 text-xs text-[#F8FAFC] placeholder-[#4B5563] focus:outline-none focus:border-violet-500/50 pr-9 font-mono"
+                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground placeholder-muted-foreground/60 focus:outline-none focus:border-violet-500/50 pr-9 font-mono"
                       />
                       <button
                         type="button"
                         onClick={() => setProxyInputVisible((v) => !v)}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6B7280] hover:text-[#9CA3AF]"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/80 hover:text-muted-foreground"
                       >
                         {proxyInputVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                       </button>
                     </div>
-                    <p className="text-[10px] text-[#4B5563]">Credentials are stored in server memory only, not in the database.</p>
+                    <p className="text-[10px] text-muted-foreground/60">Credentials are stored in server memory only, not in the database.</p>
                   </div>
                   {proxyError && (
                     <p className="text-xs text-red-400 bg-red-900/20 border border-red-500/20 rounded px-2 py-1.5">{proxyError}</p>
@@ -2163,7 +2164,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="flex-1 text-xs border-[#2A2A2A] text-[#9CA3AF] hover:text-[#F8FAFC]"
+                      className="flex-1 text-xs border-border text-muted-foreground hover:text-foreground"
                       onClick={handleTestProxy}
                       disabled={proxyTesting || !proxyInput.trim()}
                     >
@@ -2193,17 +2194,17 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             initial={{ opacity: 0, scale: 0.95, y: 16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md bg-[#1A1A1A] rounded-2xl shadow-2xl border border-[#2A2A2A] overflow-hidden flex flex-col"
+            className="w-full max-w-md bg-card rounded-2xl shadow-2xl border border-border overflow-hidden flex flex-col"
           >
             {/* Header */}
-            <div className="px-5 py-4 border-b border-[#2A2A2A] flex items-center justify-between">
+            <div className="px-5 py-4 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className={cn("w-2.5 h-2.5 rounded-full", cdpConnected ? "bg-emerald-400" : "bg-[#4B5563]")} />
-                <h3 className="font-semibold text-[#F8FAFC] text-sm">
+                <span className={cn("w-2.5 h-2.5 rounded-full", cdpConnected ? "bg-emerald-400" : "bg-muted-foreground/40")} />
+                <h3 className="font-semibold text-foreground text-sm">
                   {cdpConnected ? "Your Browser Connected" : "Connect Your Browser"}
                 </h3>
               </div>
-              <button onClick={() => setShowCdpModal(false)} className="text-[#6B7280] hover:text-[#F8FAFC] transition-colors">
+              <button onClick={() => setShowCdpModal(false)} className="text-muted-foreground hover:text-foreground transition-colors">
                 <XIcon className="w-4 h-4" />
               </button>
             </div>
@@ -2212,11 +2213,11 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               {cdpConnected ? (
                 /* Connected state */
                 <div className="space-y-3">
-                  <p className="text-xs text-[#9CA3AF]">
+                  <p className="text-xs text-muted-foreground">
                     The agent is using your local Chrome browser. Your residential IP bypasses
                     WAF blocks on Verizon, Frontier, AT&T, and Cloudflare.
                   </p>
-                  <div className="bg-[#232323] rounded-lg px-3 py-2 text-xs text-emerald-400 font-mono break-all">
+                  <div className="bg-muted rounded-lg px-3 py-2 text-xs text-emerald-400 font-mono break-all">
                     {cdpConnectedUrl}
                   </div>
                   <Button
@@ -2231,33 +2232,33 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               ) : (
                 /* Not connected state */
                 <div className="space-y-4">
-                  <p className="text-xs text-[#9CA3AF]">
+                  <p className="text-xs text-muted-foreground">
                     Run Chrome with remote debugging enabled, then expose it publicly with a tunnel
                     so this server can reach it.
                   </p>
 
                   {/* Step 1: launch Chrome */}
                   <div className="space-y-1.5">
-                    <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Step 1 — Launch Chrome</p>
-                    <div className="bg-[#111] rounded-lg px-3 py-2 flex items-center justify-between gap-2">
-                      <code className="text-xs text-[#E5E7EB] font-mono flex-1 break-all">
+                    <p className="text-[11px] font-semibold text-muted-foreground/80 uppercase tracking-wider">Step 1 — Launch Chrome</p>
+                    <div className="bg-muted rounded-lg px-3 py-2 flex items-center justify-between gap-2">
+                      <code className="text-xs text-foreground font-mono flex-1 break-all">
                         google-chrome --remote-debugging-port=9222 --no-first-run
                       </code>
                       <button
                         onClick={() => handleCdpCopy("google-chrome --remote-debugging-port=9222 --no-first-run")}
-                        className="shrink-0 text-[#6B7280] hover:text-[#F8FAFC] transition-colors"
+                        className="shrink-0 text-muted-foreground/80 hover:text-foreground transition-colors"
                         title="Copy"
                       >
                         {cdpCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
                     </div>
                     <div className="space-y-1 mt-1">
-                      <p className="text-[10px] text-[#6B7280]">
-                        <span className="text-[#9CA3AF]">macOS:</span>{" "}
+                      <p className="text-[10px] text-muted-foreground/60">
+                        <span className="text-muted-foreground/80">macOS:</span>{" "}
                         <span className="font-mono break-all">/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222</span>
                       </p>
-                      <p className="text-[10px] text-[#6B7280]">
-                        <span className="text-[#9CA3AF]">Windows:</span>{" "}
+                      <p className="text-[10px] text-muted-foreground/60">
+                        <span className="text-muted-foreground/80">Windows:</span>{" "}
                         <span className="font-mono break-all">"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222</span>
                       </p>
                     </div>
@@ -2265,22 +2266,22 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
                   {/* Step 2: tunnel */}
                   <div className="space-y-1.5">
-                    <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Step 2 — Expose via tunnel</p>
-                    <div className="bg-[#111] rounded-lg px-3 py-2">
-                      <code className="text-xs text-[#E5E7EB] font-mono break-all">npx cloudflared tunnel --url http://localhost:9222</code>
+                    <p className="text-[11px] font-semibold text-muted-foreground/80 uppercase tracking-wider">Step 2 — Expose via tunnel</p>
+                    <div className="bg-muted rounded-lg px-3 py-2">
+                      <code className="text-xs text-foreground font-mono break-all">npx cloudflared tunnel --url http://localhost:9222</code>
                     </div>
-                    <p className="text-[10px] text-[#6B7280]">Copy the <span className="text-[#9CA3AF]">trycloudflare.com</span> URL it prints — paste it below.</p>
+                    <p className="text-[10px] text-muted-foreground/60">Copy the <span className="text-muted-foreground/80">trycloudflare.com</span> URL it prints — paste it below.</p>
                   </div>
 
                   {/* Step 3: enter URL */}
                   <div className="space-y-1.5">
-                    <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Step 3 — Enter the CDP URL</p>
+                    <p className="text-[11px] font-semibold text-muted-foreground/80 uppercase tracking-wider">Step 3 — Enter the CDP URL</p>
                     <input
                       type="text"
                       value={cdpUrlInput}
                       onChange={(e) => setCdpUrlInput(e.target.value)}
                       placeholder="https://xyz.trycloudflare.com"
-                      className="w-full bg-[#111] border border-[#2A2A2A] rounded-lg px-3 py-2 text-xs text-[#F8FAFC] font-mono placeholder-[#4B5563] focus:outline-none focus:border-emerald-500"
+                      className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground font-mono placeholder-muted-foreground/40 focus:outline-none focus:border-emerald-500"
                     />
                   </div>
 
@@ -2430,7 +2431,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-3xl max-h-[80vh] bg-white dark:bg-[#0f0f12] rounded-[32px] shadow-2xl border border-slate-200 dark:border-white/5 overflow-hidden flex flex-col"
+            className="w-full max-w-3xl max-h-[80vh] bg-card rounded-[32px] shadow-2xl border border-border overflow-hidden flex flex-col"
           >
             <div className="px-8 py-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
@@ -2559,7 +2560,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       {/* Sidebar */}
       <div
         className={cn(
-          "flex flex-col shrink-0 overflow-hidden border-[#232B36] backdrop-blur-xl bg-[#05070A]/95",
+          "flex flex-col shrink-0 overflow-hidden border-border backdrop-blur-xl bg-background/95",
           isMobile
             ? cn(
                 "fixed inset-y-0 left-0 z-50 h-full w-[320px] max-w-[85vw] border-r transition-transform duration-300",
@@ -2582,15 +2583,15 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         {/* Collapsed icon-only rail (desktop only, when sidebar is toggled off) */}
         {!isMobile && isSidebarCollapsed && (
           <div className="flex h-full flex-col items-center py-4 gap-3 overflow-hidden">
-            <div className="pointer-events-none absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_28%)]" />
-            <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full border border-[#22D3EE]/20 bg-[#0B0F14] shadow-[0_0_18px_rgba(16,185,129,0.16)]">
+            <div className="pointer-events-none absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,rgba(var(--primary),0.08),transparent_28%)]" />
+            <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full border border-primary/20 bg-muted shadow-[0_0_18px_rgba(16,185,129,0.16)]">
               <img src={atomIcon} alt="SciParser" className="h-6 w-6 object-contain" />
             </div>
-            <div className="relative z-10 w-8 h-px bg-[#232B36]" />
+            <div className="relative z-10 w-8 h-px bg-border" />
             <button
               onClick={() => handleNewChat(true)}
               title="New Chat"
-              className="relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border border-[#232B36] bg-white/[0.02] text-[#9CA3AF] hover:border-[#22D3EE]/25 hover:bg-[#161B22] hover:text-[#F8FAFC] transition-all"
+              className="relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border border-border bg-card/50 text-muted-foreground hover:border-primary/25 hover:bg-muted hover:text-foreground transition-all"
             >
               <Plus className="h-5 w-5" />
             </button>
@@ -2604,8 +2605,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               className={cn(
                 "relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border transition-all",
                 currentView === "schedules"
-                  ? "border-[#22D3EE]/35 bg-gradient-to-b from-[#10B981]/20 to-[#22D3EE]/15 text-[#F8FAFC] shadow-[0_0_16px_rgba(34,211,238,0.15)]"
-                  : "border-[#232B36] bg-white/[0.02] text-[#9CA3AF] hover:border-[#22D3EE]/25 hover:bg-[#161B22] hover:text-[#F8FAFC]",
+                  ? "border-primary/35 bg-gradient-to-b from-primary/20 to-primary/15 text-foreground shadow-[0_0_16px_rgba(34,211,238,0.15)]"
+                  : "border-border bg-card/50 text-muted-foreground hover:border-primary/25 hover:bg-muted hover:text-foreground",
               )}
             >
               <Calendar className="h-5 w-5" />
@@ -2616,8 +2617,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               className={cn(
                 "relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border transition-all",
                 currentView === "settings"
-                  ? "border-violet-500/35 bg-gradient-to-b from-violet-500/20 to-violet-600/15 text-[#F8FAFC] shadow-[0_0_16px_rgba(167,139,250,0.15)]"
-                  : "border-[#232B36] bg-white/[0.02] text-[#9CA3AF] hover:border-violet-500/25 hover:bg-[#161B22] hover:text-[#F8FAFC]",
+                  ? "border-violet-500/35 bg-gradient-to-b from-violet-500/20 to-violet-600/15 text-foreground shadow-[0_0_16px_rgba(167,139,250,0.15)]"
+                  : "border-border bg-card/50 text-muted-foreground hover:border-violet-500/25 hover:bg-muted hover:text-foreground",
               )}
             >
               <Settings className="h-5 w-5" />
@@ -2626,7 +2627,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             <button
               onClick={toggleTheme}
               title="Toggle theme"
-              className="relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border border-[#232B36] bg-[#0B0F14] text-[#9CA3AF] hover:bg-[#161B22] hover:text-[#F8FAFC] transition-all"
+              className="relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border border-border bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-all"
             >
               {theme === "dark" ? (
                 <Sun className="w-4 h-4" />
@@ -2637,11 +2638,11 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             <button
               onClick={handleLogout}
               title="Log out"
-              className="relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border border-[#232B36] bg-[#0B0F14] text-red-400 hover:bg-[#161B22] hover:text-red-300 transition-all"
+              className="relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border border-border bg-muted text-red-400 hover:bg-muted/80 hover:text-red-300 transition-all"
             >
               <LogOut className="w-4 h-4" />
             </button>
-            <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full bg-[#10B981] text-white text-xs font-black shadow-[0_0_18px_rgba(16,185,129,0.3)]">
+            <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white text-xs font-black shadow-[0_0_18px_rgba(16,185,129,0.3)]">
               {userProfile?.username.slice(0, 2).toUpperCase()}
             </div>
           </div>
@@ -2650,12 +2651,12 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         {/* Icon-only rail shown when on Automation or Settings page (desktop only) */}
         {!isMobile && !isSidebarCollapsed && (currentView === "schedules" || currentView === "settings") && (
           <div className="flex h-full flex-col items-center py-4 gap-3">
-            <div className="pointer-events-none absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_28%)]" />
+            <div className="pointer-events-none absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,rgba(var(--primary),0.08),transparent_28%)]" />
             {/* Logo */}
             <div className="relative z-10">
-              <img src={logo} alt="SciParser" className="h-8 w-auto object-contain" />
+              <img src={theme === "dark" ? logoDark : logoLight} alt="SciParser" className="h-8 w-auto object-contain" />
             </div>
-            <div className="relative z-10 w-8 h-px bg-[#232B36]" />
+            <div className="relative z-10 w-8 h-px bg-border" />
             {/* Chat nav icon */}
             <button
               onClick={() => handleSwitchView("chat")}
@@ -2663,8 +2664,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               className={cn(
                 "relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border transition-all",
                 currentView === "chat"
-                  ? "border-[#22D3EE]/35 bg-gradient-to-b from-[#10B981]/20 to-[#22D3EE]/15 text-[#F8FAFC] shadow-[0_0_16px_rgba(34,211,238,0.15)]"
-                  : "border-[#232B36] bg-white/[0.02] text-[#9CA3AF] hover:border-[#22D3EE]/25 hover:bg-[#161B22] hover:text-[#F8FAFC]",
+                  ? "border-primary/35 bg-gradient-to-b from-primary/20 to-primary/15 text-foreground shadow-[0_0_16px_rgba(34,211,238,0.15)]"
+                  : "border-border bg-card/50 text-muted-foreground hover:border-primary/25 hover:bg-muted hover:text-foreground",
               )}
             >
               <MessageSquare className="h-5 w-5" />
@@ -2676,8 +2677,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               className={cn(
                 "relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border transition-all",
                 currentView === "schedules"
-                  ? "border-[#22D3EE]/35 bg-gradient-to-b from-[#10B981]/20 to-[#22D3EE]/15 text-[#F8FAFC] shadow-[0_0_16px_rgba(34,211,238,0.15)]"
-                  : "border-[#232B36] bg-white/[0.02] text-[#9CA3AF] hover:border-[#22D3EE]/25 hover:bg-[#161B22] hover:text-[#F8FAFC]",
+                  ? "border-primary/35 bg-gradient-to-b from-primary/20 to-primary/15 text-foreground shadow-[0_0_16px_rgba(34,211,238,0.15)]"
+                  : "border-border bg-card/50 text-muted-foreground hover:border-primary/25 hover:bg-muted hover:text-foreground",
               )}
             >
               <Calendar className="h-5 w-5" />
@@ -2689,8 +2690,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               className={cn(
                 "relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border transition-all",
                 currentView === "settings"
-                  ? "border-violet-500/35 bg-gradient-to-b from-violet-500/20 to-violet-600/15 text-[#F8FAFC] shadow-[0_0_16px_rgba(167,139,250,0.15)]"
-                  : "border-[#232B36] bg-white/[0.02] text-[#9CA3AF] hover:border-violet-500/25 hover:bg-[#161B22] hover:text-[#F8FAFC]",
+                  ? "border-violet-500/35 bg-gradient-to-b from-violet-500/20 to-violet-600/15 text-foreground shadow-[0_0_16px_rgba(167,139,250,0.15)]"
+                  : "border-border bg-card/50 text-muted-foreground hover:border-violet-500/25 hover:bg-muted hover:text-foreground",
               )}
             >
               <Settings className="h-5 w-5" />
@@ -2701,7 +2702,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             <button
               onClick={toggleTheme}
               title="Toggle theme"
-              className="relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border border-[#232B36] bg-[#0B0F14] text-[#9CA3AF] hover:bg-[#161B22] hover:text-[#F8FAFC] transition-all"
+              className="relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border border-border bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-all"
             >
               {theme === "dark" ? (
                 <Sun className="w-4 h-4" />
@@ -2713,19 +2714,19 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             <button
               onClick={handleLogout}
               title="Log out"
-              className="relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border border-[#232B36] bg-[#0B0F14] text-red-400 hover:bg-[#161B22] hover:text-red-300 transition-all"
+              className="relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border border-border bg-muted text-red-400 hover:bg-muted/80 hover:text-red-300 transition-all"
             >
               <LogOut className="w-4 h-4" />
             </button>
             {/* User avatar */}
-            <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full bg-[#10B981] text-white text-xs font-black shadow-[0_0_18px_rgba(16,185,129,0.3)]">
+            <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white text-xs font-black shadow-[0_0_18px_rgba(16,185,129,0.3)]">
               {userProfile?.username.slice(0, 2).toUpperCase()}
             </div>
           </div>
         )}
         <div
           className={cn(
-            "relative flex h-full flex-col bg-[#05070A]/95",
+            "relative flex h-full flex-col bg-background/95",
             !isMobile &&
               (isSidebarCollapsed || currentView === "schedules") &&
               "hidden",
@@ -2748,10 +2749,10 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
           {/* Sidebar Header */}
           <div className="relative z-10 px-4 pt-4 pb-3">
-            <div className="rounded-[18px] border border-[#232B36] bg-white/[0.03] px-4 py-4 shadow-[0_14px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl">
+            <div className="rounded-[18px] border border-border bg-muted/30 px-4 py-4 shadow-[0_14px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
-                  <img src={logo} alt="SciParser" className="h-8 w-auto object-contain" />
+                  <img src={theme === "dark" ? logoDark : logoLight} alt="SciParser" className="h-8 w-auto object-contain" />
                 </div>
                 <div className="flex items-center gap-1.5">
                   {isMobile && (
@@ -2759,7 +2760,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                       variant="ghost"
                       size="icon"
                       onClick={() => setIsMobileSidebarOpen(false)}
-                      className="h-10 w-10 rounded-[14px] border border-[#232B36] bg-[#111827]/60 text-[#9CA3AF] hover:bg-[#161B22] hover:text-[#F8FAFC]"
+                      className="h-10 w-10 rounded-[14px] border border-border bg-card/60 text-muted-foreground hover:bg-muted hover:text-foreground"
                     >
                       <X className="h-5 w-5" />
                     </Button>
@@ -2768,7 +2769,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     variant="ghost"
                     size="icon"
                     onClick={() => handleNewChat(true)}
-                    className="h-10 w-10 rounded-[14px] border border-[#232B36] bg-[#111827]/60 text-[#F8FAFC] hover:bg-[#161B22] hover:text-[#22D3EE]"
+                    className="h-10 w-10 rounded-[14px] border border-border bg-card/60 text-foreground hover:bg-muted hover:text-[#22D3EE]"
                   >
                     <Plus className="h-5 w-5" />
                   </Button>
@@ -2777,15 +2778,15 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
               {/* Sidebar Search */}
               <div className="mt-4 relative">
-                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748B]" />
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="text"
                   placeholder="Search chats..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-[14px] border border-[#232B36] bg-[#0B0F14]/80 py-3 pl-10 pr-12 text-sm text-[#E5E7EB] outline-none placeholder:text-[#64748B] focus:border-[#22D3EE]/50 focus:ring-2 focus:ring-[#22D3EE]/15"
+                  className="w-full rounded-[14px] border border-border bg-card/80 py-3 pl-10 pr-12 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-[#22D3EE]/50 focus:ring-2 focus:ring-[#22D3EE]/15"
                 />
-                <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-[#232B36] bg-white/[0.03] px-2 py-0.5 text-[10px] font-semibold text-[#64748B]">
+                <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-border bg-muted/30 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
                   ⌘K
                 </div>
               </div>
@@ -2796,8 +2797,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   className={cn(
                     "flex items-center justify-between rounded-[14px] border px-3 py-3 text-left transition-all duration-200",
                     currentView === "chat"
-                      ? "border-[#22D3EE]/35 bg-gradient-to-r from-[#10B981]/20 to-[#22D3EE]/15 text-[#F8FAFC] shadow-[0_0_24px_rgba(34,211,238,0.12)]"
-                      : "border-[#232B36] bg-white/[0.02] text-[#D1D5DB] hover:border-[#22D3EE]/25 hover:bg-[#161B22] hover:text-[#F8FAFC]",
+                      ? "border-[#22D3EE]/35 bg-gradient-to-r from-[#10B981]/20 to-[#22D3EE]/15 text-foreground shadow-[0_0_24px_rgba(34,211,238,0.12)]"
+                      : "border-border bg-muted/20 text-muted-foreground hover:border-[#22D3EE]/25 hover:bg-muted hover:text-foreground",
                   )}
                 >
                   <div className="flex items-center gap-2 min-w-0">
@@ -2814,8 +2815,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   className={cn(
                     "flex items-center justify-between rounded-[14px] border px-3 py-3 text-left transition-all duration-200",
                     currentView === "schedules"
-                      ? "border-[#22D3EE]/35 bg-gradient-to-r from-[#10B981]/20 to-[#22D3EE]/15 text-[#F8FAFC] shadow-[0_0_24px_rgba(34,211,238,0.12)]"
-                      : "border-[#232B36] bg-white/[0.02] text-[#D1D5DB] hover:border-[#22D3EE]/25 hover:bg-[#161B22] hover:text-[#F8FAFC]",
+                      ? "border-[#22D3EE]/35 bg-gradient-to-r from-[#10B981]/20 to-[#22D3EE]/15 text-foreground shadow-[0_0_24px_rgba(34,211,238,0.12)]"
+                      : "border-border bg-muted/20 text-muted-foreground hover:border-[#22D3EE]/25 hover:bg-muted hover:text-foreground",
                   )}
                 >
                   <div className="flex items-center gap-2 min-w-0">
@@ -2832,8 +2833,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   className={cn(
                     "col-span-2 flex items-center justify-between rounded-[14px] border px-3 py-3 text-left transition-all duration-200",
                     currentView === "settings"
-                      ? "border-violet-500/35 bg-gradient-to-r from-violet-500/20 to-violet-600/15 text-[#F8FAFC] shadow-[0_0_24px_rgba(167,139,250,0.12)]"
-                      : "border-[#232B36] bg-white/[0.02] text-[#D1D5DB] hover:border-violet-500/25 hover:bg-[#161B22] hover:text-[#F8FAFC]",
+                      ? "border-violet-500/35 bg-gradient-to-r from-violet-500/20 to-violet-600/15 text-foreground shadow-[0_0_24px_rgba(167,139,250,0.12)]"
+                      : "border-border bg-muted/20 text-muted-foreground hover:border-violet-500/25 hover:bg-muted hover:text-foreground",
                   )}
                 >
                   <div className="flex items-center gap-2 min-w-0">
@@ -2851,11 +2852,11 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           {/* Sidebar Thread List */}
           <div className="relative z-10 flex-1 overflow-y-auto px-4 pb-3 pt-1 hide-scrollbar">
             <div className="flex items-center gap-3 px-1.5 pb-3 pt-1">
-              <div className="h-px flex-1 bg-[#232B36]" />
+              <div className="h-px flex-1 bg-border" />
               <span className="text-[10px] font-black uppercase tracking-[0.24em] text-[#10B981]">
                 Recent Chats
               </span>
-              <div className="h-px flex-1 bg-[#232B36]" />
+              <div className="h-px flex-1 bg-border" />
             </div>
 
             <div className="space-y-2">
@@ -2869,7 +2870,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                       "group relative overflow-hidden rounded-[14px] border px-3.5 py-3 transition-all duration-200 cursor-pointer",
                       isActive
                         ? "border-[#10B981]/35 bg-gradient-to-r from-[#10B981]/16 to-[#22D3EE]/10 shadow-[0_0_30px_rgba(16,185,129,0.12)]"
-                        : "border-[#232B36] bg-white/[0.02] hover:border-[#22D3EE]/25 hover:bg-[#161B22]",
+                        : "border-border bg-muted/20 hover:border-[#22D3EE]/25 hover:bg-muted",
                     )}
                   >
                     {isActive && (
@@ -2881,7 +2882,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                           "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] border",
                           isActive
                             ? "border-[#10B981]/20 bg-[#10B981]/10 text-[#10B981]"
-                            : "border-[#232B36] bg-[#0B0F14] text-[#9CA3AF]",
+                            : "border-border bg-card text-muted-foreground",
                         )}
                       >
                         <MessageSquare className="h-4 w-4" />
@@ -2892,8 +2893,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                             className={cn(
                               "truncate text-[14px] font-semibold tracking-tight",
                               isActive
-                                ? "text-[#F8FAFC]"
-                                : "text-[#D1D5DB] group-hover:text-[#F8FAFC]",
+                                ? "text-foreground"
+                                : "text-muted-foreground group-hover:text-foreground",
                             )}
                           >
                             {t.title}
@@ -2904,19 +2905,19 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                                 e.stopPropagation();
                                 setDeletingThreadId(String(t.id));
                               }}
-                              className="rounded-md border border-[#232B36] bg-white/[0.03] p-1.5 text-[#9CA3AF] hover:border-red-500/30 hover:text-red-400"
+                              className="rounded-md border border-border bg-muted/30 p-1.5 text-muted-foreground hover:border-red-500/30 hover:text-red-400"
                             >
                               <Trash className="h-3.5 w-3.5" />
                             </button>
                           </div>
                         </div>
                         <div className="mt-1 flex items-center justify-between gap-2">
-                          <span className="text-[11px] text-[#9CA3AF]">
+                          <span className="text-[11px] text-muted-foreground">
                             {isActive
                               ? "Pinned chat"
                               : `${t.messages?.length || 0} messages`}
                           </span>
-                          <span className="text-[10px] text-[#6B7280]">
+                          <span className="text-[10px] text-muted-foreground">
                             {t.createdAt
                               ? new Date(t.createdAt).toLocaleDateString([], {
                                   month: "short",
@@ -2934,7 +2935,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
             <button
               onClick={() => handleNewChat(true)}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-[14px] border border-[#232B36] bg-[#0B0F14]/80 px-3 py-3 text-sm font-semibold text-[#10B981] transition-all hover:border-[#10B981]/30 hover:bg-[#161B22] hover:text-[#34D399]"
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-[14px] border border-border bg-card/80 px-3 py-3 text-sm font-semibold text-[#10B981] transition-all hover:border-[#10B981]/30 hover:bg-muted hover:text-[#34D399]"
             >
               <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#10B981]/30 bg-[#10B981]/10 text-[#10B981]">
                 +
@@ -2945,22 +2946,22 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
           {/* Sidebar Footer */}
           <div className="relative z-10 px-4 pb-4 pt-2">
-            <div className="rounded-[16px] border border-[#232B36] bg-white/[0.03] px-4 py-3 backdrop-blur-xl shadow-[0_14px_40px_rgba(0,0,0,0.24)]">
+            <div className="rounded-[16px] border border-border bg-muted/30 px-4 py-3 backdrop-blur-xl shadow-[0_14px_40px_rgba(0,0,0,0.24)]">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#10B981] text-white font-black shadow-[0_0_24px_rgba(16,185,129,0.38)]">
                     {userProfile?.username.slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-[#F8FAFC]">
+                    <p className="truncate text-sm font-semibold text-foreground">
                       {userProfile?.username}
                     </p>
-                    <p className="truncate text-[11px] text-[#9CA3AF]">
+                    <p className="truncate text-[11px] text-muted-foreground">
                       {userProfile?.email}
                     </p>
                   </div>
                 </div>
-                <button className="rounded-lg border border-[#232B36] bg-[#0B0F14] p-2 text-[#9CA3AF] transition-colors hover:border-[#22D3EE]/25 hover:text-[#F8FAFC]">
+                <button className="rounded-lg border border-border bg-card p-2 text-muted-foreground transition-colors hover:border-[#22D3EE]/25 hover:text-foreground">
                   <ChevronDown className="h-4 w-4" />
                 </button>
               </div>
@@ -2970,7 +2971,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   variant="ghost"
                   size="icon"
                   onClick={toggleTheme}
-                  className="h-10 w-10 rounded-[12px] border border-[#232B36] bg-[#0B0F14] text-[#9CA3AF] transition-all hover:bg-[#161B22] hover:text-[#F8FAFC] active:scale-90"
+                  className="h-10 w-10 rounded-[12px] border border-border bg-card text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-90"
                 >
                   {theme === "dark" ? (
                     <Sun className="w-5 h-5" />
@@ -2982,7 +2983,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   variant="ghost"
                   size="icon"
                   onClick={handleLogout}
-                  className="h-10 w-10 rounded-[12px] border border-[#232B36] bg-[#0B0F14] text-red-400 transition-all hover:bg-[#161B22] hover:text-red-300 active:scale-90"
+                  className="h-10 w-10 rounded-[12px] border border-border bg-card text-red-400 transition-all hover:bg-muted hover:text-red-300 active:scale-90"
                 >
                   <LogOut className="w-5 h-5" />
                 </Button>
@@ -2996,16 +2997,16 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                className="w-full max-w-sm rounded-[20px] border border-[#232B36] bg-[#111827] p-6 text-center shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
+                className="w-full max-w-sm rounded-[20px] border border-border bg-card p-6 text-center shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
               >
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-red-500/20 bg-red-500/10">
                   <Trash className="h-6 w-6 text-red-400" />
                 </div>
                 <div className="mt-4 space-y-2">
-                  <h3 className="text-lg font-bold text-[#F8FAFC]">
+                  <h3 className="text-lg font-bold text-foreground">
                     Delete chat?
                   </h3>
-                  <p className="text-sm text-[#9CA3AF]">
+                  <p className="text-sm text-muted-foreground">
                     This will permanently remove this conversation and all its
                     history.
                   </p>
@@ -3014,7 +3015,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   <Button
                     variant="ghost"
                     onClick={() => setDeletingThreadId(null)}
-                    className="flex-1 rounded-xl border border-[#232B36] bg-white/[0.03] text-xs font-bold text-[#E5E7EB] hover:bg-[#161B22]"
+                    className="flex-1 rounded-xl border border-border bg-muted/30 text-xs font-bold text-foreground hover:bg-muted"
                   >
                     CANCEL
                   </Button>
@@ -3047,7 +3048,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               }}
             >
               {/* Chat Header */}
-              <div className="h-14 border-b border-[#2A2A2A] bg-[#1A1A1A] px-4 flex items-center gap-2 shrink-0 overflow-hidden">
+              <div className="h-14 border-b border-border bg-card px-4 flex items-center gap-2 shrink-0 overflow-hidden">
                 <div className="flex items-center gap-2 shrink-0">
                   <Button
                     variant="ghost"
@@ -3069,7 +3070,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                       <PanelLeftOpen className="w-5 h-5" />
                     )}
                   </Button>
-                  <div className="font-semibold text-sm text-[#F8FAFC] truncate max-w-[120px] sm:max-w-none">
+                  <div className="font-semibold text-sm text-foreground truncate max-w-[120px] sm:max-w-none">
                     {activeModel}
                   </div>
                 </div>
@@ -3157,10 +3158,10 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                       "gap-1.5 text-xs font-semibold shrink-0 transition-all duration-300",
                       cdpConnected
                         ? "border-emerald-500 text-emerald-400 hover:bg-emerald-900/20"
-                        : "border-[#2A2A2A] text-[#9CA3AF] hover:text-[#F8FAFC] hover:border-[#3A3A3A]",
+                        : "border-border text-muted-foreground hover:text-foreground hover:border-border",
                     )}
                   >
-                    <span className={cn("w-2 h-2 rounded-full shrink-0", cdpConnected ? "bg-emerald-400" : "bg-[#4B5563]")} />
+                    <span className={cn("w-2 h-2 rounded-full shrink-0", cdpConnected ? "bg-emerald-400" : "bg-muted-foreground")} />
                     <Link className="w-4 h-4" />
                     <span className="hidden md:inline">{cdpConnected ? "Your Browser" : "Connect Browser"}</span>
                   </Button>
@@ -3175,7 +3176,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                       "gap-1.5 text-xs font-semibold shrink-0 transition-all duration-300",
                       proxyActive
                         ? "border-violet-500 text-violet-400 hover:bg-violet-900/20"
-                        : "border-[#2A2A2A] text-[#9CA3AF] hover:text-[#F8FAFC] hover:border-[#3A3A3A]",
+                        : "border-border text-muted-foreground hover:text-foreground hover:border-border",
                     )}
                   >
                     <Shield className={cn("w-4 h-4", proxyActive && "fill-violet-500/20")} />
@@ -3241,13 +3242,13 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 >
                   {messages.length === 0 && !isAiTyping ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-center p-4 sm:p-6 chat-content-cap space-y-4">
-                      <div className="w-12 h-12 rounded-2xl bg-[#1E1E1E] flex items-center justify-center border border-[#2A2A2A]">
+                      <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center border border-border">
                         <img src={atomIcon} alt="SciParser" className="w-8 h-8 object-contain" />
                       </div>
-                      <h2 className="text-xl font-bold text-[#F8FAFC]">
+                      <h2 className="text-xl font-bold text-foreground">
                         How can I assist you today?
                       </h2>
-                      <p className="text-sm text-[#9CA3AF]">
+                      <p className="text-sm text-muted-foreground">
                         SciParser can browse the web, analyze documents, and run
                         complex multi-agent workflows.
                       </p>
@@ -3258,7 +3259,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                               "Go to Hacker News and extract top stories",
                             )
                           }
-                          className="p-3 text-xs font-medium text-left rounded-xl border border-[#2A2A2A] text-[#E5E7EB] hover:bg-[#232323] transition-colors min-h-[44px]"
+                          className="p-3 text-xs font-medium text-left rounded-xl border border-border text-foreground hover:bg-muted transition-colors min-h-[44px]"
                         >
                           📰 Extract Hacker News
                         </button>
@@ -3268,7 +3269,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                               "Search for latest AI research papers",
                             )
                           }
-                          className="p-3 text-xs font-medium text-left rounded-xl border border-[#2A2A2A] text-[#E5E7EB] hover:bg-[#232323] transition-colors min-h-[44px]"
+                          className="p-3 text-xs font-medium text-left rounded-xl border border-border text-foreground hover:bg-muted transition-colors min-h-[44px]"
                         >
                           🔬 Search AI Papers
                         </button>
@@ -3287,7 +3288,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                               <div className="flex items-center gap-3">
                                 <div className="flex items-center gap-2">
                                   <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                                  <div className="text-[10px] font-black text-[#9CA3AF] uppercase tracking-[0.2em]">
+                                  <div className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">
                                     Live Execution
                                   </div>
                                 </div>
@@ -3318,7 +3319,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                                     isAiTyping={isAiTyping}
                                   />
                                 ) : (
-                                  <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl p-5 shadow-sm">
+                                  <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
                                     <MessageLoading />
                                   </div>
                                 )}
@@ -3334,8 +3335,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               </div>
 
               {/* Chat Input Area */}
-              <div className="px-3 py-3 sm:px-4 sm:py-4 bg-[#1A1A1A] border-t border-[#2A2A2A]">
-                <div className="chat-content-cap relative flex items-end gap-2 bg-[#111111] border border-[#2A2A2A] rounded-xl p-2">
+              <div className="px-3 py-3 sm:px-4 sm:py-4 bg-card border-t border-border">
+                <div className="chat-content-cap relative flex items-end gap-2 bg-card border border-border rounded-xl p-2">
                   <input
                     type="file"
                     ref={fileInputRef}
@@ -3347,9 +3348,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     variant="ghost"
                     size="icon"
                     onClick={() => fileInputRef.current?.click()}
-                    className="hover:bg-[#232323] shrink-0"
+                    className="hover:bg-muted shrink-0"
                   >
-                    <Paperclip className="w-5 h-5 text-[#9CA3AF]" />
+                    <Paperclip className="w-5 h-5 text-muted-foreground" />
                   </Button>
                   <textarea
                     ref={textareaRef}
@@ -3369,7 +3370,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                       height: `${MIN_TEXTAREA_H}px`,
                       overflowY: "hidden",
                     }}
-                    className="w-full resize-none bg-transparent border-none focus:outline-none text-sm py-2 px-1 text-[#E5E7EB] placeholder:text-[#6B7280]"
+                    className="w-full resize-none bg-transparent border-none focus:outline-none text-sm py-2 px-1 text-foreground placeholder:text-muted-foreground"
                   />
                   <Button
                     onClick={() => handleSendMessage(textareaValue)}
@@ -3388,16 +3389,16 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 {/* Resize Handle */}
                 <div
                   onMouseDown={handleBrowserResizeStart}
-                  className="w-1.5 bg-[#2A2A2A] hover:bg-indigo-500 cursor-col-resize transition-colors z-30 relative group"
+                  className="w-1.5 bg-border hover:bg-indigo-500 cursor-col-resize transition-colors z-30 relative group"
                 >
                   <div className="absolute inset-y-0 -left-2 -right-2 cursor-col-resize" />
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-12 rounded-full bg-[#3A3A3A] group-hover:bg-white transition-colors" />
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-12 rounded-full bg-border group-hover:bg-white transition-colors" />
                 </div>
 
                 <div
                   ref={browserPanelRef}
                   style={{ width: `${browserPanelWidth}%` }}
-                  className="h-full overflow-hidden bg-[#000000] flex flex-col shrink-0 transition-[width] duration-75 ease-out"
+                  className="h-full overflow-hidden bg-background flex flex-col shrink-0 transition-[width] duration-75 ease-out"
                 >
                   <BrowserPreview
                     frame={browserFrame}

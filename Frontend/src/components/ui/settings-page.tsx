@@ -150,18 +150,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile 
   };
 
   return (
-    <div className="flex h-full flex-col bg-[#05070A] overflow-hidden">
+    <div className="flex h-full flex-col bg-background overflow-hidden">
       {/* Page header */}
-      <div className="relative z-10 flex items-center gap-3 px-6 py-4 border-b border-[#141920]">
+      <div className="relative z-10 flex items-center gap-3 px-6 py-4 border-b border-border">
         <button
           onClick={onBack}
-          className="flex h-8 w-8 items-center justify-center rounded-[10px] border border-[#232B36] bg-white/[0.02] text-[#9CA3AF] hover:border-[#22D3EE]/30 hover:text-[#F8FAFC] transition-all"
+          className="flex h-8 w-8 items-center justify-center rounded-[10px] border border-border bg-muted/50 text-muted-foreground hover:border-violet-500/30 hover:text-foreground transition-all"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
         <div>
-          <h1 className="text-base font-bold text-[#F8FAFC] tracking-tight">Settings</h1>
-          <p className="text-xs text-[#6B7280]">Configure your browser and proxy preferences</p>
+          <h1 className="text-base font-bold text-foreground tracking-tight">Settings</h1>
+          <p className="text-xs text-muted-foreground">Configure your browser and proxy preferences</p>
         </div>
       </div>
 
@@ -172,45 +172,45 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile 
         <section>
           <div className="flex items-center gap-2 mb-3">
             <Shield className="h-4 w-4 text-violet-400" />
-            <h2 className="text-sm font-bold text-[#F8FAFC] uppercase tracking-widest">Residential Proxy</h2>
+            <h2 className="text-sm font-bold text-foreground uppercase tracking-widest">Residential Proxy</h2>
           </div>
 
-          <div className="rounded-2xl border border-[#1A2030] bg-[#0C1018] overflow-hidden">
+          <div className="rounded-2xl border border-border bg-card overflow-hidden">
             {/* Status bar */}
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#141920]">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
               <div className="flex items-center gap-2.5">
                 {loadingStatus ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[#6B7280]" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                 ) : proxyActive ? (
                   <span className="flex h-2 w-2 rounded-full bg-violet-400 shadow-[0_0_6px_rgba(167,139,250,0.7)]" />
                 ) : (
-                  <span className="h-2 w-2 rounded-full bg-[#374151]" />
+                  <span className="h-2 w-2 rounded-full bg-muted-foreground/30" />
                 )}
-                <span className={cn("text-sm font-semibold", proxyActive ? "text-violet-300" : "text-[#6B7280]")}>
+                <span className={cn("text-sm font-semibold", proxyActive ? "text-violet-300" : "text-muted-foreground")}>
                   {loadingStatus ? "Loading…" : proxyActive ? "Proxy Active" : "No Proxy Configured"}
                 </span>
               </div>
               {proxyActive && !loadingStatus && (
-                <span className="text-[10px] font-mono text-[#6B7280] bg-[#141920] border border-[#232B36] rounded px-2 py-0.5 max-w-[240px] truncate">
+                <span className="text-[10px] font-mono text-muted-foreground bg-muted border border-border rounded px-2 py-0.5 max-w-[240px] truncate">
                   {proxyUrlMasked}
                 </span>
               )}
             </div>
 
             {/* Why use a proxy */}
-            <div className="px-5 py-4 border-b border-[#141920]">
+            <div className="px-5 py-4 border-b border-border">
               <div className="flex gap-3">
                 <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 border border-violet-500/20">
                   <Info className="h-3.5 w-3.5 text-violet-400" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-[#D1D5DB] mb-1">Why use a residential proxy?</p>
-                  <p className="text-xs text-[#6B7280] leading-relaxed">
+                  <p className="text-xs font-semibold text-foreground mb-1">Why use a residential proxy?</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
                     Replit runs on datacenter IPs that are blocked by telecom &amp; financial sites (Verizon, Frontier, AT&T, Cloudflare). A residential proxy routes browser traffic through a real home ISP so requests look like they come from a regular user.
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {["Verizon", "AT&T", "Frontier", "Cloudflare", "Ticketmaster"].map((site) => (
-                      <span key={site} className="text-[10px] px-1.5 py-0.5 rounded bg-[#141920] border border-[#1E2835] text-[#9CA3AF]">{site}</span>
+                      <span key={site} className="text-[10px] px-1.5 py-0.5 rounded bg-muted border border-border text-muted-foreground">{site}</span>
                     ))}
                   </div>
                 </div>
@@ -220,7 +220,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile 
             {/* Input area */}
             <div className="px-5 py-4 space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wider">Proxy URL</label>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Proxy URL</label>
                 <div className="relative">
                   <input
                     type={proxyInputVisible ? "text" : "password"}
@@ -228,17 +228,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile 
                     onChange={(e) => { setProxyInput(e.target.value); setProxyError(null); }}
                     onKeyDown={(e) => e.key === "Enter" && handleSaveProxy()}
                     placeholder={proxyActive ? "Enter new URL to replace…" : "http://user:pass@proxy.host.com:port"}
-                    className="w-full bg-[#080C12] border border-[#1E2835] rounded-xl px-3.5 py-2.5 text-sm text-[#F8FAFC] placeholder-[#374151] focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20 pr-10 font-mono transition-colors"
+                    className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20 pr-10 font-mono transition-colors"
                   />
                   <button
                     type="button"
                     onClick={() => setProxyInputVisible((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#4B5563] hover:text-[#9CA3AF] transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
                   >
                     {proxyInputVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-                <p className="text-[11px] text-[#4B5563]">
+                <p className="text-[11px] text-muted-foreground/60">
                   Credentials are stored encrypted in the database and never logged.
                 </p>
               </div>
@@ -271,7 +271,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile 
                     <Wifi className="h-3.5 w-3.5 text-violet-400 shrink-0" />
                     <div>
                       <p className="text-xs font-semibold text-violet-300">Proxy working</p>
-                      <p className="text-[11px] text-[#9CA3AF] font-mono mt-0.5">Exit IP: {proxyTestResult.ip}</p>
+                      <p className="text-[11px] text-muted-foreground font-mono mt-0.5">Exit IP: {proxyTestResult.ip}</p>
                     </div>
                   </motion.div>
                 )}
@@ -291,7 +291,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile 
                 <Button
                   size="sm"
                   variant="outline"
-                  className="gap-1.5 text-xs border-[#1E2835] text-[#9CA3AF] hover:text-[#F8FAFC] hover:border-violet-500/40 disabled:opacity-40"
+                  className="gap-1.5 text-xs border-border text-muted-foreground hover:text-foreground hover:border-violet-500/40 disabled:opacity-40"
                   onClick={handleTestProxy}
                   disabled={proxyTesting || (!proxyInput.trim() && !proxyActive)}
                 >
@@ -329,10 +329,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile 
             </div>
 
             {/* Provider examples */}
-            <div className="border-t border-[#141920]">
+            <div className="border-t border-border">
               <button
                 onClick={() => setShowProviderHint((v) => !v)}
-                className="flex items-center justify-between w-full px-5 py-3 text-xs text-[#6B7280] hover:text-[#9CA3AF] transition-colors"
+                className="flex items-center justify-between w-full px-5 py-3 text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 <span className="flex items-center gap-1.5">
                   <Server className="h-3.5 w-3.5" />
@@ -352,15 +352,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile 
                       {PROXY_PROVIDERS.map((p) => (
                         <div
                           key={p.name}
-                          className="flex items-center justify-between rounded-xl bg-[#080C12] border border-[#1A2030] px-3.5 py-2.5"
+                          className="flex items-center justify-between rounded-xl bg-background border border-border px-3.5 py-2.5"
                         >
                           <div>
-                            <p className="text-xs font-semibold text-[#D1D5DB]">{p.name}</p>
-                            <p className="text-[10px] font-mono text-[#4B5563] mt-0.5">{p.example}</p>
+                            <p className="text-xs font-semibold text-foreground">{p.name}</p>
+                            <p className="text-[10px] font-mono text-muted-foreground mt-0.5">{p.example}</p>
                           </div>
                           <button
                             onClick={() => handleCopyExample(p.example, p.name)}
-                            className="ml-3 shrink-0 text-[#4B5563] hover:text-violet-400 transition-colors"
+                            className="ml-3 shrink-0 text-muted-foreground hover:text-violet-400 transition-colors"
                             title="Copy example URL"
                           >
                             {copiedProvider === p.name
@@ -370,7 +370,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile 
                           </button>
                         </div>
                       ))}
-                      <p className="text-[10px] text-[#4B5563] pt-1">
+                      <p className="text-[10px] text-muted-foreground pt-1">
                         Any HTTP/HTTPS proxy in the format <code className="text-violet-400/80">http://user:pass@host:port</code> is supported. SOCKS5 is not yet supported.
                       </p>
                     </div>
@@ -385,12 +385,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile 
         <section>
           <div className="flex items-center gap-2 mb-3">
             <Link className="h-4 w-4 text-emerald-400" />
-            <h2 className="text-sm font-bold text-[#F8FAFC] uppercase tracking-widest">Connect Your Browser</h2>
+            <h2 className="text-sm font-bold text-foreground uppercase tracking-widest">Connect Your Browser</h2>
           </div>
-          <div className="rounded-2xl border border-[#1A2030] bg-[#0C1018] px-5 py-4">
-            <p className="text-xs text-[#6B7280] leading-relaxed">
+          <div className="rounded-2xl border border-border bg-card px-5 py-4">
+            <p className="text-xs text-muted-foreground leading-relaxed">
               Connect your local Chrome browser via CDP to use your residential IP directly — no proxy needed. Use the{" "}
-              <span className="text-[#9CA3AF] font-semibold">Connect Browser</span> button in the chat toolbar to set it up.
+              <span className="text-foreground font-semibold">Connect Browser</span> button in the chat toolbar to set it up.
             </p>
           </div>
         </section>
@@ -399,18 +399,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile 
         <section>
           <div className="flex items-center gap-2 mb-3">
             <Globe className="h-4 w-4 text-[#22D3EE]" />
-            <h2 className="text-sm font-bold text-[#F8FAFC] uppercase tracking-widest">Browser Engine</h2>
+            <h2 className="text-sm font-bold text-foreground uppercase tracking-widest">Browser Engine</h2>
           </div>
-          <div className="rounded-2xl border border-[#1A2030] bg-[#0C1018] overflow-hidden">
+          <div className="rounded-2xl border border-border bg-card overflow-hidden">
             {/* Info banner */}
-            <div className="px-5 py-4 border-b border-[#141920]">
+            <div className="px-5 py-4 border-b border-border">
               <div className="flex gap-3">
                 <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#22D3EE]/10 border border-[#22D3EE]/20">
                   <Zap className="h-3.5 w-3.5 text-[#22D3EE]" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-[#D1D5DB] mb-1">Why does this matter?</p>
-                  <p className="text-xs text-[#6B7280] leading-relaxed">
+                  <p className="text-xs font-semibold text-foreground mb-1">Why does this matter?</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
                     Headless Chrome is the #1 bot-detection signal. Camoufox spoofs over 10 fingerprint vectors (GPU, fonts, canvas, WebGL) and runs as Firefox — nearly indistinguishable from a real desktop browser.
                   </p>
                 </div>
@@ -420,7 +420,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile 
             {/* Engine options */}
             <div className="px-5 py-4 space-y-3">
               {engineLoading ? (
-                <div className="flex items-center gap-2 text-[#6B7280]">
+                <div className="flex items-center gap-2 text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   <span className="text-xs">Loading…</span>
                 </div>
@@ -434,12 +434,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile 
                       "w-full flex items-center justify-between rounded-xl border px-4 py-3 transition-all text-left",
                       browserEngine === "camoufox"
                         ? "border-[#22D3EE]/40 bg-[#22D3EE]/5"
-                        : "border-[#1E2835] bg-[#080C12] hover:border-[#22D3EE]/20 hover:bg-[#22D3EE]/5"
+                        : "border-border bg-background hover:border-[#22D3EE]/20 hover:bg-[#22D3EE]/5"
                     )}
                   >
                     <div>
-                      <p className="text-xs font-semibold text-[#D1D5DB]">Camoufox – stealth Firefox</p>
-                      <p className="text-xs text-[#6B7280] mt-0.5">Deep fingerprint spoofing, recommended for most sites</p>
+                      <p className="text-xs font-semibold text-foreground">Camoufox – stealth Firefox</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Deep fingerprint spoofing, recommended for most sites</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-3">
                       {browserEngine === "camoufox" && (
@@ -447,7 +447,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile 
                       )}
                       <div className={cn(
                         "h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0",
-                        browserEngine === "camoufox" ? "border-[#22D3EE]" : "border-[#374151]"
+                        browserEngine === "camoufox" ? "border-[#22D3EE]" : "border-border"
                       )}>
                         {browserEngine === "camoufox" && <div className="h-2 w-2 rounded-full bg-[#22D3EE]" />}
                       </div>
@@ -462,12 +462,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile 
                       "w-full flex items-center justify-between rounded-xl border px-4 py-3 transition-all text-left",
                       browserEngine === "chrome"
                         ? "border-[#F59E0B]/40 bg-[#F59E0B]/5"
-                        : "border-[#1E2835] bg-[#080C12] hover:border-[#374151]"
+                        : "border-border bg-background hover:border-muted-foreground/30"
                     )}
                   >
                     <div>
-                      <p className="text-xs font-semibold text-[#D1D5DB]">Chrome – headless Chromium</p>
-                      <p className="text-xs text-[#6B7280] mt-0.5">Standard browser with stealth patches — more likely to be detected</p>
+                      <p className="text-xs font-semibold text-foreground">Chrome – headless Chromium</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Standard browser with stealth patches — more likely to be detected</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-3">
                       {browserEngine === "chrome" && (
@@ -475,7 +475,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile 
                       )}
                       <div className={cn(
                         "h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0",
-                        browserEngine === "chrome" ? "border-[#F59E0B]" : "border-[#374151]"
+                        browserEngine === "chrome" ? "border-[#F59E0B]" : "border-border"
                       )}>
                         {browserEngine === "chrome" && <div className="h-2 w-2 rounded-full bg-[#F59E0B]" />}
                       </div>
@@ -486,7 +486,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile 
                     {engineSaving && (
                       <motion.div
                         initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
-                        className="flex items-center gap-2 text-[#6B7280]"
+                        className="flex items-center gap-2 text-muted-foreground"
                       >
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         <span className="text-xs">Switching engine… browser will restart on next run.</span>

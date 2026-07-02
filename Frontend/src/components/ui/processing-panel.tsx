@@ -37,8 +37,8 @@ export function ProcessingPanel({
   if (!hasStages && !hasTools) {
     return (
       <div className="flex flex-col items-center justify-center h-40 gap-3 text-center px-4">
-        <Clock className="w-8 h-8 text-[#3A3A3A]" />
-        <p className="text-xs text-[#6B7280] leading-relaxed">
+        <Clock className="w-8 h-8 text-muted-foreground" />
+        <p className="text-xs text-muted-foreground leading-relaxed">
           No history yet for this thread.
           <br />
           Run an agent task to see execution details here.
@@ -69,28 +69,28 @@ export function ProcessingPanel({
       case "IN_PROGRESS":
         return "bg-blue-900/40 text-blue-300 border border-blue-800/40";
       default:
-        return "bg-[#2A2A2A] text-[#9CA3AF] border border-[#333]";
+        return "bg-muted text-muted-foreground border border-border";
     }
   };
 
   return (
-    <div className="flex flex-col gap-0 divide-y divide-[#2A2A2A]">
+    <div className="flex flex-col gap-0 divide-y divide-border">
 
       {/* Agent Stages */}
       {hasStages && (
         <div className="p-4 space-y-2">
-          <p className="text-[10px] font-black uppercase tracking-widest text-[#6B7280] mb-3">
+          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3">
             Agent Execution
           </p>
           {agentHistory.map((stage) => (
             <div
               key={stage.id}
-              className="bg-[#141414] rounded-xl border border-[#2A2A2A] p-3 space-y-2"
+              className="bg-card rounded-xl border border-border p-3 space-y-2"
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   {getStatusIcon(stage.status)}
-                  <span className="text-xs font-semibold text-[#F8FAFC] truncate">
+                  <span className="text-xs font-semibold text-foreground truncate">
                     {stage.stage_name}
                   </span>
                 </div>
@@ -101,12 +101,12 @@ export function ProcessingPanel({
 
               {stage.input_data && Object.keys(stage.input_data).length > 0 && (
                 <details className="group">
-                  <summary className="text-[10px] text-[#6B7280] cursor-pointer hover:text-[#9CA3AF] transition-colors list-none flex items-center gap-1">
+                  <summary className="text-[10px] text-muted-foreground cursor-pointer hover:text-foreground transition-colors list-none flex items-center gap-1">
                     <span className="group-open:hidden">▶</span>
                     <span className="hidden group-open:inline">▼</span>
                     Input
                   </summary>
-                  <pre className="mt-1 text-[10px] bg-[#0D0D0F] border border-[#232323] p-2 rounded-lg overflow-x-auto text-[#9CA3AF] leading-relaxed">
+                  <pre className="mt-1 text-[10px] bg-muted border border-border p-2 rounded-lg overflow-x-auto text-muted-foreground leading-relaxed">
                     {JSON.stringify(stage.input_data, null, 2).slice(0, 300)}
                     {JSON.stringify(stage.input_data, null, 2).length > 300 ? "\n…" : ""}
                   </pre>
@@ -115,12 +115,12 @@ export function ProcessingPanel({
 
               {stage.output_data && Object.keys(stage.output_data).length > 0 && (
                 <details className="group">
-                  <summary className="text-[10px] text-[#6B7280] cursor-pointer hover:text-[#9CA3AF] transition-colors list-none flex items-center gap-1">
+                  <summary className="text-[10px] text-muted-foreground cursor-pointer hover:text-foreground transition-colors list-none flex items-center gap-1">
                     <span className="group-open:hidden">▶</span>
                     <span className="hidden group-open:inline">▼</span>
                     Output
                   </summary>
-                  <pre className="mt-1 text-[10px] bg-[#0D0D0F] border border-[#232323] p-2 rounded-lg overflow-x-auto text-[#9CA3AF] leading-relaxed">
+                  <pre className="mt-1 text-[10px] bg-muted border border-border p-2 rounded-lg overflow-x-auto text-muted-foreground leading-relaxed">
                     {JSON.stringify(stage.output_data, null, 2).slice(0, 300)}
                     {JSON.stringify(stage.output_data, null, 2).length > 300 ? "\n…" : ""}
                   </pre>
@@ -141,18 +141,18 @@ export function ProcessingPanel({
       {/* Tool Execution Logs — always shown when available */}
       {hasTools && (
         <div className="p-4 space-y-2">
-          <p className="text-[10px] font-black uppercase tracking-widest text-[#6B7280] mb-3">
+          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3">
             Tool Execution ({toolHistory.length})
           </p>
           {toolHistory.map((tool) => (
             <div
               key={tool.id}
-              className="bg-[#141414] rounded-xl border border-[#2A2A2A] p-3 space-y-2"
+              className="bg-card rounded-xl border border-border p-3 space-y-2"
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <Wrench className="size-3.5 text-[#22D3EE] shrink-0" />
-                  <span className="text-xs font-semibold text-[#F8FAFC] truncate font-mono">
+                  <span className="text-xs font-semibold text-foreground truncate font-mono">
                     {tool.tool_name}
                   </span>
                 </div>
@@ -163,12 +163,12 @@ export function ProcessingPanel({
 
               {tool.tool_input && Object.keys(tool.tool_input).length > 0 && (
                 <details className="group">
-                  <summary className="text-[10px] text-[#6B7280] cursor-pointer hover:text-[#9CA3AF] transition-colors list-none flex items-center gap-1">
+                  <summary className="text-[10px] text-muted-foreground cursor-pointer hover:text-foreground transition-colors list-none flex items-center gap-1">
                     <span className="group-open:hidden">▶</span>
                     <span className="hidden group-open:inline">▼</span>
                     Input
                   </summary>
-                  <pre className="mt-1 text-[10px] bg-[#0D0D0F] border border-[#232323] p-2 rounded-lg overflow-x-auto text-[#9CA3AF] leading-relaxed">
+                  <pre className="mt-1 text-[10px] bg-muted border border-border p-2 rounded-lg overflow-x-auto text-muted-foreground leading-relaxed">
                     {JSON.stringify(tool.tool_input, null, 2).slice(0, 300)}
                     {JSON.stringify(tool.tool_input, null, 2).length > 300 ? "\n…" : ""}
                   </pre>
@@ -177,12 +177,12 @@ export function ProcessingPanel({
 
               {tool.tool_output && Object.keys(tool.tool_output).length > 0 && (
                 <details className="group">
-                  <summary className="text-[10px] text-[#6B7280] cursor-pointer hover:text-[#9CA3AF] transition-colors list-none flex items-center gap-1">
+                  <summary className="text-[10px] text-muted-foreground cursor-pointer hover:text-foreground transition-colors list-none flex items-center gap-1">
                     <span className="group-open:hidden">▶</span>
                     <span className="hidden group-open:inline">▼</span>
                     Output
                   </summary>
-                  <pre className="mt-1 text-[10px] bg-[#0D0D0F] border border-[#232323] p-2 rounded-lg overflow-x-auto text-[#9CA3AF] leading-relaxed">
+                  <pre className="mt-1 text-[10px] bg-muted border border-border p-2 rounded-lg overflow-x-auto text-muted-foreground leading-relaxed">
                     {JSON.stringify(tool.tool_output, null, 2).slice(0, 300)}
                     {JSON.stringify(tool.tool_output, null, 2).length > 300 ? "\n…" : ""}
                   </pre>

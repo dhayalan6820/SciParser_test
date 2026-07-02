@@ -141,15 +141,15 @@ export function BrowserPreview({
   };
 
   const wrapCls = isFullSize
-    ? "fixed inset-0 z-[300] flex flex-col bg-[#05070A]"
-    : "flex flex-col h-full w-full bg-[#05070A]";
+    ? "fixed inset-0 z-[300] flex flex-col bg-background"
+    : "flex flex-col h-full w-full bg-background";
 
   return (
-    <div className={cn(wrapCls, "text-[#F8FAFC] overflow-hidden")}>
+    <div className={cn(wrapCls, "text-foreground overflow-hidden")}>
       <div className="flex flex-col h-full w-full overflow-hidden">
 
         {/* ── Toolbar ───────────────────────────────────────────────────── */}
-        <div className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-b border-[#1E2530] bg-[#0B0F14]">
+        <div className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-b border-border bg-card">
 
           {/* Brand */}
           <div className="flex items-center gap-2 shrink-0">
@@ -157,10 +157,10 @@ export function BrowserPreview({
               <Globe className="h-3.5 w-3.5 text-sky-400" />
             </div>
             <div className="hidden sm:block leading-none">
-              <div className="text-[11px] font-black uppercase tracking-widest text-white">Live Browser</div>
+              <div className="text-[11px] font-black uppercase tracking-widest text-foreground">Live Browser</div>
               <div className="flex items-center gap-1 mt-0.5">
                 <div className={cn("h-1.5 w-1.5 rounded-full", frame ? "bg-emerald-400 animate-pulse" : "bg-amber-400")} />
-                <span className="text-[9px] font-bold uppercase tracking-widest text-white/40">{frame ? "Connected" : "Connecting"}</span>
+                <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{frame ? "Connected" : "Connecting"}</span>
               </div>
             </div>
           </div>
@@ -170,8 +170,8 @@ export function BrowserPreview({
             <div className={cn(
               "hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-md border text-[9px] font-bold uppercase tracking-wider shrink-0",
               browserEngine === "camoufox"
-                ? "bg-[#22D3EE]/8 border-[#22D3EE]/20 text-[#22D3EE]/70"
-                : "bg-white/4 border-white/10 text-white/35"
+                ? "bg-sky-400/10 border-sky-400/20 text-sky-400"
+                : "bg-muted border-border text-muted-foreground"
             )}>
               {browserEngine === "camoufox" ? "Firefox · Camoufox" : "Chrome · Headless"}
             </div>
@@ -179,21 +179,21 @@ export function BrowserPreview({
 
           {/* Nav buttons */}
           <div className="flex items-center gap-0.5 shrink-0">
-            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-white/40 hover:text-white hover:bg-white/5">
+            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent">
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-white/40 hover:text-white hover:bg-white/5">
+            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent">
               <ChevronRight className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-white/40 hover:text-white hover:bg-white/5">
+            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent">
               <RefreshCw className="h-3 w-3" />
             </Button>
           </div>
 
           {/* URL bar */}
-          <div className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/40 border border-white/[0.06] min-w-0">
+          <div className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/40 border border-border min-w-0">
             <ShieldCheck className="h-3 w-3 text-emerald-400/70 shrink-0" />
-            <span className="flex-1 truncate text-[12px] text-white/55 select-all font-mono">{currentUrl}</span>
+            <span className="flex-1 truncate text-[12px] text-muted-foreground select-all font-mono">{currentUrl}</span>
           </div>
 
           {/* Tool Log button — full-width pill with count badge */}
@@ -203,8 +203,8 @@ export function BrowserPreview({
               className={cn(
                 "flex items-center gap-2 rounded-lg px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider border transition-all",
                 showToolLog
-                  ? "bg-sky-500/15 border-sky-500/40 text-sky-300"
-                  : "bg-white/[0.04] border-white/[0.07] text-white/50 hover:text-white hover:bg-white/[0.07]"
+                  ? "bg-sky-500/15 border-sky-500/40 text-sky-400"
+                  : "bg-muted border-border text-muted-foreground hover:text-foreground hover:bg-accent"
               )}
             >
               <Terminal className="h-3.5 w-3.5" />
@@ -212,7 +212,7 @@ export function BrowserPreview({
               {toolLogs.length > 0 && (
                 <span className={cn(
                   "ml-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-black tabular-nums",
-                  runningCount > 0 ? "bg-sky-500/30 text-sky-300" : "bg-white/10 text-white/40"
+                  runningCount > 0 ? "bg-sky-500/30 text-sky-400" : "bg-muted-foreground/20 text-muted-foreground"
                 )}>
                   {toolLogs.length}
                 </span>
@@ -228,38 +228,38 @@ export function BrowserPreview({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -8, scale: 0.97 }}
                   transition={{ duration: 0.15 }}
-                  className="fixed right-4 top-16 w-[min(520px,90vw)] z-[500] rounded-2xl border border-white/[0.08] bg-[#0c0e13] shadow-[0_24px_64px_rgba(0,0,0,0.7)] overflow-hidden"
+                  className="fixed right-4 top-16 w-[min(520px,90vw)] z-[500] rounded-2xl border border-border bg-popover shadow-[0_24px_64px_rgba(0,0,0,0.4)] overflow-hidden"
                 >
                   {/* Popup header */}
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] bg-white/[0.02]">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/20">
                     <div className="flex items-center gap-2">
                       <Terminal className="h-3.5 w-3.5 text-sky-400" />
-                      <span className="text-[11px] font-black uppercase tracking-[0.2em] text-white/80">Tool Execution Log</span>
-                      <span className="text-[10px] text-white/25 font-medium">({toolLogs.length} calls)</span>
+                      <span className="text-[11px] font-black uppercase tracking-[0.2em] text-foreground">Tool Execution Log</span>
+                      <span className="text-[10px] text-muted-foreground font-medium">({toolLogs.length} calls)</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => { onClearLogs?.(); }}
-                        className="text-[10px] font-bold text-white/30 hover:text-red-400 transition-colors uppercase tracking-wider"
+                        className="text-[10px] font-bold text-muted-foreground hover:text-destructive transition-colors uppercase tracking-wider"
                       >
                         Clear
                       </button>
-                      <button onClick={() => setShowToolLog(false)} className="text-white/25 hover:text-white/70 transition-colors">
+                      <button onClick={() => setShowToolLog(false)} className="text-muted-foreground hover:text-foreground transition-colors">
                         <X className="h-4 w-4" />
                       </button>
                     </div>
                   </div>
 
                   {/* Search + filter */}
-                  <div className="px-3 py-2 border-b border-white/[0.05] flex items-center gap-2">
+                  <div className="px-3 py-2 border-b border-border flex items-center gap-2">
                     <div className="relative flex-1">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-white/25" />
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                       <input
                         type="text"
                         placeholder="Search logs..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-7 pr-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[11px] text-white/70 outline-none placeholder:text-white/20 focus:border-sky-500/30"
+                        className="w-full pl-7 pr-3 py-1.5 rounded-lg bg-muted/40 border border-border text-[11px] text-foreground outline-none placeholder:text-muted-foreground focus:border-sky-500/30"
                       />
                     </div>
                     <div className="flex gap-1">
@@ -269,7 +269,7 @@ export function BrowserPreview({
                           onClick={() => setLogFilter(f)}
                           className={cn(
                             "px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-wider transition-all",
-                            logFilter === f ? "bg-sky-500 text-black" : "text-white/30 hover:text-white"
+                            logFilter === f ? "bg-sky-500 text-white" : "text-muted-foreground hover:text-foreground"
                           )}
                         >
                           {f}
@@ -281,7 +281,7 @@ export function BrowserPreview({
                   {/* Log list */}
                   <div className="max-h-[420px] overflow-y-auto p-3 space-y-2 font-mono">
                     {filteredLogs.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-10 gap-2 text-white/20">
+                      <div className="flex flex-col items-center justify-center py-10 gap-2 text-muted-foreground">
                         <Code className="h-8 w-8 opacity-30" />
                         <span className="text-[10px] font-bold uppercase tracking-widest">No activity</span>
                       </div>
@@ -305,11 +305,11 @@ export function BrowserPreview({
                           >
                             <div className="flex items-center justify-between gap-2">
                               <div className="flex items-center gap-2 min-w-0">
-                                <span className="text-[9px] font-bold text-white/20 tabular-nums">{String(idx + 1).padStart(2,'0')}</span>
+                                <span className="text-[9px] font-bold text-muted-foreground tabular-nums">{String(idx + 1).padStart(2,'0')}</span>
                                 <span className={cn(
                                   "text-[11px] font-bold truncate",
-                                  st === 'IN_PROGRESS' ? "text-sky-300" :
-                                  st === 'SUCCESS'     ? "text-emerald-300" : "text-red-300"
+                                  st === 'IN_PROGRESS' ? "text-sky-400" :
+                                  st === 'SUCCESS'     ? "text-emerald-500" : "text-red-400"
                                 )}>
                                   {log.tool_name}
                                 </span>
@@ -317,27 +317,27 @@ export function BrowserPreview({
                               <div className="flex items-center gap-1.5 shrink-0">
                                 <span className={cn(
                                   "px-1.5 py-0.5 rounded text-[9px] font-black uppercase",
-                                  st === 'IN_PROGRESS' ? "bg-sky-500/20 text-sky-300" :
-                                  st === 'SUCCESS'     ? "bg-emerald-500/20 text-emerald-300" : "bg-red-500/20 text-red-300"
+                                  st === 'IN_PROGRESS' ? "bg-sky-500/20 text-sky-400" :
+                                  st === 'SUCCESS'     ? "bg-emerald-500/20 text-emerald-500" : "bg-red-500/20 text-red-400"
                                 )}>
                                   {st}
                                 </span>
                                 {formatTime(log.created_at) && (
-                                  <span className="text-[9px] text-white/20">{formatTime(log.created_at)}</span>
+                                  <span className="text-[9px] text-muted-foreground">{formatTime(log.created_at)}</span>
                                 )}
                               </div>
                             </div>
                             <div className="space-y-1.5">
                               <div>
-                                <span className="text-[9px] font-bold text-white/20 uppercase tracking-widest block mb-1">Input</span>
-                                <div className="text-[10px] text-white/50 bg-black/30 px-2 py-1.5 rounded-lg border border-white/[0.03] break-all leading-relaxed">
+                                <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Input</span>
+                                <div className="text-[10px] text-foreground bg-muted/40 px-2 py-1.5 rounded-lg border border-border break-all leading-relaxed">
                                   {typeof log.tool_input === 'string' ? log.tool_input : JSON.stringify(log.tool_input)}
                                 </div>
                               </div>
                               {log.tool_output && (
                                 <div>
-                                  <span className="text-[9px] font-bold text-white/20 uppercase tracking-widest block mb-1">Output</span>
-                                  <div className="text-[10px] text-white/35 bg-black/20 px-2 py-1.5 rounded-lg border border-white/[0.02] break-words leading-relaxed line-clamp-3">
+                                  <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Output</span>
+                                  <div className="text-[10px] text-muted-foreground bg-muted/20 px-2 py-1.5 rounded-lg border border-border break-words leading-relaxed line-clamp-3">
                                     {String(log.tool_output)}
                                   </div>
                                 </div>
@@ -346,9 +346,9 @@ export function BrowserPreview({
                             {isSelectionMode && (
                               <div className={cn(
                                 "absolute top-2 right-2 h-4 w-4 rounded-full border flex items-center justify-center",
-                                isSelected ? "bg-sky-500 border-sky-500" : "bg-black/40 border-white/20"
+                                isSelected ? "bg-sky-500 border-sky-500" : "bg-muted/40 border-border"
                               )}>
-                                {isSelected && <Check className="h-2.5 w-2.5 text-black" />}
+                                {isSelected && <Check className="h-2.5 w-2.5 text-white" />}
                               </div>
                             )}
                           </motion.div>
@@ -359,20 +359,20 @@ export function BrowserPreview({
                   </div>
 
                   {/* Popup footer */}
-                  <div className="px-4 py-2.5 border-t border-white/[0.05] bg-white/[0.015] flex items-center justify-between">
+                  <div className="px-4 py-2.5 border-t border-border bg-muted/10 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className={cn("h-1.5 w-1.5 rounded-full", isAiTyping ? "bg-sky-400 animate-pulse" : "bg-white/20")} />
-                      <span className="text-[9px] font-bold text-white/30 uppercase tracking-widest">
+                      <div className={cn("h-1.5 w-1.5 rounded-full", isAiTyping ? "bg-sky-400 animate-pulse" : "bg-muted-foreground/30")} />
+                      <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
                         {isAiTyping ? 'Agent running' : 'Idle'}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[9px] text-white/20">Auto-scroll</span>
+                      <span className="text-[9px] text-muted-foreground">Auto-scroll</span>
                       <button
                         onClick={() => setAutoScroll(!autoScroll)}
                         className={cn(
                           "w-7 h-3.5 rounded-full relative transition-all",
-                          autoScroll ? "bg-emerald-500" : "bg-white/10"
+                          autoScroll ? "bg-emerald-500" : "bg-muted"
                         )}
                       >
                         <div className={cn(
@@ -387,14 +387,14 @@ export function BrowserPreview({
             </AnimatePresence>
           </div>
 
-          <div className="h-5 w-px bg-white/[0.07] shrink-0" />
+          <div className="h-5 w-px bg-border shrink-0" />
 
           {/* Full Size button */}
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setIsFullSize(!isFullSize)}
-            className="h-8 px-3 rounded-lg text-white/50 hover:text-white hover:bg-white/[0.06] gap-1.5 shrink-0"
+            className="h-8 px-3 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent gap-1.5 shrink-0"
           >
             {isFullSize ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
             <span className="text-[10px] font-bold uppercase tracking-wider hidden lg:inline">
@@ -407,14 +407,14 @@ export function BrowserPreview({
             variant="ghost"
             size="icon"
             onClick={onClose}
-            className="h-8 w-8 rounded-lg text-red-400/70 hover:text-red-300 hover:bg-red-500/10 shrink-0"
+            className="h-8 w-8 rounded-lg text-destructive/70 hover:text-destructive hover:bg-destructive/10 shrink-0"
           >
             <X className="h-4 w-4" />
           </Button>
         </div>
 
         {/* ── Browser viewport — takes all remaining height ─────────────── */}
-        <div className="flex-1 relative flex flex-col overflow-hidden bg-black">
+        <div className="flex-1 relative flex flex-col overflow-hidden bg-[#000000]">
           {frame ? (
             <div
               ref={viewportRef}
@@ -470,43 +470,43 @@ export function BrowserPreview({
               )}
 
               {/* Hover controls */}
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 px-2 py-1.5 rounded-xl bg-black/70 backdrop-blur-md border border-white/[0.07] opacity-0 hover:opacity-100 focus-within:opacity-100 transition-opacity shadow-xl group">
-                <Button variant="ghost" size="icon" onClick={() => setZoom(z => Math.max(50, z - 10))} className="h-7 w-7 rounded-lg text-white/60 hover:text-white hover:bg-white/10">
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 px-2 py-1.5 rounded-xl bg-background/70 backdrop-blur-md border border-border opacity-0 hover:opacity-100 focus-within:opacity-100 transition-opacity shadow-xl group">
+                <Button variant="ghost" size="icon" onClick={() => setZoom(z => Math.max(50, z - 10))} className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent">
                   <ZoomOut className="h-3.5 w-3.5" />
                 </Button>
-                <span className="text-[10px] font-black w-9 text-center text-white/50">{zoom}%</span>
-                <Button variant="ghost" size="icon" onClick={() => setZoom(z => Math.min(200, z + 10))} className="h-7 w-7 rounded-lg text-white/60 hover:text-white hover:bg-white/10">
+                <span className="text-[10px] font-black w-9 text-center text-muted-foreground">{zoom}%</span>
+                <Button variant="ghost" size="icon" onClick={() => setZoom(z => Math.min(200, z + 10))} className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent">
                   <ZoomIn className="h-3.5 w-3.5" />
                 </Button>
-                <div className="h-4 w-px bg-white/10 mx-1" />
-                <Button variant="ghost" size="icon" onClick={() => setShowGrid(!showGrid)} className={cn("h-7 w-7 rounded-lg hover:bg-white/10", showGrid ? "text-sky-400" : "text-white/60 hover:text-white")}>
+                <div className="h-4 w-px bg-border mx-1" />
+                <Button variant="ghost" size="icon" onClick={() => setShowGrid(!showGrid)} className={cn("h-7 w-7 rounded-lg transition-colors", showGrid ? "text-sky-400 bg-sky-400/10" : "text-muted-foreground hover:text-foreground hover:bg-accent")}>
                   <Grid3X3 className="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={() => setZoom(100)} className="h-7 w-7 rounded-lg text-white/60 hover:text-white hover:bg-white/10">
+                <Button variant="ghost" size="icon" onClick={() => setZoom(100)} className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent">
                   <RefreshCw className="h-3 w-3" />
                 </Button>
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center gap-5 text-white/30">
+            <div className="flex-1 flex flex-col items-center justify-center gap-5 text-muted-foreground/30">
               <div className="relative">
                 <Loader2 className="h-10 w-10 text-sky-400 animate-spin" />
                 <div className="absolute inset-0 blur-xl bg-sky-400/15 animate-pulse" />
               </div>
               <div className="text-center space-y-1">
-                <p className="text-sm font-black uppercase tracking-[0.2em] text-white/70">Initializing Stream</p>
-                <p className="text-[11px] text-white/30">Establishing secure CDP connection…</p>
+                <p className="text-sm font-black uppercase tracking-[0.2em] text-foreground/70">Initializing Stream</p>
+                <p className="text-[11px] text-muted-foreground/30">Establishing secure CDP connection…</p>
               </div>
             </div>
           )}
 
           {/* Status bar */}
-          <div className="shrink-0 h-9 border-t border-white/[0.05] bg-black/40 px-4 flex items-center justify-between">
+          <div className="shrink-0 h-9 border-t border-border bg-card/40 px-4 flex items-center justify-between">
             <div className="flex items-center gap-1.5">
               {frame ? (
                 <>
-                  <CheckCircle2 className="h-3 w-3 text-emerald-400" />
-                  <span className="text-[9px] font-bold text-emerald-400/80 uppercase tracking-wider">Page loaded</span>
+                  <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                  <span className="text-[9px] font-bold text-emerald-500/80 uppercase tracking-wider">Page loaded</span>
                 </>
               ) : (
                 <>
@@ -518,7 +518,7 @@ export function BrowserPreview({
             <div className="flex items-center gap-1.5">
               {frame ? (
                 <>
-                  <Wifi className="h-3 w-3 text-emerald-400" />
+                  <Wifi className="h-3 w-3 text-emerald-500" />
                   <span className="text-[9px] font-black text-emerald-400/80">STABLE</span>
                 </>
               ) : (

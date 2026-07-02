@@ -111,7 +111,7 @@ interface NotFoundProps {
 
 export function NotFound({ onGoBack }: NotFoundProps) {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-slate-950 px-4 py-12 text-center">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4 py-12 text-center">
       <AnimatePresence mode="wait">
         <motion.div
           className="text-center"
@@ -122,7 +122,7 @@ export function NotFound({ onGoBack }: NotFoundProps) {
         >
           <div className="flex items-center justify-center gap-4 md:gap-6 mb-8 md:mb-12">
             <motion.span
-              className="text-[80px] md:text-[120px] font-bold text-slate-800 dark:text-slate-200 opacity-70 font-signika select-none"
+              className="text-[80px] md:text-[120px] font-bold text-foreground opacity-70 font-signika select-none"
               variants={numberVariants}
               custom={-1}
             >
@@ -145,7 +145,7 @@ export function NotFound({ onGoBack }: NotFoundProps) {
             </motion.div>
 
             <motion.span
-              className="text-[80px] md:text-[120px] font-bold text-slate-800 dark:text-slate-200 opacity-70 font-signika select-none"
+              className="text-[80px] md:text-[120px] font-bold text-foreground opacity-70 font-signika select-none"
               variants={numberVariants}
               custom={1}
             >
@@ -154,14 +154,14 @@ export function NotFound({ onGoBack }: NotFoundProps) {
           </div>
 
           <motion.h1
-            className="text-3xl md:text-5xl font-bold text-[#222222] dark:text-slate-100 mb-4 md:mb-6 opacity-70 font-dm-sans select-none"
+            className="text-3xl md:text-5xl font-bold text-foreground mb-4 md:mb-6 opacity-70 font-dm-sans select-none"
             variants={itemVariants}
           >
             Boo! Page missing!
           </motion.h1>
 
           <motion.p
-            className="text-lg md:text-xl text-[#222222] dark:text-slate-400 mb-8 md:mb-12 opacity-50 font-dm-sans select-none"
+            className="text-lg md:text-xl text-foreground mb-8 md:mb-12 opacity-50 font-dm-sans select-none"
             variants={itemVariants}
           >
             Whoops! This page must be a ghost - it's not here!
@@ -182,14 +182,14 @@ export function NotFound({ onGoBack }: NotFoundProps) {
               <button
                 type="button"
                 onClick={onGoBack}
-                className="inline-block bg-[#222222] dark:bg-slate-100 text-white dark:text-slate-900 px-8 py-3 rounded-full text-lg font-medium hover:bg-black dark:hover:bg-white transition-colors font-dm-sans select-none cursor-pointer border-0"
+                className="inline-block bg-foreground text-background px-8 py-3 rounded-full text-lg font-medium hover:opacity-90 transition-opacity font-dm-sans select-none cursor-pointer border-0"
               >
                 Back to SciParser Gateway
               </button>
             ) : (
               <a
                 href="/"
-                className="inline-block bg-[#222222] dark:bg-slate-100 text-white dark:text-slate-900 px-8 py-3 rounded-full text-lg font-medium hover:bg-black dark:hover:bg-white transition-colors font-dm-sans select-none cursor-pointer"
+                className="inline-block bg-foreground text-background px-8 py-3 rounded-full text-lg font-medium hover:opacity-90 transition-opacity font-dm-sans select-none cursor-pointer"
               >
                 Find shelter
               </a>
@@ -202,7 +202,7 @@ export function NotFound({ onGoBack }: NotFoundProps) {
           >
             <a
               href="#"
-              className="text-[#222222] dark:text-slate-400 opacity-50 hover:opacity-70 transition-opacity underline text-sm font-dm-sans select-none"
+              className="text-muted-foreground opacity-50 hover:opacity-70 transition-opacity underline text-sm font-dm-sans select-none"
             >
               What is 404?
             </a>

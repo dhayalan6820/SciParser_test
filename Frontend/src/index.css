@@ -1,6 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Great+Vibes&family=Signika:wght@400;600;700&family=DM+Sans:wght@400;500;700&family=Noto+Sans:wght@400;600&display=swap');
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: 'Noto Sans', ui-sans-serif, system-ui, sans-serif;
   --font-signika: 'Signika', sans-serif;
@@ -160,9 +162,9 @@ code {
   scrollbar-width: none;  /* Firefox */
 }
 
-.glass-panel { background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(4px); border: 1px solid #27272a; }
-.glass-button { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(4px); border: 1px solid rgba(255, 255, 255, 0.2); transition: all 0.3s ease; }
-.glass-button:hover { background: rgba(255, 255, 255, 0.2); }
+.glass-panel { background: color-mix(in oklab, var(--card) 80%, transparent); backdrop-filter: blur(4px); border: 1px solid var(--border); }
+.glass-button { background: color-mix(in oklab, var(--foreground) 10%, transparent); backdrop-filter: blur(4px); border: 1px solid color-mix(in oklab, var(--foreground) 20%, transparent); transition: all 0.3s ease; }
+.glass-button:hover { background: color-mix(in oklab, var(--foreground) 20%, transparent); }
 
 @theme inline {
   --font-heading: var(--font-sans);

@@ -287,17 +287,17 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-[#05070A] overflow-hidden text-[#F8FAFC]">
+    <div className="flex flex-col h-full w-full bg-background overflow-hidden text-foreground">
       {/* Header */}
-      <div className="min-h-14 border-b border-[#1F2937] bg-[#111827]/50 px-4 sm:px-8 flex flex-wrap items-center justify-between gap-2 py-3 sm:py-0 sm:h-20 shrink-0 backdrop-blur-xl z-10">
+      <div className="min-h-14 border-b border-border bg-card/50 px-4 sm:px-8 flex flex-wrap items-center justify-between gap-2 py-3 sm:py-0 sm:h-20 shrink-0 backdrop-blur-xl z-10">
         <div className="flex items-center gap-3 sm:gap-6">
-          <Button variant="ghost" size="icon" onClick={onBack} className="rounded-2xl hover:bg-white/5 text-[#64748B] hover:text-white transition-all shrink-0">
+          <Button variant="ghost" size="icon" onClick={onBack} className="rounded-2xl hover:bg-foreground/5 text-muted-foreground hover:text-foreground transition-all shrink-0">
             <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
           </Button>
-          <div className="hidden sm:block h-10 w-px bg-[#1F2937]" />
+          <div className="hidden sm:block h-10 w-px bg-border" />
           <div>
-            <h1 className="text-base sm:text-xl font-black tracking-tight text-white uppercase">Automation Monitoring</h1>
-            <p className="hidden sm:block text-[10px] text-[#64748B] uppercase tracking-[0.2em] font-bold">Real-time AI orchestration dashboard</p>
+            <h1 className="text-base sm:text-xl font-black tracking-tight text-foreground uppercase">Automation Monitoring</h1>
+            <p className="hidden sm:block text-[10px] text-muted-foreground uppercase tracking-[0.2em] font-bold">Real-time AI orchestration dashboard</p>
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-4">
@@ -305,7 +305,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">System Online</span>
           </div>
-          <Button variant="outline" size="sm" onClick={fetchSchedules} className="h-9 sm:h-11 px-3 sm:px-6 rounded-xl border-[#1F2937] bg-transparent text-[#CBD5E1] text-[11px] font-black uppercase tracking-[0.15em] hover:bg-white/5 gap-2">
+          <Button variant="outline" size="sm" onClick={fetchSchedules} className="h-9 sm:h-11 px-3 sm:px-6 rounded-xl border-border bg-transparent text-muted-foreground text-[11px] font-black uppercase tracking-[0.15em] hover:bg-foreground/5 gap-2">
             <RefreshCw className="w-4 h-4" />
             <span className="hidden sm:inline">REFRESH</span>
           </Button>
@@ -315,25 +315,25 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
       <div ref={sidebarContainerRef} className="flex-1 flex overflow-hidden min-h-0">
         {/* Sidebar - Schedule List (hidden on mobile) */}
         <div
-          className="hidden md:flex border-r border-[#1F2937] bg-[#05070A] flex-col shrink-0 relative"
+          className="hidden md:flex border-r border-border bg-background flex-col shrink-0 relative"
           style={{ width: sidebarWidth }}
         >
-          <div className="p-6 border-b border-[#1F2937] flex items-center justify-between">
+          <div className="p-6 border-b border-border flex items-center justify-between">
             <div className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em]">Your Schedules</div>
-            <div className="px-2 py-1 rounded-md bg-[#111827] border border-[#1F2937] text-[9px] text-[#64748B] font-bold">{schedules.length}</div>
+            <div className="px-2 py-1 rounded-md bg-card border border-border text-[9px] text-muted-foreground font-bold">{schedules.length}</div>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-3 hide-scrollbar">
             {loading ? (
               <div className="flex flex-col items-center justify-center h-40 gap-4">
                 <div className="w-8 h-8 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
-                <span className="text-[10px] font-black text-[#64748B] uppercase tracking-widest">Syncing...</span>
+                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Syncing...</span>
               </div>
             ) : schedules.length === 0 ? (
               <div className="p-10 text-center space-y-4">
-                <div className="w-12 h-12 rounded-2xl bg-[#111827] border border-[#1F2937] flex items-center justify-center mx-auto">
-                  <Calendar className="w-6 h-6 text-[#374151]" />
+                <div className="w-12 h-12 rounded-2xl bg-card border border-border flex items-center justify-center mx-auto">
+                  <Calendar className="w-6 h-6 text-muted-foreground/60" />
                 </div>
-                <p className="text-[11px] text-[#64748B] font-bold uppercase leading-relaxed">No schedules found.<br/>Create one from the chat!</p>
+                <p className="text-[11px] text-muted-foreground font-bold uppercase leading-relaxed">No schedules found.<br/>Create one from the chat!</p>
               </div>
             ) : (
               schedules.map((s) => (
@@ -343,8 +343,8 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                   className={cn(
                     "group relative overflow-hidden rounded-[20px] border p-4 transition-all duration-300 cursor-pointer",
                     selectedSchedule?.schedule_id === s.schedule_id
-                      ? "border-indigo-500/40 bg-indigo-500/10 text-white shadow-[0_0_30px_rgba(99,102,241,0.1)]"
-                      : "border-[#1F2937] bg-[#111827]/40 text-[#64748B] hover:border-[#374151] hover:bg-[#111827]"
+                      ? "border-indigo-500/40 bg-indigo-500/10 text-foreground shadow-[0_0_30px_rgba(99,102,241,0.1)]"
+                      : "border-border bg-card/40 text-muted-foreground hover:border-border hover:bg-card"
                   )}
                 >
                   {selectedSchedule?.schedule_id === s.schedule_id && (
@@ -355,7 +355,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                     <div className="flex items-center gap-2">
                       <span className={cn(
                         "px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest",
-                        selectedSchedule?.schedule_id === s.schedule_id ? "bg-indigo-500 text-white" : "bg-[#1F2937] text-[#64748B]"
+                        selectedSchedule?.schedule_id === s.schedule_id ? "bg-indigo-500 text-foreground" : "bg-border text-muted-foreground"
                       )}>
                         {s.schedule_type}
                       </span>
@@ -365,7 +365,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                         </span>
                       )}
                     </div>
-                    <span className="text-[9px] text-[#374151] font-black uppercase">{formatDate(s.created_at).split(',')[0]}</span>
+                    <span className="text-[9px] text-muted-foreground/60 font-black uppercase">{formatDate(s.created_at).split(',')[0]}</span>
                   </div>
                 </div>
               ))
@@ -377,12 +377,12 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
             onMouseDown={(e) => { e.preventDefault(); setIsResizingSidebar(true); }}
             className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize z-20 group flex items-center justify-center hover:bg-indigo-500/20 transition-colors"
           >
-            <div className="w-0.5 h-16 rounded-full bg-[#1F2937] group-hover:bg-indigo-500 transition-colors" />
+            <div className="w-0.5 h-16 rounded-full bg-border group-hover:bg-indigo-500 transition-colors" />
           </div>
         </div>
 
         {/* Main Content - Premium Dashboard */}
-        <div className="flex-1 overflow-y-auto bg-[#05070A] p-4 sm:p-6 hide-scrollbar min-w-0">
+        <div className="flex-1 overflow-y-auto bg-background p-4 sm:p-6 hide-scrollbar min-w-0">
 
           {/* Mobile schedule switcher — visible only below md breakpoint */}
           {schedules.length > 0 && (
@@ -394,8 +394,8 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                   className={cn(
                     "shrink-0 px-3 py-2 rounded-xl border text-[11px] font-black uppercase tracking-wider transition-all",
                     selectedSchedule?.schedule_id === s.schedule_id
-                      ? "border-indigo-500/60 bg-indigo-500/15 text-white"
-                      : "border-[#1F2937] bg-[#111827]/60 text-[#64748B] hover:border-[#374151] hover:text-[#CBD5E1]"
+                      ? "border-indigo-500/60 bg-indigo-500/15 text-foreground"
+                      : "border-border bg-card/60 text-muted-foreground hover:border-border hover:text-muted-foreground"
                   )}
                 >
                   {s.title.length > 18 ? s.title.slice(0, 18) + "…" : s.title}
@@ -411,7 +411,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
               className="space-y-6"
             >
               {/* Header Section */}
-              <div className="flex flex-wrap items-start gap-6 bg-[#111827]/40 p-6 rounded-[32px] border border-[#1F2937] relative overflow-hidden">
+              <div className="flex flex-wrap items-start gap-6 bg-card/40 p-6 rounded-[32px] border border-border relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-8 opacity-5">
                   <Activity className="w-40 h-40 text-indigo-500" />
                 </div>
@@ -421,17 +421,17 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                       <Zap className="w-7 h-7 text-indigo-500" />
                     </div>
                     <div>
-                      <h2 className="text-lg sm:text-2xl font-black tracking-tight text-white uppercase break-words">{selectedSchedule.title}</h2>
+                      <h2 className="text-lg sm:text-2xl font-black tracking-tight text-foreground uppercase break-words">{selectedSchedule.title}</h2>
                       <div className="flex flex-wrap items-center gap-3 sm:gap-6 mt-2">
-                        <div className="flex items-center gap-2 text-[11px] font-bold text-[#64748B] uppercase tracking-widest">
+                        <div className="flex items-center gap-2 text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
                           <Mail className="w-3.5 h-3.5 text-indigo-500" />
                           <span>{selectedSchedule.email_recipient}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-[11px] font-bold text-[#64748B] uppercase tracking-widest">
+                        <div className="flex items-center gap-2 text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
                           <Clock className="w-3.5 h-3.5 text-indigo-500" />
                           <span className="capitalize">{selectedSchedule.schedule_type}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-[11px] font-bold text-[#64748B] uppercase tracking-widest">
+                        <div className="flex items-center gap-2 text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
                           <div className={cn(
                             "w-2 h-2 rounded-full",
                             selectedSchedule.status === 'active' ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" :
@@ -455,11 +455,11 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                       { label: 'Email', val: selectedSchedule.email_recipient ? 'Configured' : 'Not set', icon: Mail }
                     ].map((item, i) => (
                       <div key={i} className="space-y-1.5">
-                        <div className="flex items-center gap-2 text-[9px] font-black text-[#64748B] uppercase tracking-[0.2em]">
+                        <div className="flex items-center gap-2 text-[9px] font-black text-muted-foreground uppercase tracking-[0.2em]">
                           <item.icon className="w-3 h-3" />
                           {item.label}
                         </div>
-                        <div className="text-xs font-black text-[#CBD5E1] uppercase tracking-wider">{item.val}</div>
+                        <div className="text-xs font-black text-muted-foreground uppercase tracking-wider">{item.val}</div>
                       </div>
                     ))}
                   </div>
@@ -471,7 +471,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                       <Button
                         onClick={handleActivate}
                         disabled={isActivating}
-                        className="h-14 px-10 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-amber-500/20 transition-all active:scale-95 disabled:opacity-50 min-w-[200px] flex items-center justify-center gap-3"
+                        className="h-14 px-10 rounded-2xl bg-amber-500 hover:bg-amber-600 text-foreground text-[11px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-amber-500/20 transition-all active:scale-95 disabled:opacity-50 min-w-[200px] flex items-center justify-center gap-3"
                       >
                         {isActivating ? (
                           <Loader2 className="w-5 h-5 animate-spin" />
@@ -491,7 +491,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                   <Button 
                     onClick={handleRunNow}
                     disabled={isRunning}
-                    className="h-14 px-10 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-indigo-500/20 transition-all active:scale-95 disabled:opacity-50 min-w-[200px] flex items-center justify-center gap-3"
+                    className="h-14 px-10 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-foreground text-[11px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-indigo-500/20 transition-all active:scale-95 disabled:opacity-50 min-w-[200px] flex items-center justify-center gap-3"
                   >
                     {isRunning ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
@@ -505,7 +505,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                     <Button 
                       variant="outline" 
                       onClick={() => setIsEditing(true)}
-                      className="flex-1 h-12 rounded-xl border-[#1F2937] bg-[#111827]/60 text-[#CBD5E1] hover:bg-white/5 transition-all"
+                      className="flex-1 h-12 rounded-xl border-border bg-card/60 text-muted-foreground hover:bg-foreground/5 transition-all"
                     >
                       <Pencil className="w-4 h-4" />
                     </Button>
@@ -527,10 +527,10 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                 <div className="col-span-1 xl:col-span-8 space-y-6 min-w-0">
                   
                   {/* Current Run Progress */}
-                  <div className="bg-[#111827]/40 rounded-[32px] border border-[#1F2937] p-4 sm:p-8 flex flex-col sm:flex-row items-center gap-6 sm:gap-10">
+                  <div className="bg-card/40 rounded-[32px] border border-border p-4 sm:p-8 flex flex-col sm:flex-row items-center gap-6 sm:gap-10">
                     <div className="relative w-32 h-32 shrink-0">
                       <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                        <circle className="text-[#1F2937]" strokeWidth="8" stroke="currentColor" fill="transparent" r="42" cx="50" cy="50" />
+                        <circle className="text-border" strokeWidth="8" stroke="currentColor" fill="transparent" r="42" cx="50" cy="50" />
                         <motion.circle 
                           className="text-indigo-500" 
                           strokeWidth="8" 
@@ -544,8 +544,8 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                         />
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-2xl font-black text-white">{currentProgress}%</span>
-                        <span className="text-[8px] font-black text-[#64748B] uppercase tracking-widest">Progress</span>
+                        <span className="text-2xl font-black text-foreground">{currentProgress}%</span>
+                        <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest">Progress</span>
                       </div>
                     </div>
                     
@@ -553,21 +553,21 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                       <div className="flex items-center justify-between">
                         <div className="space-y-1">
                           <div className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">Current Status</div>
-                          <div className="text-lg font-black text-white uppercase tracking-tight">Running Automation...</div>
+                          <div className="text-lg font-black text-foreground uppercase tracking-tight">Running Automation...</div>
                         </div>
                         <div className="text-right space-y-1">
-                          <div className="text-[10px] font-black text-[#64748B] uppercase tracking-[0.2em]">ETA</div>
-                          <div className="text-lg font-black text-white uppercase tracking-tight">30s</div>
+                          <div className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">ETA</div>
+                          <div className="text-lg font-black text-foreground uppercase tracking-tight">30s</div>
                         </div>
                       </div>
-                      <div className="h-2 w-full bg-[#1F2937] rounded-full overflow-hidden">
+                      <div className="h-2 w-full bg-border rounded-full overflow-hidden">
                         <motion.div 
                           className="h-full bg-gradient-to-r from-indigo-600 to-purple-600"
                           initial={{ width: 0 }}
                           animate={{ width: `${currentProgress}%` }}
                         />
                       </div>
-                      <div className="flex items-center justify-between text-[9px] font-black text-[#64748B] uppercase tracking-widest">
+                      <div className="flex items-center justify-between text-[9px] font-black text-muted-foreground uppercase tracking-widest">
                         <span>Started: 04:42:10 PM</span>
                         <span>3 / 4 Steps Completed</span>
                       </div>
@@ -575,11 +575,11 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                   </div>
 
                   {/* Execution Pipeline */}
-                  <div className="bg-[#111827]/40 rounded-[32px] border border-[#1F2937] p-4 sm:p-8 space-y-6 sm:space-y-8">
+                  <div className="bg-card/40 rounded-[32px] border border-border p-4 sm:p-8 space-y-6 sm:space-y-8">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <Workflow className="w-5 h-5 text-indigo-500" />
-                        <h3 className="text-xs font-black text-white uppercase tracking-[0.2em]">Execution Pipeline</h3>
+                        <h3 className="text-xs font-black text-foreground uppercase tracking-[0.2em]">Execution Pipeline</h3>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
@@ -590,7 +590,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                     <div className="overflow-x-auto scroll-x-smooth -mx-4 px-4">
                       <div className="relative flex items-center justify-between px-4 min-w-[480px]">
                       {/* Connector Line */}
-                      <div className="absolute top-6 left-10 right-10 h-0.5 bg-[#1F2937] z-0" />
+                      <div className="absolute top-6 left-10 right-10 h-0.5 bg-border z-0" />
                       
                       {pipelineSteps.map((step, i) => (
                         <div key={step.id} className="relative z-10 flex flex-col items-center gap-4 group">
@@ -598,7 +598,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                             "w-12 h-12 rounded-2xl border flex items-center justify-center transition-all duration-500 shadow-xl",
                             step.status === 'completed' ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-500" :
                             step.status === 'running' ? "bg-indigo-500/10 border-indigo-500 text-indigo-500 animate-pulse" :
-                            "bg-[#05070A] border-[#1F2937] text-[#374151]"
+                            "bg-background border-border text-muted-foreground/60"
                           )}>
                             {step.status === 'completed' ? <Check className="w-6 h-6" /> : 
                              step.status === 'running' ? <RefreshCw className="w-5 h-5 animate-spin-slow" /> :
@@ -607,9 +607,9 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                           <div className="text-center space-y-1">
                             <div className={cn(
                               "text-[10px] font-black uppercase tracking-widest transition-colors",
-                              step.status === 'pending' ? "text-[#374151]" : "text-white"
+                              step.status === 'pending' ? "text-muted-foreground/60" : "text-foreground"
                             )}>{step.name}</div>
-                            <div className="text-[8px] font-bold text-[#64748B] uppercase tracking-tighter">{step.time}</div>
+                            <div className="text-[8px] font-bold text-muted-foreground uppercase tracking-tighter">{step.time}</div>
                             {step.status === 'completed' && (
                               <div className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">{step.duration}</div>
                             )}
@@ -621,8 +621,8 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                   </div>
 
                   {/* Tabs for AI Context & Logs */}
-                  <div className="bg-[#111827]/40 rounded-[32px] border border-[#1F2937] overflow-hidden flex flex-col min-h-[400px] sm:min-h-[500px]">
-                    <div className="px-4 sm:px-8 pt-4 sm:pt-6 flex items-center gap-4 sm:gap-8 border-b border-[#1F2937] shrink-0 overflow-x-auto scroll-x-smooth">
+                  <div className="bg-card/40 rounded-[32px] border border-border overflow-hidden flex flex-col min-h-[400px] sm:min-h-[500px]">
+                    <div className="px-4 sm:px-8 pt-4 sm:pt-6 flex items-center gap-4 sm:gap-8 border-b border-border shrink-0 overflow-x-auto scroll-x-smooth">
                       {[
                         { id: 'pipeline', label: 'Live Logs', icon: Terminal },
                         { id: 'ai', label: 'AI Planning', icon: Brain },
@@ -634,7 +634,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                           onClick={() => setActiveTab(tab.id)}
                           className={cn(
                             "flex shrink-0 items-center gap-2 pb-4 text-[11px] font-black uppercase tracking-[0.15em] transition-all relative",
-                            activeTab === tab.id ? "text-indigo-500" : "text-[#64748B] hover:text-[#CBD5E1]"
+                            activeTab === tab.id ? "text-indigo-500" : "text-muted-foreground hover:text-muted-foreground"
                           )}
                         >
                           <tab.icon className="w-4 h-4" />
@@ -658,16 +658,16 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                           >
                             {liveLogs.length > 0 ? (
                               liveLogs.map((log, i) => (
-                                <div key={i} className="flex items-start gap-4 text-[11px] py-1 group hover:bg-white/5 rounded px-2 transition-colors">
-                                  <span className="text-[#374151] shrink-0">{log.time}</span>
+                                <div key={i} className="flex items-start gap-4 text-[11px] py-1 group hover:bg-foreground/5 rounded px-2 transition-colors">
+                                  <span className="text-muted-foreground/60 shrink-0">{log.time}</span>
                                   <span className={cn("font-black shrink-0 w-20", log.type === 'error' ? 'text-red-400' : 'text-indigo-400')}>[{log.engine || 'SYS'}]</span>
-                                  <span className="text-[#CBD5E1]">{log.message}</span>
+                                  <span className="text-muted-foreground">{log.message}</span>
                                 </div>
                               ))
                             ) : (
                               <div className="py-20 text-center">
-                                <Terminal className="w-8 h-8 text-[#1F2937] mx-auto mb-3" />
-                                <p className="text-[10px] font-black text-[#374151] uppercase tracking-widest">Waiting for execution logs...</p>
+                                <Terminal className="w-8 h-8 text-border mx-auto mb-3" />
+                                <p className="text-[10px] font-black text-muted-foreground/60 uppercase tracking-widest">Waiting for execution logs...</p>
                               </div>
                             )}
                             {isRunning && (
@@ -689,43 +689,43 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                           >
                             {/* User Goal */}
                             {selectedSchedule.user_prompt && (
-                              <div className="p-5 rounded-2xl bg-[#05070A] border border-indigo-500/20 space-y-3">
+                              <div className="p-5 rounded-2xl bg-background border border-indigo-500/20 space-y-3">
                                 <div className="flex items-center gap-2.5">
                                   <UserIcon className="w-4 h-4 text-indigo-400" />
-                                  <h4 className="text-[11px] font-black text-white uppercase tracking-widest">User Goal</h4>
+                                  <h4 className="text-[11px] font-black text-foreground uppercase tracking-widest">User Goal</h4>
                                 </div>
-                                <p className="text-sm text-[#CBD5E1] leading-relaxed">{selectedSchedule.user_prompt}</p>
+                                <p className="text-sm text-muted-foreground leading-relaxed">{selectedSchedule.user_prompt}</p>
                               </div>
                             )}
 
                             {/* Execution Strategy */}
-                            <div className="p-6 rounded-2xl bg-[#05070A] border border-[#1F2937] space-y-4">
+                            <div className="p-6 rounded-2xl bg-background border border-border space-y-4">
                               <div className="flex items-center gap-2.5">
                                 <Target className="w-4 h-4 text-purple-500" />
-                                <h4 className="text-[11px] font-black text-white uppercase tracking-widest">Execution Strategy</h4>
+                                <h4 className="text-[11px] font-black text-foreground uppercase tracking-widest">Execution Strategy</h4>
                               </div>
-                              <p className="text-sm text-[#CBD5E1] leading-relaxed">
+                              <p className="text-sm text-muted-foreground leading-relaxed">
                                 {selectedSchedule.assistant_response || "No strategy recorded for this schedule."}
                               </p>
                             </div>
 
                             {/* Rehydrated Plan */}
                             <div className="space-y-3">
-                              <div className="text-[10px] font-black text-[#64748B] uppercase tracking-widest ml-1">Original Agent Plan</div>
+                              <div className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">Original Agent Plan</div>
                               {selectedSchedule.plan_data ? (() => {
                                 try {
                                   const tasks = JSON.parse(selectedSchedule.plan_data) as any[];
                                   return tasks.map((task: any, i: number) => (
-                                    <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-[#05070A] border border-[#1F2937]">
+                                    <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-background border border-border">
                                       <div className="w-5 h-5 rounded-md bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-[9px] font-black text-indigo-500">{i + 1}</div>
-                                      <span className="text-xs text-[#CBD5E1] font-medium">{task.title || String(task)}</span>
+                                      <span className="text-xs text-muted-foreground font-medium">{task.title || String(task)}</span>
                                     </div>
                                   ));
                                 } catch {
-                                  return <p className="text-xs text-[#CBD5E1] ml-1 leading-relaxed">{selectedSchedule.plan_data}</p>;
+                                  return <p className="text-xs text-muted-foreground ml-1 leading-relaxed">{selectedSchedule.plan_data}</p>;
                                 }
                               })() : (
-                                <p className="text-[10px] text-[#374151] italic ml-1">No plan data stored for this schedule.</p>
+                                <p className="text-[10px] text-muted-foreground/60 italic ml-1">No plan data stored for this schedule.</p>
                               )}
                             </div>
                           </motion.div>
@@ -745,30 +745,30 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                                   <Code className="w-5 h-5 text-indigo-500" />
                                 </div>
                                 <div>
-                                  <h4 className="text-sm font-black text-white uppercase tracking-widest">Automation Script</h4>
-                                  <p className="text-[10px] text-[#64748B] font-bold uppercase tracking-widest">Production-ready Python code</p>
+                                  <h4 className="text-sm font-black text-foreground uppercase tracking-widest">Automation Script</h4>
+                                  <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Production-ready Python code</p>
                                 </div>
                               </div>
                               <Button 
                                 variant="outline" 
                                 size="sm" 
                                 onClick={() => handleCopyCode(selectedSchedule.generated_script)}
-                                className="h-9 px-4 rounded-xl border-[#1F2937] bg-white/5 text-[#CBD5E1] text-[10px] font-black uppercase tracking-widest hover:bg-white/10 gap-2"
+                                className="h-9 px-4 rounded-xl border-border bg-white/5 text-muted-foreground text-[10px] font-black uppercase tracking-widest hover:bg-white/10 gap-2"
                               >
                                 {copySuccess ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                                 {copySuccess || "COPY CODE"}
                               </Button>
                             </div>
-                            <div className="rounded-2xl border border-[#1F2937] bg-[#05070A] overflow-hidden">
-                              <div className="px-4 py-2 border-b border-[#1F2937] bg-white/[0.02] flex items-center justify-between">
+                            <div className="rounded-2xl border border-border bg-background overflow-hidden">
+                              <div className="px-4 py-2 border-b border-border bg-white/[0.02] flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                   <div className="w-2 h-2 rounded-full bg-red-500/50" />
                                   <div className="w-2 h-2 rounded-full bg-yellow-500/50" />
                                   <div className="w-2 h-2 rounded-full bg-green-500/50" />
                                 </div>
-                                <span className="text-[9px] font-black text-[#374151] uppercase tracking-widest">automation_script.py</span>
+                                <span className="text-[9px] font-black text-muted-foreground/60 uppercase tracking-widest">automation_script.py</span>
                               </div>
-                              <pre className="p-6 text-[12px] font-mono text-[#CBD5E1] overflow-x-auto leading-relaxed hide-scrollbar max-h-[600px]">
+                              <pre className="p-6 text-[12px] font-mono text-muted-foreground overflow-x-auto leading-relaxed hide-scrollbar max-h-[600px]">
                                 <code>{selectedSchedule.generated_script || "# No script generated yet."}</code>
                               </pre>
                             </div>
@@ -786,7 +786,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                             <div className="overflow-x-auto scroll-x-smooth">
                             <table className="w-full text-left text-[11px] min-w-[480px]">
                               <thead>
-                                <tr className="text-[#64748B] font-black uppercase tracking-widest border-b border-[#1F2937]">
+                                <tr className="text-muted-foreground font-black uppercase tracking-widest border-b border-border">
                                   <th className="pb-4 px-2">Run ID</th>
                                   <th className="pb-4 px-2">Date</th>
                                   <th className="pb-4 px-2">Status</th>
@@ -795,21 +795,21 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                                   <th className="pb-4 px-2 text-right">Action</th>
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-[#1F2937]">
+                              <tbody className="divide-y divide-border">
                                 {runs.map((run) => (
-                                  <tr key={run.run_id} className="group hover:bg-white/5 transition-colors">
+                                  <tr key={run.run_id} className="group hover:bg-foreground/5 transition-colors">
                                     <td className="py-4 px-2 font-mono text-indigo-400 truncate max-w-[100px]">{run.run_id}</td>
-                                    <td className="py-4 px-2 text-[#CBD5E1] whitespace-nowrap">{formatDate(run.created_at).split(',')[0]}</td>
+                                    <td className="py-4 px-2 text-muted-foreground whitespace-nowrap">{formatDate(run.created_at).split(',')[0]}</td>
                                     <td className="py-4 px-2">
                                       <span className={cn(
                                         "px-2 py-0.5 rounded-md text-[9px] font-black uppercase whitespace-nowrap",
                                         run.status === 'completed' ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-500"
                                       )}>{run.status}</span>
                                     </td>
-                                    <td className="py-4 px-2 text-[#64748B] font-bold">{run.engine}</td>
-                                    <td className="py-4 px-2 text-[#64748B] font-bold">{run.duration_seconds}s</td>
+                                    <td className="py-4 px-2 text-muted-foreground font-bold">{run.engine}</td>
+                                    <td className="py-4 px-2 text-muted-foreground font-bold">{run.duration_seconds}s</td>
                                     <td className="py-4 px-2 text-right">
-                                      <button className="p-2 rounded-lg hover:bg-white/10 text-[#64748B] hover:text-white transition-all">
+                                      <button className="p-2 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all">
                                         <ExternalLink className="w-3.5 h-3.5" />
                                       </button>
                                     </td>
@@ -829,10 +829,10 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                 <div className="col-span-1 xl:col-span-4 space-y-6 min-w-0">
                   
                   {/* Execution Summary */}
-                  <div className="bg-[#111827]/40 rounded-[32px] border border-[#1F2937] p-8 space-y-6">
+                  <div className="bg-card/40 rounded-[32px] border border-border p-8 space-y-6">
                     <div className="flex items-center gap-3">
                       <Gauge className="w-5 h-5 text-indigo-500" />
-                      <h3 className="text-xs font-black text-white uppercase tracking-[0.2em]">Execution Summary</h3>
+                      <h3 className="text-xs font-black text-foreground uppercase tracking-[0.2em]">Execution Summary</h3>
                     </div>
                     
                     <div className="space-y-4">
@@ -842,26 +842,26 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                         { label: 'Network Status', val: 'Stable', icon: Network, color: 'text-blue-500' },
                         { label: 'Browser Status', val: 'Active', icon: Globe, color: 'text-purple-500' }
                       ].map((item, i) => (
-                        <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-[#05070A] border border-[#1F2937]">
+                        <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-background border border-border">
                           <div className="flex items-center gap-3">
                             <item.icon className={cn("w-4 h-4", item.color)} />
-                            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-widest">{item.label}</span>
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{item.label}</span>
                           </div>
-                          <span className="text-xs font-black text-white uppercase">{item.val}</span>
+                          <span className="text-xs font-black text-foreground uppercase">{item.val}</span>
                         </div>
                       ))}
                     </div>
                   </div>
 
                   {/* Live Browser Preview */}
-                  <div className="bg-[#111827]/40 rounded-[32px] border border-[#1F2937] overflow-hidden flex flex-col">
-                    <div className="px-6 py-4 border-b border-[#1F2937] flex items-center justify-between bg-white/[0.02]">
+                  <div className="bg-card/40 rounded-[32px] border border-border overflow-hidden flex flex-col">
+                    <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-white/[0.02]">
                       <div className="flex items-center gap-2">
                         <Globe className="w-4 h-4 text-indigo-500" />
-                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Live Browser</span>
+                        <span className="text-[10px] font-black text-foreground uppercase tracking-widest">Live Browser</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button className="p-1.5 rounded-lg hover:bg-white/5 text-[#64748B] hover:text-white transition-all">
+                        <button className="p-1.5 rounded-lg hover:bg-foreground/5 text-muted-foreground hover:text-foreground transition-all">
                           <Maximize2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -890,16 +890,16 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                       )}
                       
                       {/* Browser Toolbar Overlay */}
-                      <div className="absolute bottom-4 left-4 right-4 p-3 rounded-xl bg-[#05070A]/80 backdrop-blur-md border border-white/10 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <div className="absolute bottom-4 left-4 right-4 p-3 rounded-xl bg-background/80 backdrop-blur-md border border-white/10 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                         <div className="flex items-center gap-3">
                           <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                          <span className="text-[9px] font-black text-[#CBD5E1] uppercase truncate max-w-[150px]">
+                          <span className="text-[9px] font-black text-muted-foreground uppercase truncate max-w-[150px]">
                             {liveLogs.filter(l => l.message.includes('https://')).pop()?.message.match(/https?:\/\/[^\s]+/)?.[0] || "https://browser.live"}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <button className="p-1.5 rounded-lg hover:bg-white/10 text-[#64748B] hover:text-white"><RefreshCw className="w-3 h-3" /></button>
-                          <button className="p-1.5 rounded-lg hover:bg-white/10 text-[#64748B] hover:text-white"><ZoomIn className="w-3 h-3" /></button>
+                          <button className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground"><RefreshCw className="w-3 h-3" /></button>
+                          <button className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground"><ZoomIn className="w-3 h-3" /></button>
                         </div>
                       </div>
                     </div>
@@ -908,13 +908,13 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                   {/* Final Result Card */}
                   <div className="bg-gradient-to-br from-indigo-600/20 to-purple-600/20 rounded-[32px] border border-indigo-500/30 p-8 space-y-6 relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-6 opacity-10">
-                      <Shield className="w-20 h-20 text-white" />
+                      <Shield className="w-20 h-20 text-foreground" />
                     </div>
                     <div className="relative z-10 space-y-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                          <h3 className="text-xs font-black text-white uppercase tracking-[0.2em]">Final Result</h3>
+                          <h3 className="text-xs font-black text-foreground uppercase tracking-[0.2em]">Final Result</h3>
                         </div>
                         {selectedSchedule.email_recipient && selectedSchedule.extracted_content && (
                           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
@@ -923,8 +923,8 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                           </div>
                         )}
                       </div>
-                      <div className="p-5 rounded-2xl bg-[#05070A]/60 border border-white/5 backdrop-blur-sm max-h-48 overflow-y-auto hide-scrollbar">
-                        <p className="text-xs text-[#CBD5E1] leading-relaxed font-medium whitespace-pre-wrap">
+                      <div className="p-5 rounded-2xl bg-background/60 border border-white/5 backdrop-blur-sm max-h-48 overflow-y-auto hide-scrollbar">
+                        <p className="text-xs text-muted-foreground leading-relaxed font-medium whitespace-pre-wrap">
                           {selectedSchedule.extracted_content || "No results available yet. Run the schedule to see data."}
                         </p>
                       </div>
@@ -938,7 +938,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                             a.download = `report-${selectedSchedule.schedule_id}.txt`;
                             a.click();
                           }}
-                          className="w-full h-12 rounded-xl bg-white text-indigo-600 text-[10px] font-black uppercase tracking-widest hover:bg-[#F8FAFC] transition-all gap-2"
+                          className="w-full h-12 rounded-xl bg-white text-indigo-600 text-[10px] font-black uppercase tracking-widest hover:bg-background transition-all gap-2"
                         >
                           <Download className="w-4 h-4" />
                           DOWNLOAD FULL REPORT
@@ -954,13 +954,13 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
             <div className="h-full flex flex-col items-center justify-center text-center space-y-6">
               <div className="relative">
                 <div className="absolute -inset-4 bg-indigo-500/20 rounded-full blur-2xl animate-pulse" />
-                <div className="relative w-24 h-24 rounded-[32px] bg-[#111827] border border-[#1F2937] flex items-center justify-center text-indigo-500 shadow-2xl">
+                <div className="relative w-24 h-24 rounded-[32px] bg-card border border-border flex items-center justify-center text-indigo-500 shadow-2xl">
                   <Activity className="w-12 h-12" />
                 </div>
               </div>
               <div className="space-y-2">
-                <h3 className="text-2xl font-black text-white uppercase tracking-tight">Select an Automation</h3>
-                <p className="text-sm text-[#64748B] max-w-xs mx-auto font-bold uppercase tracking-widest leading-relaxed">
+                <h3 className="text-2xl font-black text-foreground uppercase tracking-tight">Select an Automation</h3>
+                <p className="text-sm text-muted-foreground max-w-xs mx-auto font-bold uppercase tracking-widest leading-relaxed">
                   Choose a task from the sidebar to monitor its real-time execution and results.
                 </p>
               </div>
@@ -972,32 +972,32 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
       {/* Modals (Edit/Delete) - Reusing existing logic but with premium styling */}
       <AnimatePresence>
         {isEditing && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-[#05070A]/80 backdrop-blur-xl p-4">
+          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-background/80 backdrop-blur-xl p-4">
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md bg-[#111827] rounded-[32px] shadow-2xl border border-[#1F2937] p-8 space-y-8"
+              className="w-full max-w-md bg-card rounded-[32px] shadow-2xl border border-border p-8 space-y-8"
             >
               <div className="flex items-center justify-between">
-                <h3 className="font-black text-xl text-white uppercase tracking-tight">Edit Schedule</h3>
-                <button onClick={() => setIsEditing(false)} className="text-[#64748B] hover:text-white"><X className="w-6 h-6" /></button>
+                <h3 className="font-black text-xl text-foreground uppercase tracking-tight">Edit Schedule</h3>
+                <button onClick={() => setIsEditing(false)} className="text-muted-foreground hover:text-foreground"><X className="w-6 h-6" /></button>
               </div>
               <div className="space-y-6">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-[#64748B] uppercase tracking-widest ml-1">Task Title</label>
+                  <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">Task Title</label>
                   <input 
                     value={editData.title} 
                     onChange={e => setEditData({...editData, title: e.target.value})}
-                    className="w-full px-5 py-4 rounded-2xl bg-[#05070A] border border-[#1F2937] text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                    className="w-full px-5 py-4 rounded-2xl bg-background border border-border text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-[#64748B] uppercase tracking-widest ml-1">Frequency</label>
+                  <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">Frequency</label>
                   <select 
                     value={editData.type} 
                     onChange={e => setEditData({...editData, type: e.target.value})}
-                    className="w-full px-5 py-4 rounded-2xl bg-[#05070A] border border-[#1F2937] text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 appearance-none"
+                    className="w-full px-5 py-4 rounded-2xl bg-background border border-border text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 appearance-none"
                   >
                     <option value="daily">Daily</option>
                     <option value="weekly">Weekly</option>
@@ -1005,17 +1005,17 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-[#64748B] uppercase tracking-widest ml-1">Delivery Email</label>
+                  <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">Delivery Email</label>
                   <input 
                     value={editData.email} 
                     onChange={e => setEditData({...editData, email: e.target.value})}
-                    className="w-full px-5 py-4 rounded-2xl bg-[#05070A] border border-[#1F2937] text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                    className="w-full px-5 py-4 rounded-2xl bg-background border border-border text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
                   />
                 </div>
               </div>
               <div className="flex gap-4 pt-4">
                 <Button variant="ghost" onClick={() => setIsEditing(false)} className="flex-1 h-14 rounded-2xl text-[11px] font-black uppercase tracking-widest">CANCEL</Button>
-                <Button onClick={handleUpdate} className="flex-1 h-14 rounded-2xl bg-indigo-600 text-white text-[11px] font-black uppercase tracking-widest shadow-xl shadow-indigo-500/20">SAVE CHANGES</Button>
+                <Button onClick={handleUpdate} className="flex-1 h-14 rounded-2xl bg-indigo-600 text-foreground text-[11px] font-black uppercase tracking-widest shadow-xl shadow-indigo-500/20">SAVE CHANGES</Button>
               </div>
             </motion.div>
           </div>
@@ -1025,19 +1025,19 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
       {/* Delete Confirmation Modal */}
       <AnimatePresence>
         {deleteConfirmId && (
-          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#05070A]/80 backdrop-blur-xl p-4">
+          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-background/80 backdrop-blur-xl p-4">
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-sm bg-[#111827] rounded-[32px] shadow-2xl border border-[#1F2937] p-8 text-center space-y-6"
+              className="w-full max-w-sm bg-card rounded-[32px] shadow-2xl border border-border p-8 text-center space-y-6"
             >
               <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto">
                 <AlertCircle className="w-8 h-8 text-red-500" />
               </div>
               <div className="space-y-2">
-                <h3 className="font-black text-xl text-white uppercase tracking-tight">Confirm Deletion</h3>
-                <p className="text-sm text-[#64748B] font-bold uppercase tracking-widest leading-relaxed">
+                <h3 className="font-black text-xl text-foreground uppercase tracking-tight">Confirm Deletion</h3>
+                <p className="text-sm text-muted-foreground font-bold uppercase tracking-widest leading-relaxed">
                   Are you sure you want to delete this schedule? This action cannot be undone.
                 </p>
               </div>
@@ -1051,7 +1051,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                 </Button>
                 <Button 
                   onClick={handleDelete} 
-                  className="flex-1 h-14 bg-red-500 hover:bg-red-600 text-white text-[11px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-red-500/20"
+                  className="flex-1 h-14 bg-red-500 hover:bg-red-600 text-foreground text-[11px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-red-500/20"
                 >
                   DELETE
                 </Button>
