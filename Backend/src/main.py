@@ -317,6 +317,7 @@ async def _run_schedule_task(schedule_id: str, run_id: str) -> None:
         email_recipient = sched.email_recipient or ""
         schedule_type   = sched.schedule_type or "manual"
         schedule_time   = sched.schedule_time or ""
+        headless        = sched.headless if sched.headless is not None else True
         # Mark last_run immediately
         sched.last_run = datetime.now(timezone.utc)
         await db.commit()
@@ -342,12 +343,14 @@ async def _run_schedule_task(schedule_id: str, run_id: str) -> None:
                 f.write(current_script)
                 temp_path = f.name
 
+            run_env = {**os.environ, "BROWSER_USE_HEADLESS": "false" if not headless else "true"}
             process = subprocess.Popen(
                 [sys.executable, "-u", temp_path],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
+                env=run_env,
             )
 
             full_output: List[str] = []

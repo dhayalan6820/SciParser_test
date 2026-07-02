@@ -78,14 +78,22 @@ class ToolContextItem(BaseModel):
     tool_name: str
     output: Optional[str] = None
 
+class AdvancedOptions(BaseModel):
+    retry_count: int = 3
+    timeout: int = 120
+    headless: bool = True
+
 class ScheduleRequest(BaseModel):
     chat_id: str
     title: str
     selected_message_ids: List[str]
     selected_tool_ids: List[str]
     schedule_type: str # daily, weekly, monthly
+    schedule_time: Optional[str] = "09:00"  # HH:MM 24-hour
+    timezone: Optional[str] = "America/New_York"  # IANA timezone
     email_recipient: str
     tool_context: Optional[List[ToolContextItem]] = None
+    advanced_options: Optional[AdvancedOptions] = None
 
 class ScheduleResponse(BaseModel):
     schedule_id: str

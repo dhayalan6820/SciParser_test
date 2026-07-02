@@ -41,6 +41,13 @@ async def init_database():
             await conn.execute(text(
                 "ALTER TABLE schedules ADD COLUMN IF NOT EXISTS last_run TIMESTAMPTZ"
             ))
+            # Schedule timezone + browser mode columns
+            await conn.execute(text(
+                "ALTER TABLE schedules ADD COLUMN IF NOT EXISTS timezone VARCHAR(100) DEFAULT 'America/New_York'"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE schedules ADD COLUMN IF NOT EXISTS headless BOOLEAN NOT NULL DEFAULT TRUE"
+            ))
             logger.info("Database tables checked/created successfully.")
     except Exception as e:
         logger.error(f"Error creating tables: {e}")

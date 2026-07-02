@@ -212,6 +212,9 @@ class ChatService:
             assistant_response=ai_msg.content if ai_msg else None,
             plan_data=ai_msg.plan_data if ai_msg else None,
             schedule_type=req.schedule_type,
+            schedule_time=req.schedule_time or "09:00",
+            timezone=req.timezone or "America/New_York",
+            headless=(req.advanced_options.headless if req.advanced_options else True),
             email_recipient=req.email_recipient,
             status="active",
             created_at=datetime.now(timezone.utc)

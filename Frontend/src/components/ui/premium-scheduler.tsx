@@ -15,6 +15,45 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { Task, Subtask } from "./agent-plan";
 
+const TIMEZONE_OPTIONS = [
+  { label: "(GMT-05:00) EST — New York", value: "America/New_York", abbr: "EST" },
+  { label: "(GMT-06:00) CST — Chicago", value: "America/Chicago", abbr: "CST" },
+  { label: "(GMT-07:00) MST — Denver", value: "America/Denver", abbr: "MST" },
+  { label: "(GMT-08:00) PST — Los Angeles", value: "America/Los_Angeles", abbr: "PST" },
+  { label: "(GMT+05:30) IST — India", value: "Asia/Kolkata", abbr: "IST" },
+  { label: "(GMT+00:00) UTC", value: "UTC", abbr: "UTC" },
+];
+
+const TIME_OPTIONS = Array.from({ length: 24 }, (_, h) => {
+  const ampm = h < 12 ? "AM" : "PM";
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return {
+    label: `${String(h12).padStart(2, "0")}:00 ${ampm}`,
+    value: `${String(h).padStart(2, "0")}:00`,
+  };
+});
+
+function computeNextRun(scheduleType: string, scheduleTime: string): string {
+  const [h, m] = scheduleTime.split(":").map(Number);
+  const now = new Date();
+  let next = new Date(now);
+  next.setHours(h, m || 0, 0, 0);
+
+  if (scheduleType === "daily") {
+    if (next <= now) next.setDate(next.getDate() + 1);
+  } else if (scheduleType === "weekly") {
+    const dow = next.getDay(); // 0=Sun
+    const toMonday = dow === 1 && next > now ? 0 : ((8 - dow) % 7) || 7;
+    next.setDate(next.getDate() + toMonday);
+  } else if (scheduleType === "monthly") {
+    next = new Date(now.getFullYear(), now.getMonth() + 1, 1, h, m || 0, 0, 0);
+  }
+
+  return next.toLocaleDateString("en-US", {
+    weekday: "short", month: "short", day: "numeric", year: "numeric",
+  }) + " at " + next.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+}
+
 interface Schedule {
   schedule_id: string;
   title: string;
@@ -58,6 +97,10 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
   const [scheduleError, setScheduleError] = React.useState("");
   const [scheduleSuccess, setScheduleSuccess] = React.useState(false);
   
+  // Schedule time & timezone
+  const [scheduleTime, setScheduleTime] = React.useState("09:00");
+  const [timezone, setTimezone] = React.useState("America/New_York");
+
   // Advanced Options
   const [retryCount, setRetryCount] = React.useState(3);
   const [timeout, setTimeoutVal] = React.useState(120);
@@ -76,8 +119,8 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
   const handleCreateSchedule = async (skipWarning = false) => {
     setScheduleError("");
 
-    // If no tool activity has been recorded, warn the user first
-    if (!skipWarning && (toolLogs || []).length === 0) {
+    // If no tools have been selected, warn the user first
+    if (!skipWarning && selectedTools.length === 0) {
       setShowEmptyToolsWarning(true);
       return;
     }
@@ -86,18 +129,23 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
     try {
       setLoading(true);
 
-      // Build compact tool context — only SUCCESS/COMPLETED tools, output truncated
+      // Build compact tool context — only the user-selected SUCCESS tools, output summarised ≤300 chars
       const tool_context = (toolLogs || [])
-        .filter(log => log.status === 'SUCCESS' || log.status === 'COMPLETED')
+        .filter(log =>
+          selectedTools.includes(log.id) &&
+          (log.status === 'SUCCESS' || log.status === 'COMPLETED')
+        )
         .map(log => ({
           tool_name: log.tool_name,
-          output: summarizeOutput(log.tool_output)
+          output: summarizeOutput(log.tool_output, 300)
         }));
 
       const data = {
         chat_id: chatId,
         title: taskName || "New Automation Task",
         schedule_type: scheduleType,
+        schedule_time: scheduleTime,
+        timezone: timezone,
         email_recipient: emailRecipient,
         selected_message_ids: selectedMessages,
         selected_tool_ids: selectedTools,
@@ -141,11 +189,14 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
   // Use the plan from the selected AI message
   const displayPlan = selectedAiMsg?.plan || [];
 
-  // All tool logs for display; success-only count drives the badge
-  const allTools = toolLogs || [];
-  const successTools = allTools.filter(
+  // Only the tools the user explicitly checked (selectedTools IDs)
+  const selectedToolLogs = (toolLogs || []).filter(l => selectedTools.includes(l.id));
+  const successSelectedTools = selectedToolLogs.filter(
     log => log.status === 'SUCCESS' || log.status === 'COMPLETED'
   );
+  // Keep full session list only for the tab badge (shows 0 if nothing selected)
+  const allTools = toolLogs || [];
+  const successTools = successSelectedTools;
 
   // --- FIX: Ensure activeTab switches correctly ---
   const handleTabChange = (tabId: string) => {
@@ -227,11 +278,14 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                   <label className="text-[10px] font-black text-[#64748B] uppercase tracking-widest ml-1">Time of Day</label>
                   <div className="relative">
                     <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#64748B]" />
-                    <select className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-[#111827] border border-[#1F2937] text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 appearance-none">
-                      <option>09:00 AM</option>
-                      <option>12:00 PM</option>
-                      <option>06:00 PM</option>
-                      <option>12:00 AM</option>
+                    <select
+                      value={scheduleTime}
+                      onChange={e => setScheduleTime(e.target.value)}
+                      className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-[#111827] border border-[#1F2937] text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 appearance-none"
+                    >
+                      {TIME_OPTIONS.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
                     </select>
                     <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#64748B] pointer-events-none" />
                   </div>
@@ -240,10 +294,14 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                   <label className="text-[10px] font-black text-[#64748B] uppercase tracking-widest ml-1">Timezone</label>
                   <div className="relative">
                     <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#64748B]" />
-                    <select className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-[#111827] border border-[#1F2937] text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 appearance-none">
-                      <option>(GMT+05:30) Asia/Kolkata</option>
-                      <option>(GMT+00:00) UTC</option>
-                      <option>(GMT-05:00) EST</option>
+                    <select
+                      value={timezone}
+                      onChange={e => setTimezone(e.target.value)}
+                      className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-[#111827] border border-[#1F2937] text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 appearance-none"
+                    >
+                      {TIMEZONE_OPTIONS.map(tz => (
+                        <option key={tz.value} value={tz.value}>{tz.label}</option>
+                      ))}
                     </select>
                     <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#64748B] pointer-events-none" />
                   </div>
@@ -255,8 +313,10 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                 <div className="flex items-center gap-4">
                   <Calendar className="w-5 h-5 text-indigo-500" />
                   <div>
-                    <div className="text-sm font-bold text-white">Tomorrow, 29 Jun 2026</div>
-                    <div className="text-[11px] text-[#64748B] font-bold uppercase tracking-wider">at 09:00 AM (GMT+05:30)</div>
+                    <div className="text-sm font-bold text-white">{computeNextRun(scheduleType, scheduleTime).split(" at ")[0]}</div>
+                    <div className="text-[11px] text-[#64748B] font-bold uppercase tracking-wider">
+                      at {computeNextRun(scheduleType, scheduleTime).split(" at ")[1]} ({TIMEZONE_OPTIONS.find(t => t.value === timezone)?.abbr || timezone})
+                    </div>
                   </div>
                 </div>
               </div>
@@ -355,6 +415,32 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                     />
                     <span className="text-[10px] font-bold text-[#64748B] uppercase">sec</span>
                   </div>
+                </div>
+                <div className="h-px bg-[#1F2937]" />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-sky-500" />
+                    <div>
+                      <span className="text-[11px] font-bold text-[#CBD5E1] uppercase tracking-wider">Browser Mode</span>
+                      <p className="text-[9px] text-[#64748B] font-bold uppercase tracking-wider mt-0.5">
+                        {headless ? "Headless — no visible window" : "Headed — browser window visible"}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setHeadless(h => !h)}
+                    className={cn(
+                      "relative w-11 h-6 rounded-full transition-colors duration-200 border",
+                      headless
+                        ? "bg-indigo-600 border-indigo-500"
+                        : "bg-emerald-600 border-emerald-500"
+                    )}
+                  >
+                    <span className={cn(
+                      "absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200",
+                      headless ? "left-0.5" : "left-[22px]"
+                    )} />
+                  </button>
                 </div>
               </div>
             </section>
@@ -593,21 +679,33 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                       </div>
                     </div>
 
-                    {allTools.length === 0 ? (
+                    {selectedTools.length === 0 ? (
+                      <div className="py-14 flex flex-col items-center justify-center bg-indigo-500/5 border border-indigo-500/20 rounded-[32px] border-dashed gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                          <List className="w-6 h-6 text-indigo-400" />
+                        </div>
+                        <div className="text-center px-6">
+                          <p className="text-xs font-black text-indigo-400 uppercase tracking-widest mb-1">No Tools Selected</p>
+                          <p className="text-[10px] text-indigo-400/60 font-bold uppercase tracking-wider leading-relaxed">
+                            Select tool runs from the chat to include them here.<br />Only success tools are used for script generation.
+                          </p>
+                        </div>
+                      </div>
+                    ) : selectedToolLogs.length === 0 ? (
                       <div className="py-14 flex flex-col items-center justify-center bg-amber-500/5 border border-amber-500/20 rounded-[32px] border-dashed gap-3">
                         <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
                           <AlertCircle className="w-6 h-6 text-amber-400" />
                         </div>
                         <div className="text-center px-6">
-                          <p className="text-xs font-black text-amber-400 uppercase tracking-widest mb-1">No Tool Activity Recorded</p>
+                          <p className="text-xs font-black text-amber-400 uppercase tracking-widest mb-1">No Matching Tool Logs</p>
                           <p className="text-[10px] text-amber-400/60 font-bold uppercase tracking-wider leading-relaxed">
-                            Run an automation first to populate the tool log.<br />Without tool context, the generated script may be low quality.
+                            Selected tool IDs were not found in the current session log.
                           </p>
                         </div>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                        {allTools.map((log, i) => {
+                        {selectedToolLogs.map((log, i) => {
                           const isSuccess = log.status === 'SUCCESS' || log.status === 'COMPLETED';
                           const isFailed  = log.status === 'FAILED'  || log.status === 'ERROR';
                           return (
@@ -635,7 +733,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                                   )} />
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <div className="text-xs font-black text-white uppercase tracking-wider truncate">
+                                  <div className="text-xs font-black text-white uppercase tracking-wider truncate" title={log.tool_name}>
                                     {log.tool_name}
                                   </div>
                                   <div className={cn(
@@ -655,7 +753,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                                 </div>
                               </div>
                               <div className="mt-3 p-2 rounded-lg bg-black/20 border border-white/5 text-[9px] text-[#64748B] font-mono line-clamp-3 overflow-hidden">
-                                {summarizeOutput(log.tool_output, 200)}
+                                {summarizeOutput(log.tool_output, 300)}
                               </div>
                             </div>
                           );
@@ -732,9 +830,9 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                 {/* Execution Config Summary */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                   {[
-                    { label: 'Retry Attempts', val: 'Max 3 attempts', icon: RefreshCw },
-                    { label: 'Timeout', val: '120 seconds', icon: Clock },
-                    { label: 'Browser', val: 'Chromium (Headless)', icon: Globe },
+                    { label: 'Retry Attempts', val: `Max ${retryCount} attempts`, icon: RefreshCw },
+                    { label: 'Timeout', val: `${timeout} seconds`, icon: Clock },
+                    { label: 'Browser', val: headless ? 'Chromium (Headless)' : 'Chromium (Headed)', icon: Globe },
                     { label: 'Notification', val: 'On Failure & Success', icon: Bell },
                     { label: 'Log Retention', val: '30 Days', icon: Database }
                   ].map((item, i) => (
@@ -770,13 +868,17 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                         <div className="flex items-center gap-2 text-[10px] font-bold text-[#64748B] uppercase tracking-widest">
                           <Clock className="w-3.5 h-3.5" /> Time of Day
                         </div>
-                        <span className="text-xs font-black text-white uppercase">09:00 AM</span>
+                        <span className="text-xs font-black text-white uppercase">
+                          {TIME_OPTIONS.find(t => t.value === scheduleTime)?.label || scheduleTime}
+                        </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-[10px] font-bold text-[#64748B] uppercase tracking-widest">
                           <Globe className="w-3.5 h-3.5" /> Timezone
                         </div>
-                        <span className="text-xs font-black text-white uppercase">Asia/Kolkata (GMT+05:30)</span>
+                        <span className="text-xs font-black text-white uppercase">
+                          {TIMEZONE_OPTIONS.find(t => t.value === timezone)?.abbr || timezone}
+                        </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-[10px] font-bold text-[#64748B] uppercase tracking-widest">
@@ -796,7 +898,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                         <div className="flex items-center gap-2 text-[10px] font-bold text-[#64748B] uppercase tracking-widest">
                           <Calendar className="w-3.5 h-3.5" /> Next Run
                         </div>
-                        <span className="text-xs font-black text-white uppercase text-right">Tomorrow, 29 Jun 2026 at 09:00 AM</span>
+                        <span className="text-xs font-black text-white uppercase text-right">{computeNextRun(scheduleType, scheduleTime)}</span>
                       </div>
                       <div className="pt-4">
                         <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 flex items-center gap-3">

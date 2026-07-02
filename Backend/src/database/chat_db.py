@@ -3,7 +3,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import (
-    TIMESTAMP, BigInteger, Column, ForeignKey, Float, Index, Integer, String, Text, DateTime
+    TIMESTAMP, BigInteger, Boolean, Column, ForeignKey, Float, Index, Integer, String, Text, DateTime
 )
 
 from sqlalchemy.orm import Mapped, declarative_base, relationship
@@ -143,6 +143,8 @@ class Schedule(Base):
     status = Column(String(20), default="completed")
     schedule_type = Column(String(20), default="manual")
     schedule_time = Column(String(50), nullable=True)
+    timezone = Column(String(100), nullable=True)
+    headless = Column(Boolean, default=True, nullable=False)
     cron_expression = Column(String(50), nullable=True)
     email_recipient = Column(String(255), nullable=True)
     next_run = Column(TIMESTAMP(timezone=True), nullable=True)
