@@ -8,6 +8,526 @@ import tempfile
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
+# Stealth JS injected into every page before any content loads
+# ---------------------------------------------------------------------------
+
+STEALTH_JS = """
+(function() {
+    // 1. Hide webdriver flag
+    try {
+        Object.defineProperty(navigator, 'webdriver', {
+            get: () => undefined,
+            configurable: true,
+        });
+    } catch(e) {}
+
+    // 2. Remove CDP / Playwright runtime artifacts
+    try { delete window.__playwright; } catch(e) {}
+    try { delete window.__pwInitScripts; } catch(e) {}
+    try { delete window.__PWDEBUGGER__; } catch(e) {}
+    try {
+        Object.getOwnPropertyNames(window).forEach(function(key) {
+            if (key.startsWith('cdc_')) { try { delete window[key]; } catch(e) {} }
+        });
+    } catch(e) {}
+
+    // 3. Spoof navigator.plugins with realistic entries
+    try {
+        const mimeProto = Object.create(MimeType.prototype);
+        function makeMime(type, desc, suffixes) {
+            const m = Object.create(mimeProto);
+            Object.defineProperties(m, {
+                type:        { value: type,     enumerable: true },
+                description: { value: desc,     enumerable: true },
+                suffixes:    { value: suffixes, enumerable: true },
+            });
+            return m;
+        }
+        function makePlugin(name, desc, filename, mimes) {
+            const p = Object.create(Plugin.prototype);
+            Object.defineProperties(p, {
+                name:        { value: name,         enumerable: true },
+                description: { value: desc,         enumerable: true },
+                filename:    { value: filename,      enumerable: true },
+                length:      { value: mimes.length,  enumerable: true },
+            });
+            mimes.forEach(function(m, i) { p[i] = m; p[m.type] = m; });
+            return p;
+        }
+        const pdfMime = makeMime('application/pdf', 'Portable Document Format', 'pdf');
+        const pdfPlugin = makePlugin('PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer', [pdfMime]);
+        const chromePdf = makePlugin('Chrome PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer', [pdfMime]);
+        const nativeClient = makePlugin('Native Client', '', 'internal-nacl-plugin', []);
+        const arr = Object.create(PluginArray.prototype);
+        [pdfPlugin, chromePdf, nativeClient].forEach(function(p, i) { arr[i] = p; arr[p.name] = p; });
+        Object.defineProperties(arr, {
+            length:    { value: 3 },
+            item:      { value: function(i) { return arr[i] || null; } },
+            namedItem: { value: function(n) { return arr[n] || null; } },
+            refresh:   { value: function() {} },
+        });
+        Object.defineProperty(navigator, 'plugins', { get: function() { return arr; }, configurable: true });
+    } catch(e) {}
+
+    // 4. Spoof navigator.languages
+    try {
+        Object.defineProperty(navigator, 'languages', {
+            get: function() { return ['en-US', 'en']; },
+            configurable: true,
+        });
+    } catch(e) {}
+
+    // 5. Canvas fingerprint: add per-session noise to both toDataURL and getImageData
+    try {
+        // _noiseByte is in range [1, 15] — always non-zero, subtle enough to
+        // not break visual rendering but distinct enough to shift fingerprints.
+        const _noiseByte = (Math.floor(Math.random() * 15) + 1) & 0xff;
+
+        // Patch toDataURL
+        const origToDataURL = HTMLCanvasElement.prototype.toDataURL;
+        HTMLCanvasElement.prototype.toDataURL = function(type) {
+            var ctx2d = this.getContext('2d');
+            if (ctx2d && this.width > 0 && this.height > 0) {
+                try {
+                    var id = ctx2d.getImageData(0, 0, 1, 1);
+                    id.data[0] = (id.data[0] ^ _noiseByte) & 0xff;
+                    ctx2d.putImageData(id, 0, 0);
+                } catch(e2) {}
+            }
+            return origToDataURL.apply(this, arguments);
+        };
+
+        // Patch CanvasRenderingContext2D.prototype.getImageData
+        const origGetCtx = HTMLCanvasElement.prototype.getContext;
+        HTMLCanvasElement.prototype.getContext = function(contextType) {
+            var ctx = origGetCtx.apply(this, arguments);
+            if (ctx && (contextType === '2d') && !ctx._stealthPatched) {
+                ctx._stealthPatched = true;
+                var origGetImageData = ctx.getImageData.bind(ctx);
+                ctx.getImageData = function(sx, sy, sw, sh) {
+                    var imageData = origGetImageData(sx, sy, sw, sh);
+                    if (imageData && imageData.data && imageData.data.length > 0) {
+                        imageData.data[0] = (imageData.data[0] ^ _noiseByte) & 0xff;
+                    }
+                    return imageData;
+                };
+            }
+            return ctx;
+        };
+    } catch(e) {}
+
+    // 6. WebGL RENDERER / VENDOR spoofing
+    try {
+        const _RENDERER = 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1650 Direct3D11 vs_5_0 ps_5_0, D3D11)';
+        const _VENDOR   = 'Google Inc. (NVIDIA)';
+        function patchWGL(proto) {
+            var orig = proto.getParameter;
+            proto.getParameter = function(param) {
+                if (param === 37446) return _RENDERER;  // UNMASKED_RENDERER_WEBGL
+                if (param === 37445) return _VENDOR;    // UNMASKED_VENDOR_WEBGL
+                return orig.call(this, param);
+            };
+        }
+        if (typeof WebGLRenderingContext  !== 'undefined') patchWGL(WebGLRenderingContext.prototype);
+        if (typeof WebGL2RenderingContext !== 'undefined') patchWGL(WebGL2RenderingContext.prototype);
+    } catch(e) {}
+
+    // 7. Ensure window.chrome.runtime exists (headless Chromium lacks it)
+    try {
+        if (!window.chrome) window.chrome = {};
+        if (!window.chrome.runtime) {
+            window.chrome.runtime = {
+                connect:      function() { return {}; },
+                sendMessage:  function() {},
+                onMessage:    { addListener: function() {}, removeListener: function() {} },
+                id:           undefined,
+            };
+        }
+    } catch(e) {}
+
+    // 8. Notification.permission → 'default' (headless reports 'denied')
+    try {
+        Object.defineProperty(Notification, 'permission', {
+            get: function() { return 'default'; },
+            configurable: true,
+        });
+    } catch(e) {}
+
+    // 9. Screen / window dimensions consistent with 1920×1080
+    try {
+        Object.defineProperty(screen, 'width',       { get: function() { return 1920; }, configurable: true });
+        Object.defineProperty(screen, 'height',      { get: function() { return 1080; }, configurable: true });
+        Object.defineProperty(screen, 'availWidth',  { get: function() { return 1920; }, configurable: true });
+        Object.defineProperty(screen, 'availHeight', { get: function() { return 1040; }, configurable: true });
+        Object.defineProperty(window, 'outerWidth',  { get: function() { return 1920; }, configurable: true });
+        Object.defineProperty(window, 'outerHeight', { get: function() { return 1080; }, configurable: true });
+    } catch(e) {}
+})();
+"""
+
+# ---------------------------------------------------------------------------
+# Camoufox Firefox automation state
+# (set in run_bridge when BROWSER_ENGINE=camoufox)
+# ---------------------------------------------------------------------------
+
+_CAMOUFOX_WS_URL: str = ""
+_CAMOUFOX_CONTEXT: object = None   # Playwright BrowserContext
+_CAMOUFOX_PAGES: list = []         # Open Playwright Pages (tabs)
+_CAMOUFOX_ACTIVE_IDX: int = 0      # Index of current page in _CAMOUFOX_PAGES
+_CAMOUFOX_ELEMENTS: dict = {}      # index → element info from last get_state
+
+
+class _CamoufoxSessionStub:
+    """Minimal stub — passes BrowserUseServer's 'if self.browser_session:' checks.
+    All actual browser operations are intercepted in _patched_execute_tool and
+    routed to the live Playwright Firefox context so BrowserSession (Chrome/CDP)
+    is never used."""
+    id: str = "camoufox-firefox"
+
+    async def stop(self, force: bool = False) -> None:
+        pass
+
+
+def _camoufox_page():
+    """Return the currently active camoufox Playwright page (or None)."""
+    if not _CAMOUFOX_PAGES:
+        return None
+    idx = min(_CAMOUFOX_ACTIVE_IDX, len(_CAMOUFOX_PAGES) - 1)
+    return _CAMOUFOX_PAGES[idx]
+
+
+# JS injected into every get_state call to extract visible interactive elements.
+_CAMOUFOX_DOM_JS = r"""
+() => {
+    const results = [];
+    const sel = 'a,button,input,select,textarea,[onclick],[role="button"],[role="link"],[tabindex]';
+    const seen = new Set();
+    let i = 0;
+    document.querySelectorAll(sel).forEach(el => {
+        if (seen.has(el)) return; seen.add(el);
+        const r = el.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) return;
+        const st = window.getComputedStyle(el);
+        if (st.display === 'none' || st.visibility === 'hidden' || parseFloat(st.opacity) < 0.05) return;
+        results.push({
+            index: i++,
+            tag: el.tagName.toLowerCase(),
+            text: (el.innerText || el.value || el.getAttribute('placeholder') || el.getAttribute('aria-label') || '').trim().slice(0, 80),
+            type: el.type || null,
+            href: el.href || null,
+            cx: Math.round(r.left + r.width / 2),
+            cy: Math.round(r.top + r.height / 2),
+        });
+    });
+    return { url: location.href, title: document.title, elements: results };
+}
+"""
+
+
+async def _ff_navigate(args: dict) -> str:
+    global _CAMOUFOX_CONTEXT, _CAMOUFOX_PAGES, _CAMOUFOX_ACTIVE_IDX
+    page = _camoufox_page()
+    url = args.get("url", "")
+    new_tab = args.get("new_tab", False)
+    if new_tab and _CAMOUFOX_CONTEXT:
+        try:
+            new_page = await _CAMOUFOX_CONTEXT.new_page()
+            await _CAMOUFOX_CONTEXT.add_init_script(STEALTH_JS)
+            _CAMOUFOX_PAGES.append(new_page)
+            _CAMOUFOX_ACTIVE_IDX = len(_CAMOUFOX_PAGES) - 1
+            page = new_page
+        except Exception:
+            pass
+    if not page:
+        return "Error: No active camoufox page"
+    try:
+        await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        return f"Navigated to {page.url}"
+    except Exception as exc:
+        return f"Navigation error: {exc}"
+
+
+async def _ff_click(args: dict) -> str:
+    global _CAMOUFOX_ELEMENTS
+    page = _camoufox_page()
+    if not page:
+        return "Error: No active camoufox page"
+    cx = args.get("coordinate_x")
+    cy = args.get("coordinate_y")
+    idx = args.get("index")
+    try:
+        if cx is not None and cy is not None:
+            await page.mouse.click(int(cx), int(cy))
+            _write_mouse_state(float(cx), float(cy), "click")
+            return f"Clicked at ({cx}, {cy})"
+        if idx is not None:
+            idx = int(idx)
+            el = _CAMOUFOX_ELEMENTS.get(idx)
+            if el:
+                await page.mouse.click(el["cx"], el["cy"])
+                _write_mouse_state(float(el["cx"]), float(el["cy"]), "click")
+                return f"Clicked [{idx}] <{el.get('tag','?')}> {el.get('text','')[:40]}"
+            return f"Error: element index {idx} not found — call browser_get_state first"
+        return "Error: provide index or coordinate_x+coordinate_y"
+    except Exception as exc:
+        return f"Click error: {exc}"
+
+
+async def _ff_type(args: dict) -> str:
+    global _CAMOUFOX_ELEMENTS
+    page = _camoufox_page()
+    if not page:
+        return "Error: No active camoufox page"
+    idx = args.get("index")
+    text = str(args.get("text", ""))
+    try:
+        if idx is not None:
+            el = _CAMOUFOX_ELEMENTS.get(int(idx))
+            if el:
+                await page.mouse.click(el["cx"], el["cy"])
+                await asyncio.sleep(0.1)
+        await page.keyboard.type(text, delay=30)
+        return f"Typed: {text[:60]}"
+    except Exception as exc:
+        return f"Type error: {exc}"
+
+
+async def _ff_get_state(args: dict):
+    import base64
+    import mcp.types as mcp_types
+    global _CAMOUFOX_ELEMENTS
+    page = _camoufox_page()
+    if not page:
+        return [mcp_types.TextContent(type="text", text="Error: No active camoufox page")]
+    try:
+        dom = await page.evaluate(_CAMOUFOX_DOM_JS)
+        _CAMOUFOX_ELEMENTS = {el["index"]: el for el in dom.get("elements", [])}
+        lines = [
+            f"URL: {dom.get('url', page.url)}",
+            f"Title: {dom.get('title', '')}",
+            f"Engine: Firefox (camoufox)",
+            "",
+            "Interactive elements — use [index] with browser_click / browser_type:",
+        ]
+        for el in dom.get("elements", []):
+            typ = f"[{el['type']}]" if el.get("type") else ""
+            href = f" → {el['href'][:50]}" if el.get("href") else ""
+            lines.append(f"  [{el['index']}] <{el['tag']}>{typ} {el.get('text','')[:60]}{href}")
+        content = [mcp_types.TextContent(type="text", text="\n".join(lines))]
+        if args.get("include_screenshot"):
+            try:
+                ss = await page.screenshot(type="png")
+                content.append(mcp_types.ImageContent(
+                    type="image",
+                    data=base64.b64encode(ss).decode(),
+                    mimeType="image/png",
+                ))
+            except Exception:
+                pass
+        return content
+    except Exception as exc:
+        return [mcp_types.TextContent(type="text", text=f"State error: {exc}")]
+
+
+async def _ff_screenshot(args: dict):
+    import base64
+    import mcp.types as mcp_types
+    page = _camoufox_page()
+    if not page:
+        return [mcp_types.TextContent(type="text", text="Error: No active camoufox page")]
+    try:
+        ss = await page.screenshot(full_page=args.get("full_page", False), type="png")
+        try:
+            title = await page.title()
+        except Exception:
+            title = ""
+        meta = json.dumps({"url": page.url, "title": title})
+        return [
+            mcp_types.TextContent(type="text", text=meta),
+            mcp_types.ImageContent(
+                type="image",
+                data=base64.b64encode(ss).decode(),
+                mimeType="image/png",
+            ),
+        ]
+    except Exception as exc:
+        return [mcp_types.TextContent(type="text", text=f"Screenshot error: {exc}")]
+
+
+async def _ff_scroll(args: dict) -> str:
+    page = _camoufox_page()
+    if not page:
+        return "Error: No active camoufox page"
+    direction = args.get("direction", "down")
+    delta = 400
+    try:
+        if direction == "down":
+            await page.mouse.wheel(0, delta)
+        elif direction == "up":
+            await page.mouse.wheel(0, -delta)
+        elif direction == "right":
+            await page.mouse.wheel(delta, 0)
+        elif direction == "left":
+            await page.mouse.wheel(-delta, 0)
+        return f"Scrolled {direction}"
+    except Exception as exc:
+        return f"Scroll error: {exc}"
+
+
+async def _ff_go_back(_args: dict) -> str:
+    page = _camoufox_page()
+    if not page:
+        return "Error: No active camoufox page"
+    try:
+        await page.go_back()
+        return f"Went back to {page.url}"
+    except Exception as exc:
+        return f"Go back error: {exc}"
+
+
+async def _ff_get_html(args: dict) -> str:
+    page = _camoufox_page()
+    if not page:
+        return "Error: No active camoufox page"
+    selector = args.get("selector")
+    try:
+        if selector:
+            el = await page.query_selector(selector)
+            return (await el.inner_html()) if el else f"No element: {selector}"
+        return await page.content()
+    except Exception as exc:
+        return f"HTML error: {exc}"
+
+
+async def _ff_extract(args: dict) -> str:
+    page = _camoufox_page()
+    if not page:
+        return "Error: No active camoufox page"
+    extract_links = args.get("extract_links", False)
+    try:
+        text = await page.evaluate("() => document.body.innerText")
+        result = text[:5000]
+        if extract_links:
+            links = await page.evaluate(r"""
+                () => [...document.querySelectorAll('a[href]')]
+                    .map(a => (a.href + ' — ' + a.innerText.trim()).slice(0, 120))
+                    .filter(s => s.length > 5).slice(0, 30)
+            """)
+            result += "\n\nLinks:\n" + "\n".join(links)
+        return result
+    except Exception as exc:
+        return f"Extract error: {exc}"
+
+
+async def _ff_list_tabs() -> str:
+    if not _CAMOUFOX_PAGES:
+        return "No open tabs"
+    lines = []
+    for i, p in enumerate(_CAMOUFOX_PAGES):
+        try:
+            t = await p.title()
+            u = p.url
+        except Exception:
+            t, u = "?", "?"
+        lines.append(f"[{i}] {t[:50]} — {u[:80]}")
+    return "Tabs:\n" + "\n".join(lines)
+
+
+async def _ff_switch_tab(args: dict) -> str:
+    global _CAMOUFOX_ACTIVE_IDX
+    try:
+        idx = int(args.get("tab_id", 0))
+        if 0 <= idx < len(_CAMOUFOX_PAGES):
+            _CAMOUFOX_ACTIVE_IDX = idx
+            try:
+                await _CAMOUFOX_PAGES[idx].bring_to_front()
+            except Exception:
+                pass
+            return f"Switched to tab {idx}: {_CAMOUFOX_PAGES[idx].url}"
+        return f"Tab {idx} not found (have {len(_CAMOUFOX_PAGES)})"
+    except Exception as exc:
+        return f"Switch tab error: {exc}"
+
+
+async def _ff_close_tab(args: dict) -> str:
+    global _CAMOUFOX_ACTIVE_IDX, _CAMOUFOX_PAGES
+    try:
+        idx = int(args.get("tab_id", 0))
+        if 0 <= idx < len(_CAMOUFOX_PAGES):
+            await _CAMOUFOX_PAGES[idx].close()
+            _CAMOUFOX_PAGES.pop(idx)
+            _CAMOUFOX_ACTIVE_IDX = max(0, min(_CAMOUFOX_ACTIVE_IDX, len(_CAMOUFOX_PAGES) - 1))
+            return f"Closed tab {idx}"
+        return f"Tab {idx} not found"
+    except Exception as exc:
+        return f"Close tab error: {exc}"
+
+
+async def _ff_key_press(args: dict) -> str:
+    """Firefox-native keyboard press — uses Playwright page.keyboard.press()."""
+    page = _camoufox_page()
+    if not page:
+        return "Error: No active camoufox page"
+    key = str(args.get("key", "Enter"))
+    try:
+        await page.keyboard.press(key)
+        return f"Pressed key: {key}"
+    except Exception as exc:
+        return f"Error pressing key '{key}': {exc}"
+
+
+async def _ff_hover(args: dict) -> str:
+    """Firefox-native hover — uses Playwright page.mouse.move()."""
+    page = _camoufox_page()
+    if not page:
+        return "Error: No active camoufox page"
+    cx = args.get("coordinate_x")
+    cy = args.get("coordinate_y")
+    idx = args.get("index")
+    try:
+        if cx is not None and cy is not None:
+            await page.mouse.move(int(cx), int(cy))
+            _write_mouse_state(float(cx), float(cy), "move")
+            return f"Hovered at ({cx}, {cy})"
+        if idx is not None:
+            el = _CAMOUFOX_ELEMENTS.get(int(idx))
+            if el:
+                await page.mouse.move(el["cx"], el["cy"])
+                _write_mouse_state(float(el["cx"]), float(el["cy"]), "move")
+                return f"Hovered over element [{idx}] at ({el['cx']}, {el['cy']})"
+            return f"Error: element {idx} not found — call browser_get_state first"
+        return "Error: provide index or coordinate_x+coordinate_y"
+    except Exception as exc:
+        return f"Error hovering: {exc}"
+
+
+async def _ff_drag(args: dict) -> str:
+    """Firefox-native drag — uses Playwright mouse down/move/up sequence."""
+    page = _camoufox_page()
+    if not page:
+        return "Error: No active camoufox page"
+    try:
+        fx, fy = int(args["from_x"]), int(args["from_y"])
+        tx, ty = int(args["to_x"]),   int(args["to_y"])
+        steps = max(5, min(50, int(args.get("steps", 15))))
+        _write_mouse_state(float(fx), float(fy), "move")
+        await page.mouse.move(fx, fy)
+        await asyncio.sleep(0.08)
+        await page.mouse.down()
+        await asyncio.sleep(0.05)
+        for i in range(1, steps + 1):
+            ix = int(fx + (tx - fx) * i / steps)
+            iy = int(fy + (ty - fy) * i / steps)
+            _write_mouse_state(float(ix), float(iy), "move")
+            await page.mouse.move(ix, iy)
+            await asyncio.sleep(0.02)
+        _write_mouse_state(float(tx), float(ty), "move")
+        await page.mouse.up()
+        return f"Dragged ({fx},{fy}) → ({tx},{ty}) in {steps} steps"
+    except Exception as exc:
+        return f"Error dragging: {exc}"
+
+# ---------------------------------------------------------------------------
 # Mouse-state temp file — shared with brain.py for cursor compositing
 # ---------------------------------------------------------------------------
 
@@ -111,6 +631,30 @@ async def _patch_session_mouse(session: object) -> None:
     except Exception as exc:
         print(f"Bridge: _patch_session_mouse failed: {exc}", file=sys.stderr)
 
+
+async def _patch_session_stealth(session: object) -> None:
+    """
+    After BrowserSession.start(), inject STEALTH_JS as an init script on the
+    browser context so it runs before any page content loads on every new page.
+    """
+    try:
+        ctx = (
+            getattr(session, "context", None)
+            or getattr(session, "browser_context", None)
+            or getattr(session, "_context", None)
+        )
+        if ctx is None:
+            print("Bridge: stealth — no context found on session", file=sys.stderr)
+            return
+        add_init = getattr(ctx, "add_init_script", None)
+        if callable(add_init):
+            await add_init(STEALTH_JS)
+            print("Bridge: stealth init script injected on browser context", file=sys.stderr)
+        else:
+            print("Bridge: stealth — context.add_init_script not available", file=sys.stderr)
+    except Exception as exc:
+        print(f"Bridge: _patch_session_stealth failed: {exc}", file=sys.stderr)
+
 # ---------------------------------------------------------------------------
 # Chrome binary (Playwright-managed Chromium in the Replit sandbox)
 # ---------------------------------------------------------------------------
@@ -184,11 +728,14 @@ async def _launch_chrome(port: int, user_data_dir: str, headless: bool) -> async
         "--remote-allow-origins=*",
         "--no-sandbox",
         "--disable-dev-shm-usage",
-        "--disable-gpu",
         "--disable-setuid-sandbox",
         "--no-first-run",
         "--no-default-browser-check",
-        "--window-size=1280,800",
+        "--window-size=1920,1080",
+        "--start-maximized",
+        "--force-color-profile=srgb",
+        "--disable-features=IsolateOrigins,site-per-process",
+        "--password-store=basic",
         "--disable-blink-features=AutomationControlled",
         "--disable-infobars",
         "--disable-notifications",
@@ -218,7 +765,10 @@ async def _launch_chrome(port: int, user_data_dir: str, headless: bool) -> async
         f"--user-data-dir={user_data_dir}",
     ]
     if headless:
+        # In headless mode we must keep --disable-gpu (no display server)
         args.append("--headless=new")
+        args.append("--disable-gpu")
+    # In non-headless mode, omit --disable-gpu so WebGL looks realistic
 
     proc = await asyncio.create_subprocess_exec(
         *args,
@@ -312,6 +862,22 @@ def _patch_mcp_server_session_retry(chrome_ready: asyncio.Event, cdp_url: str, h
             except asyncio.TimeoutError:
                 print("Bridge [patch]: 90s timeout waiting for Chrome — trying anyway", file=sys.stderr)
 
+        # ── Camoufox Firefox path ──────────────────────────────────────────────
+        # When _CAMOUFOX_CONTEXT is set the Firefox context is already live.
+        # Use a minimal stub so BrowserUseServer passes 'if self.browser_session:'
+        # checks; all actual tool calls are intercepted in _patched_execute_tool
+        # and routed to Playwright Firefox — BrowserSession (Chrome/CDP) is NOT
+        # used. Chrome-specific flags and user-agent spoofing are also skipped
+        # because _launch_chrome is never called in this path.
+        if _CAMOUFOX_CONTEXT is not None:
+            self.browser_session = _CamoufoxSessionStub()
+            print(
+                "Bridge [patch]: camoufox mode — using _CamoufoxSessionStub "
+                f"(Firefox); {len(_CAMOUFOX_PAGES)} page(s) ready",
+                file=sys.stderr,
+            )
+            return
+
         print(f"Bridge [patch]: creating BrowserSession(cdp_url={_cdp_url}, is_local=False)", file=sys.stderr)
 
         try:
@@ -330,6 +896,10 @@ def _patch_mcp_server_session_retry(chrome_ready: asyncio.Event, cdp_url: str, h
             self.browser_session = session
             await session.start()
             print("Bridge [patch]: BrowserSession started successfully", file=sys.stderr)
+
+            # Inject stealth JS on the browser context so every page gets it
+            # before any content loads (must be done before any navigation).
+            await _patch_session_stealth(session)
 
             # Patch page.mouse so ALL Playwright mouse ops emit cursor events.
             # Await the initial page patch before returning so early tool calls
@@ -572,6 +1142,59 @@ def _patch_add_human_tools() -> None:
     _orig_execute = BrowserUseServer._execute_tool
 
     async def _patched_execute_tool(self, tool_name: str, arguments: dict):
+        # ── Camoufox Firefox path ──────────────────────────────────────────
+        # When _CAMOUFOX_CONTEXT is live, ALL browser_ tools are handled via
+        # Playwright Firefox — BrowserSession (Chrome/CDP) is never invoked.
+        if _CAMOUFOX_CONTEXT is not None and tool_name.startswith("browser_"):
+            if tool_name == "browser_navigate":
+                return await _ff_navigate(arguments)
+            if tool_name == "browser_click":
+                return await _ff_click(arguments)
+            if tool_name == "browser_type":
+                return await _ff_type(arguments)
+            if tool_name == "browser_get_state":
+                return await _ff_get_state(arguments)
+            if tool_name == "browser_screenshot":
+                return await _ff_screenshot(arguments)
+            if tool_name == "browser_scroll":
+                return await _ff_scroll(arguments)
+            if tool_name == "browser_go_back":
+                return await _ff_go_back(arguments)
+            if tool_name == "browser_get_html":
+                return await _ff_get_html(arguments)
+            if tool_name == "browser_extract_content":
+                return await _ff_extract(arguments)
+            if tool_name == "browser_list_tabs":
+                return await _ff_list_tabs()
+            if tool_name == "browser_switch_tab":
+                return await _ff_switch_tab(arguments)
+            if tool_name == "browser_close_tab":
+                return await _ff_close_tab(arguments)
+            if tool_name == "browser_close":
+                for p in list(_CAMOUFOX_PAGES):
+                    try:
+                        await p.close()
+                    except Exception:
+                        pass
+                _CAMOUFOX_PAGES.clear()
+                return "Browser closed"
+            if tool_name == "browser_search_google":
+                q = arguments.get("query", "")
+                import urllib.parse
+                return await _ff_navigate({"url": f"https://www.google.com/search?q={urllib.parse.quote(q)}"})
+            # Custom tools: use Firefox-native implementations (no BrowserSession needed)
+            if tool_name == "browser_key_press":
+                return await _ff_key_press(arguments)
+            if tool_name == "browser_hover":
+                return await _ff_hover(arguments)
+            if tool_name == "browser_wait":
+                ms = max(50, min(8000, int(arguments.get("milliseconds", 500))))
+                await asyncio.sleep(ms / 1000.0)
+                return f"Waited {ms} ms"
+            if tool_name == "browser_drag":
+                return await _ff_drag(arguments)
+            # Unknown browser_ tool — fall through to CDP path
+        # ── Standard (Chrome CDP) path ─────────────────────────────────────
         if tool_name == "browser_key_press":
             return await _exec_key_press(self, arguments)
         if tool_name == "browser_hover":
@@ -632,15 +1255,17 @@ async def run_bridge():
     import inspect
 
     # -- Read env vars set by MCPToolManager ----------------------------------
-    cdp_url_env  = os.getenv("MCP_BROWSER_CDP_URL") or os.getenv("BROWSER_CDP_URL")
-    own_browser  = os.getenv("MCP_BROWSER_USE_OWN_BROWSER", "false").lower() == "true"
-    port_env     = os.getenv("BROWSER_USE_CDP_PORT")
-    port         = int(port_env) if port_env and port_env not in ("", "0") else find_free_port()
-    headless     = os.getenv("BROWSER_USE_HEADLESS", "true").lower() != "false"
-    user_data_dir = os.getenv(
-        "BROWSER_USER_DATA_DIR",
-        tempfile.mkdtemp(prefix="browser-use-user-data-dir-"),
-    )
+    cdp_url_env    = os.getenv("MCP_BROWSER_CDP_URL") or os.getenv("BROWSER_CDP_URL")
+    own_browser    = os.getenv("MCP_BROWSER_USE_OWN_BROWSER", "false").lower() == "true"
+    port_env       = os.getenv("BROWSER_USE_CDP_PORT")
+    port           = int(port_env) if port_env and port_env not in ("", "0") else find_free_port()
+    headless       = os.getenv("BROWSER_USE_HEADLESS", "true").lower() != "false"
+    browser_engine = os.getenv("BROWSER_ENGINE", "chrome").lower()
+
+    # Persistent profile directory — cookies, localStorage, and history
+    # survive between runs so the browser looks like a real returning user.
+    _default_profile = str(Path.home() / ".config" / "browser-use" / "profile")
+    user_data_dir = os.getenv("BROWSER_USER_DATA_DIR", _default_profile)
     os.makedirs(user_data_dir, exist_ok=True)
 
     cdp_url = cdp_url_env or f"http://localhost:{port}"
@@ -660,7 +1285,118 @@ async def run_bridge():
     chrome_ready = asyncio.Event()
     chrome_proc: asyncio.subprocess.Process | None = None
 
-    if own_browser:
+    if browser_engine == "camoufox":
+        # -- Camoufox path (Option C) -----------------------------------------
+        # Launch Firefox-based camoufox; it handles fingerprinting internally.
+        # We extract its ws_endpoint and store it in _CAMOUFOX_WS_URL so
+        # _patched_init can connect via BrowserSession(wss_url=...).
+        global _CAMOUFOX_WS_URL
+        try:
+            import camoufox  # type: ignore[import]
+            print("Bridge: camoufox engine selected", file=sys.stderr)
+
+            async def _start_camoufox_background() -> None:
+                global _CAMOUFOX_WS_URL, _CAMOUFOX_CONTEXT, _CAMOUFOX_PAGES
+                nonlocal chrome_proc  # declared once at top to satisfy Python scoping rules
+                try:
+                    print("Bridge: launching camoufox (Firefox) browser...", file=sys.stderr)
+                    async with camoufox.AsyncNewBrowser(
+                        headless=headless,
+                    ) as browser_or_ctx:
+                        # AsyncNewBrowser may yield a Browser or BrowserContext.
+                        # Normalise to a BrowserContext and inject stealth script.
+                        if hasattr(browser_or_ctx, "new_context"):
+                            # It's a Playwright Browser — create/reuse a context
+                            _br = browser_or_ctx
+                            ws = getattr(_br, "ws_endpoint", None)
+                            if ws:
+                                _CAMOUFOX_WS_URL = ws
+                            _ctx = _br.contexts[0] if _br.contexts else await _br.new_context()
+                        else:
+                            # It's already a BrowserContext
+                            _ctx = browser_or_ctx
+                            _br = getattr(_ctx, "browser", None)
+                            if _br:
+                                ws = getattr(_br, "ws_endpoint", None)
+                                if ws:
+                                    _CAMOUFOX_WS_URL = ws
+
+                        _CAMOUFOX_CONTEXT = _ctx
+
+                        # Inject stealth JS so every new page gets it at creation
+                        await _ctx.add_init_script(STEALTH_JS)
+
+                        # Seed the pages list
+                        if _ctx.pages:
+                            _CAMOUFOX_PAGES = list(_ctx.pages)
+                        else:
+                            _CAMOUFOX_PAGES = [await _ctx.new_page()]
+
+                        print(
+                            f"Bridge: camoufox Firefox ready — "
+                            f"{len(_CAMOUFOX_PAGES)} page(s), "
+                            f"ws_endpoint={_CAMOUFOX_WS_URL or 'N/A'}, "
+                            "Chrome-specific flags skipped (Firefox handles fingerprinting)",
+                            file=sys.stderr,
+                        )
+
+                        # Signal init complete — no Chrome subprocess needed
+                        chrome_ready.set()
+
+                        # Keep the context manager alive until bridge exits
+                        await asyncio.Event().wait()
+
+                except Exception as exc:
+                    print(f"Bridge: camoufox launch error — {exc!r}", file=sys.stderr)
+                    # Camoufox failed — fall back to Chrome so the bridge still works
+                    if own_browser and chrome_proc is None:
+                        try:
+                            print("Bridge: camoufox failed — falling back to Chrome", file=sys.stderr)
+                            chrome_proc = await _launch_chrome(port, user_data_dir, headless)
+                            async def _drain_err():
+                                assert chrome_proc.stderr
+                                while True:
+                                    line = await chrome_proc.stderr.readline()
+                                    if not line:
+                                        break
+                            asyncio.create_task(_drain_err())
+                            await _wait_for_cdp(port, timeout_secs=60)
+                        except Exception as exc2:
+                            print(f"Bridge: Chrome fallback also failed — {exc2!r}", file=sys.stderr)
+                    chrome_ready.set()
+
+            asyncio.create_task(_start_camoufox_background())
+        except ImportError:
+            print("Bridge: camoufox not installed — falling back to Chrome", file=sys.stderr)
+            browser_engine = "chrome"
+            # The if/elif/else chain entered this branch, so the elif/else below
+            # will not execute. Handle Chrome / ready signalling explicitly here.
+            if own_browser:
+                async def _camoufox_fallback_chrome() -> None:
+                    nonlocal chrome_proc
+                    try:
+                        chrome_proc = await _launch_chrome(port, user_data_dir, headless)
+                        async def _drain():
+                            assert chrome_proc.stderr
+                            while True:
+                                line = await chrome_proc.stderr.readline()
+                                if not line:
+                                    break
+                        asyncio.create_task(_drain())
+                        ready = await _wait_for_cdp(port, timeout_secs=90)
+                        if ready:
+                            print(f"Bridge: Chrome (fallback) ready at {cdp_url}", file=sys.stderr)
+                    except Exception as exc:
+                        print(f"Bridge: Chrome fallback launch error — {exc}", file=sys.stderr)
+                    finally:
+                        chrome_ready.set()
+                asyncio.create_task(_camoufox_fallback_chrome())
+                os.environ["BROWSER_CDP_URL"]     = cdp_url
+                os.environ["MCP_BROWSER_CDP_URL"] = cdp_url
+            else:
+                chrome_ready.set()
+
+    elif own_browser:
         # We own Chrome: launch it ourselves in the background.
         # The patch will await chrome_ready before attempting BrowserSession.start().
         async def _start_chrome_background() -> None:

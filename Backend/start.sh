@@ -58,4 +58,14 @@ export PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
 
 echo "[start.sh] LD_LIBRARY_PATH set (${#PKG_PATHS[@]} Nix lib paths injected)"
 
+# ---------------------------------------------------------------------------
+# Camoufox browser binary bootstrap
+# Only runs when BROWSER_ENGINE=camoufox is set; skipped otherwise so normal
+# Chrome-based runs are not delayed.
+# ---------------------------------------------------------------------------
+if [ "${BROWSER_ENGINE:-}" = "camoufox" ]; then
+    echo "[start.sh] BROWSER_ENGINE=camoufox — fetching camoufox browser binary..."
+    python3 -m camoufox fetch || echo "[start.sh] WARNING: camoufox fetch failed — camoufox mode may not work"
+fi
+
 exec python3 run.py

@@ -21,3 +21,4 @@ pydantic
 PyJWT
 passlib[bcrypt]
 Pillow
+camoufox
