@@ -87,6 +87,18 @@ class PlanStreamManager:
                 except Exception:
                     pass
 
+    async def broadcast_mouse(self, mouse_data: Any, user_id: str):
+        """Broadcasts a mouse-position event to browser stream clients for a user."""
+        if user_id in self.browser_connections:
+            dead: list = []
+            for connection in list(self.browser_connections[user_id]):
+                try:
+                    await connection.send_json({"event": "mouse", "data": mouse_data})
+                except Exception:
+                    dead.append(connection)
+            for conn in dead:
+                self.disconnect(user_id, conn, is_browser=True)
+
     async def broadcast_frame(self, frame_data: Any, user_id: str, is_tool: bool = False):
         """Broadcasts a base64 CDP frame or tool log to all connected browser stream clients for a user."""
         if not is_tool:

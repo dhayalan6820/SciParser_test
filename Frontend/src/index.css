@@ -7,6 +7,11 @@
   --font-dm-sans: 'DM Sans', sans-serif;
 }
 
+@keyframes cursorPulse {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; }
+}
+
 @keyframes bounce-x {
   0%, 100% { transform: translateX(-4px); }
   50% { transform: translateX(0px); }

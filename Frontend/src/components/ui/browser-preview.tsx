@@ -10,6 +10,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../../../lib/utils';
 import { Button } from './button';
 
+interface MousePos {
+  x: number;
+  y: number;
+  event: string;
+  vpW: number;
+  vpH: number;
+}
+
 interface BrowserPreviewProps {
   frame: string | null;
   isActive: boolean;
@@ -19,6 +27,7 @@ interface BrowserPreviewProps {
   activeThreadId?: string;
   isSelectionMode?: boolean;
   selectedTools?: string[];
+  mousePos?: MousePos | null;
   onToggleToolSelection?: (id: string) => void;
   onClearLogs?: () => void;
 }
@@ -32,6 +41,7 @@ export function BrowserPreview({
   activeThreadId,
   isSelectionMode,
   selectedTools = [],
+  mousePos,
   onToggleToolSelection,
   onClearLogs
 }: BrowserPreviewProps) {
@@ -42,8 +52,35 @@ export function BrowserPreview({
   const [searchQuery, setSearchQuery]     = useState('');
   const [logFilter, setLogFilter]         = useState<'all' | 'success' | 'error'>('all');
   const [autoScroll, setAutoScroll]       = useState(true);
+  const [clickPulse, setClickPulse]       = useState(false);
+  const [cursorPx, setCursorPx]           = useState<{ x: number; y: number } | null>(null);
   const logsEndRef    = useRef<HTMLDivElement>(null);
   const popupRef      = useRef<HTMLDivElement>(null);
+  const viewportRef   = useRef<HTMLDivElement>(null);
+
+  // Recompute cursor pixel position whenever mousePos or viewport size changes
+  useEffect(() => {
+    if (!mousePos || !viewportRef.current) { setCursorPx(null); return; }
+    const el = viewportRef.current;
+    const cw = el.clientWidth;
+    const ch = el.clientHeight;
+    const vpW = mousePos.vpW || 1280;
+    const vpH = mousePos.vpH || 800;
+    const scale = Math.min(cw / vpW, ch / vpH);
+    const displayW = vpW * scale;
+    const displayH = vpH * scale;
+    const offsetX = (cw - displayW) / 2;
+    const offsetY = (ch - displayH) / 2;
+    setCursorPx({
+      x: mousePos.x * scale + offsetX,
+      y: mousePos.y * scale + offsetY,
+    });
+    if (mousePos.event === 'click') {
+      setClickPulse(true);
+      const t = setTimeout(() => setClickPulse(false), 350);
+      return () => clearTimeout(t);
+    }
+  }, [mousePos]);
 
   useEffect(() => {
     if (autoScroll && logsEndRef.current && showToolLog) {
@@ -363,6 +400,7 @@ export function BrowserPreview({
         <div className="flex-1 relative flex flex-col overflow-hidden bg-black">
           {frame ? (
             <div
+              ref={viewportRef}
               className="flex-1 flex items-center justify-center overflow-hidden relative"
               style={{ cursor: 'default' }}
             >
@@ -379,6 +417,40 @@ export function BrowserPreview({
                 className="w-full h-full object-contain"
                 draggable={false}
               />
+
+              {/* ── Agent cursor overlay ────────────────────────────────── */}
+              {cursorPx && isAiTyping && (
+                <div
+                  className="pointer-events-none absolute"
+                  style={{
+                    left: cursorPx.x,
+                    top: cursorPx.y,
+                    transform: 'translate(-50%, -50%)',
+                    transition: 'left 0.12s ease-out, top 0.12s ease-out',
+                    zIndex: 50,
+                  }}
+                >
+                  {/* Click pulse ring */}
+                  {clickPulse && (
+                    <div
+                      className="absolute rounded-full border-2 border-red-400"
+                      style={{
+                        width: 36,
+                        height: 36,
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        animation: 'cursorPulse 0.35s ease-out forwards',
+                      }}
+                    />
+                  )}
+                  {/* Cursor dot */}
+                  <div
+                    className="rounded-full bg-red-500 border-2 border-white shadow-lg shadow-red-500/50"
+                    style={{ width: 16, height: 16 }}
+                  />
+                </div>
+              )}
 
               {/* Hover controls */}
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 px-2 py-1.5 rounded-xl bg-black/70 backdrop-blur-md border border-white/[0.07] opacity-0 hover:opacity-100 focus-within:opacity-100 transition-opacity shadow-xl group">

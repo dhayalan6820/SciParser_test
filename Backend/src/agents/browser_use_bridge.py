@@ -1,10 +1,30 @@
 import os
 import sys
 import json
+import time
 import asyncio
 import socket
 import tempfile
 from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# Mouse-state temp file — shared with brain.py for cursor compositing
+# ---------------------------------------------------------------------------
+
+_MOUSE_STATE_PATH: str = ""  # set once in run_bridge() from CDP port
+
+
+def _write_mouse_state(x: float, y: float, event: str, vp_w: int = 1280, vp_h: int = 800) -> None:
+    """Write current mouse position to a temp file so brain.py can composite it."""
+    if not _MOUSE_STATE_PATH:
+        return
+    try:
+        Path(_MOUSE_STATE_PATH).write_text(json.dumps({
+            "x": x, "y": y, "event": event,
+            "ts": time.time(), "vpW": vp_w, "vpH": vp_h,
+        }))
+    except Exception:
+        pass
 
 # ---------------------------------------------------------------------------
 # Chrome binary (Playwright-managed Chromium in the Replit sandbox)
@@ -396,6 +416,7 @@ def _patch_add_human_tools() -> None:
 
             if cx is not None and cy is not None:
                 await mouse.move(int(cx), int(cy))
+                _write_mouse_state(float(cx), float(cy), "move")
                 return f"Hovered at ({cx}, {cy})"
 
             if idx is not None:
@@ -415,6 +436,7 @@ def _patch_add_human_tools() -> None:
                     else:
                         return f"Error: Cannot read coordinates for element {idx}"
                     await mouse.move(x, y)
+                    _write_mouse_state(float(x), float(y), "move")
                     return f"Hovered over element {idx} at ({x}, {y})"
                 return f"Error: Cannot determine coordinates for element {idx}"
 
@@ -438,6 +460,7 @@ def _patch_add_human_tools() -> None:
             if page is None:
                 return "Error: No active page"
             mouse = await page.mouse()
+            _write_mouse_state(float(fx), float(fy), "move")
             await mouse.move(fx, fy)
             await asyncio.sleep(0.08)
             await mouse.down()
@@ -445,8 +468,10 @@ def _patch_add_human_tools() -> None:
             for i in range(1, steps + 1):
                 ix = int(fx + (tx - fx) * i / steps)
                 iy = int(fy + (ty - fy) * i / steps)
+                _write_mouse_state(float(ix), float(iy), "move")
                 await mouse.move(ix, iy)
                 await asyncio.sleep(0.02)
+            _write_mouse_state(float(tx), float(ty), "move")
             await mouse.up()
             return f"Dragged from ({fx}, {fy}) to ({tx}, {ty})"
         except Exception as exc:
@@ -464,6 +489,13 @@ def _patch_add_human_tools() -> None:
             return await _exec_wait(self, arguments)
         if tool_name == "browser_drag":
             return await _exec_drag(self, arguments)
+        # Intercept any browser_use native tool that carries pixel coordinates
+        # so the cursor overlay tracks all agent click/interact operations.
+        cx = arguments.get("coordinate_x") or arguments.get("x")
+        cy = arguments.get("coordinate_y") or arguments.get("y")
+        if cx is not None and cy is not None:
+            is_click = any(k in tool_name for k in ("click", "input", "select", "type"))
+            _write_mouse_state(float(cx), float(cy), "click" if is_click else "move")
         return await _orig_execute(self, tool_name, arguments)
 
     BrowserUseServer._execute_tool = _patched_execute_tool  # type: ignore[method-assign]
@@ -521,6 +553,11 @@ async def run_bridge():
     os.makedirs(user_data_dir, exist_ok=True)
 
     cdp_url = cdp_url_env or f"http://localhost:{port}"
+
+    # Set the mouse-state file path so _write_mouse_state() can use it
+    global _MOUSE_STATE_PATH
+    _MOUSE_STATE_PATH = f"/tmp/agent_mouse_{port}.json"
+    print(f"Bridge: mouse state file → {_MOUSE_STATE_PATH}", file=sys.stderr)
 
     print(
         f"Bridge: port={port}  headless={headless}  own_browser={own_browser}  "

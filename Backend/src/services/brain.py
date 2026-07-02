@@ -5,6 +5,7 @@ import json
 import re
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 from sqlalchemy import select, insert
@@ -643,7 +644,66 @@ class Brain:
                 logger.debug(f"CDP screenshot WS failed for user {user_id}: {exc}")
             return None
 
+        def _read_mouse_state() -> Optional[dict]:
+            """Read the bridge's mouse-state temp file for this user's CDP port."""
+            try:
+                import time as _time
+                state_path = f"/tmp/agent_mouse_{port}.json"
+                p = Path(state_path)
+                if p.exists():
+                    data = json.loads(p.read_text())
+                    if _time.time() - data.get("ts", 0) < 30:
+                        return data
+            except Exception:
+                pass
+            return None
+
+        def _composite_cursor(b64_raw: str, ms: dict) -> str:
+            """Draw an agent cursor dot on a raw base64 JPEG at the mouse position."""
+            try:
+                import io as _io
+                from PIL import Image, ImageDraw
+                raw = base64.b64decode(b64_raw)
+                img = Image.open(_io.BytesIO(raw)).convert("RGB")
+                mx = float(ms.get("x", 0))
+                my = float(ms.get("y", 0))
+                vp_w = float(ms.get("vpW", 1280)) or 1280
+                vp_h = float(ms.get("vpH", 800)) or 800
+                sx = mx * img.width / vp_w
+                sy = my * img.height / vp_h
+                is_click = ms.get("event") == "click"
+                draw = ImageDraw.Draw(img)
+                r = 9
+                if is_click:
+                    draw.ellipse([sx - r * 2.2, sy - r * 2.2, sx + r * 2.2, sy + r * 2.2],
+                                 outline=(239, 68, 68), width=2)
+                draw.ellipse([sx - r, sy - r, sx + r, sy + r],
+                             fill=(239, 68, 68), outline=(255, 255, 255), width=2)
+                buf = _io.BytesIO()
+                img.save(buf, format="JPEG", quality=80)
+                return base64.b64encode(buf.getvalue()).decode()
+            except Exception:
+                return b64_raw
+
         async def _broadcast_frame(b64: str):
+            # Composite agent cursor dot onto the raw JPEG before broadcasting
+            mouse_state = _read_mouse_state()
+            if mouse_state:
+                b64 = _composite_cursor(b64, mouse_state)
+                # Also send a lightweight mouse-position event so the frontend
+                # can show a smooth animated overlay between screenshot updates.
+                if self.stream_manager:
+                    await self.stream_manager.broadcast_mouse(
+                        {
+                            "chat_id": chat_id,
+                            "x": mouse_state["x"],
+                            "y": mouse_state["y"],
+                            "event": mouse_state.get("event", "move"),
+                            "vpW": mouse_state.get("vpW", 1280),
+                            "vpH": mouse_state.get("vpH", 800),
+                        },
+                        user_id,
+                    )
             # Ensure the frame has the data-URL prefix the frontend expects
             if not b64.startswith("data:"):
                 b64 = f"data:image/jpeg;base64,{b64}"

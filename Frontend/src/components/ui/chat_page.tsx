@@ -96,6 +96,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   >(undefined);
   const [browserActive, setBrowserActive] = React.useState(false);
   const [browserFrame, setBrowserFrame] = React.useState<string | null>(null);
+  const [mousePos, setMousePos] = React.useState<{ x: number; y: number; event: string; vpW: number; vpH: number } | null>(null);
   const [lastManualToggle, setLastManualToggle] = React.useState<number>(0);
   const [browserBlink, setBrowserBlink] = React.useState<
     "green" | "red" | null
@@ -527,6 +528,23 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 setBrowserActive(true);
                 setTimeout(() => setBrowserBlink(null), 1500);
               }
+            }
+          } else if (eventType === "mouse") {
+            try {
+              const md = typeof rawData === "string" ? JSON.parse(rawData) : rawData;
+              const frameChatId = md.chat_id ? String(md.chat_id) : null;
+              const activeId = activeThreadId ? String(activeThreadId) : null;
+              if (!frameChatId || !activeId || frameChatId === activeId) {
+                setMousePos({
+                  x: Number(md.x ?? 0),
+                  y: Number(md.y ?? 0),
+                  event: md.event || "move",
+                  vpW: Number(md.vpW ?? 1280),
+                  vpH: Number(md.vpH ?? 800),
+                });
+              }
+            } catch {
+              /* ignore */
             }
           } else if (eventType === "tool_log") {
             try {
@@ -3024,6 +3042,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     activeThreadId={activeThreadId}
                     isSelectionMode={isSelectionMode}
                     selectedTools={selectedTools}
+                    mousePos={mousePos}
                     onToggleToolSelection={(id) => {
                       setSelectedToolIds((prev) =>
                         prev.includes(id)
