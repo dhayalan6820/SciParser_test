@@ -2583,7 +2583,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         {/* Collapsed icon-only rail (desktop only, when sidebar is toggled off) */}
         {!isMobile && isSidebarCollapsed && (
           <div className="flex h-full flex-col items-center py-4 gap-3 overflow-hidden">
-            <div className="pointer-events-none absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,rgba(var(--primary),0.08),transparent_28%)]" />
+            <div className="pointer-events-none absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,color-mix(in_oklab,var(--primary)_8%,transparent),transparent_28%)]" />
             <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full border border-primary/20 bg-muted shadow-[0_0_18px_rgba(16,185,129,0.16)]">
               <img src={atomIcon} alt="SciParser" className="h-6 w-6 object-contain" />
             </div>
@@ -2651,7 +2651,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         {/* Icon-only rail shown when on Automation or Settings page (desktop only) */}
         {!isMobile && !isSidebarCollapsed && (currentView === "schedules" || currentView === "settings") && (
           <div className="flex h-full flex-col items-center py-4 gap-3">
-            <div className="pointer-events-none absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,rgba(var(--primary),0.08),transparent_28%)]" />
+            <div className="pointer-events-none absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,color-mix(in_oklab,var(--primary)_8%,transparent),transparent_28%)]" />
             {/* Logo */}
             <div className="relative z-10">
               <img src={theme === "dark" ? logoDark : logoLight} alt="SciParser" className="h-8 w-auto object-contain" />

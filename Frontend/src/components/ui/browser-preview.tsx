@@ -414,7 +414,7 @@ export function BrowserPreview({
         </div>
 
         {/* ── Browser viewport — takes all remaining height ─────────────── */}
-        <div className="flex-1 relative flex flex-col overflow-hidden bg-[#000000]">
+        <div className="flex-1 relative flex flex-col overflow-hidden bg-background">
           {frame ? (
             <div
               ref={viewportRef}
