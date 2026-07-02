@@ -710,57 +710,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     };
   }, [activeThreadId]);
 
-  // Poll live tool logs via HTTP while the agent is running (catches logs even before WS connects)
-  React.useEffect(() => {
-    if (!isAiTyping || !activeThreadId) return;
-    const token = localStorage.getItem("access_token");
-    if (!token) return;
-
-    const poll = async () => {
-      try {
-        const res = await fetch(
-          `/sciparser/v1/chat/sessions/${activeThreadId}/tool-logs-live`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
-        if (!res.ok) return;
-        const data = await res.json();
-        const events: any[] = data.tool_logs || [];
-        if (events.length === 0) return;
-
-        // Reconstruct the tool log list from buffered events (start + output pairs)
-        const logMap = new Map<string, any>();
-        events.forEach((ev) => {
-          if (ev.type === "tool_start") {
-            logMap.set(ev.tool_call_id, {
-              id: ev.tool_call_id,
-              tool_name: ev.tool,
-              tool_input: ev.args,
-              status: "IN_PROGRESS",
-              created_at: new Date().toISOString(),
-            });
-          } else if (ev.type === "tool_output") {
-            const existing = logMap.get(ev.tool_call_id);
-            if (existing) {
-              logMap.set(ev.tool_call_id, {
-                ...existing,
-                status: ev.status,
-                tool_output: ev.output,
-              });
-            }
-          }
-        });
-
-        const rebuilt = Array.from(logMap.values());
-        if (rebuilt.length > 0) {
-          setToolLogs(rebuilt);
-        }
-      } catch (_) {}
-    };
-
-    const interval = setInterval(poll, 2000);
-    poll(); // immediate first fetch
-    return () => clearInterval(interval);
-  }, [isAiTyping, activeThreadId]);
+  // Tool logs are delivered in real-time via the browser WebSocket stream (tool_log events).
+  // HTTP polling was removed — it was redundant and caused 5-10 extra requests/second.
 
   const MIN_TEXTAREA_H = 44; // ~1 row
   const MAX_TEXTAREA_H = 160; // ~4 rows

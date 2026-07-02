@@ -694,11 +694,17 @@ async def websocket_plan_endpoint(
             logger.info(f"Last WS for {chat_id} closed — auto-cancelling agent task.")
             asyncio.create_task(brain.stop_process(chat_id, user_id=user.user_id))
     except Exception as e:
-        logger.error(f"Plan stream error: {e}")
+        _emsg = str(e)
+        # "Cannot call receive once a disconnect message has been received" is a normal
+        # client-initiated close — treat it silently like WebSocketDisconnect.
+        if "Cannot call" in _emsg or "disconnect" in _emsg.lower():
+            pass
+        else:
+            logger.error(f"Plan stream error: {e}")
         plan_stream_manager.disconnect(chat_id, websocket)
         remaining = plan_stream_manager.active_connections.get(chat_id, [])
         if not remaining and chat_id in brain.active_tasks:
-            logger.info(f"Last WS for {chat_id} errored — auto-cancelling agent task.")
+            logger.info(f"Last WS for {chat_id} closed — auto-cancelling agent task.")
             asyncio.create_task(brain.stop_process(chat_id, user_id=user.user_id))
 
 @app.websocket("/sciparser/v1/browser/stream")
@@ -735,7 +741,11 @@ async def browser_stream(
     except WebSocketDisconnect:
         plan_stream_manager.disconnect(user.user_id, websocket, is_browser=True)
     except Exception as e:
-        logger.error(f"Browser stream error: {e}")
+        _emsg = str(e)
+        if "Cannot call" in _emsg or "disconnect" in _emsg.lower():
+            pass
+        else:
+            logger.error(f"Browser stream error: {e}")
         plan_stream_manager.disconnect(user.user_id, websocket, is_browser=True)
 
 @app.post("/sciparser/v1/browser/state")
