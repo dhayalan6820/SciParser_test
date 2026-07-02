@@ -659,9 +659,18 @@ async def websocket_plan_endpoint(
             await websocket.receive()
     except WebSocketDisconnect:
         plan_stream_manager.disconnect(chat_id, websocket)
+        # Auto-cancel the running agent when the last client disconnects (e.g. page reload)
+        remaining = plan_stream_manager.active_connections.get(chat_id, [])
+        if not remaining and chat_id in brain.active_tasks:
+            logger.info(f"Last WS for {chat_id} closed — auto-cancelling agent task.")
+            asyncio.create_task(brain.stop_process(chat_id, user_id=user.user_id))
     except Exception as e:
         logger.error(f"Plan stream error: {e}")
         plan_stream_manager.disconnect(chat_id, websocket)
+        remaining = plan_stream_manager.active_connections.get(chat_id, [])
+        if not remaining and chat_id in brain.active_tasks:
+            logger.info(f"Last WS for {chat_id} errored — auto-cancelling agent task.")
+            asyncio.create_task(brain.stop_process(chat_id, user_id=user.user_id))
 
 @app.websocket("/sciparser/v1/browser/stream")
 async def browser_stream(
