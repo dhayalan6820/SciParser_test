@@ -216,7 +216,7 @@ class ChatService:
             timezone=req.timezone or "America/New_York",
             headless=(req.advanced_options.headless if req.advanced_options else True),
             email_recipient=req.email_recipient,
-            status="active",
+            status=getattr(req, "status", None) or "active",
             created_at=datetime.now(timezone.utc)
         )
         db.add(new_schedule)

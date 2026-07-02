@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, TypedDict, Annotated, Sequence, Dict, Any, Optional
+from typing import List, TypedDict, Annotated, Sequence, Dict, Any, Optional, Literal
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, ConfigDict, EmailStr
 
@@ -91,7 +91,8 @@ class ScheduleRequest(BaseModel):
     schedule_type: str # daily, weekly, monthly
     schedule_time: Optional[str] = "09:00"  # HH:MM 24-hour
     timezone: Optional[str] = "America/New_York"  # IANA timezone
-    email_recipient: str
+    email_recipient: Optional[str] = None
+    status: Optional[Literal["active", "draft"]] = "active"
     tool_context: Optional[List[ToolContextItem]] = None
     advanced_options: Optional[AdvancedOptions] = None
 

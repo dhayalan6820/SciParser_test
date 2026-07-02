@@ -22,7 +22,7 @@ interface Schedule {
   title: string;
   schedule_type: string;
   schedule_time?: string;
-  email_recipient: string;
+  email_recipient: string | null;
   status: string;
   generated_script: string;
   extracted_content: string;
@@ -57,6 +57,8 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
   const [selectedSchedule, setSelectedSchedule] = React.useState<Schedule | null>(null);
   const [copySuccess, setCopySuccess] = React.useState<string | null>(null);
   const [isRunning, setIsRunning] = React.useState(false);
+  const [isActivating, setIsActivating] = React.useState(false);
+  const [activateError, setActivateError] = React.useState<string | null>(null);
   const [showScript, setShowScript] = React.useState(false);
   const [isEditing, setIsEditing] = React.useState(false);
   const [editData, setEditData] = React.useState({ title: "", type: "", email: "" });
@@ -247,6 +249,27 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
     }
   };
 
+  const handleActivate = async () => {
+    if (!selectedSchedule) return;
+    setActivateError(null);
+    try {
+      setIsActivating(true);
+      await sciparserApi.activateSchedule(selectedSchedule.schedule_id);
+      // Refresh the schedule list and update the selected schedule
+      const updated = await sciparserApi.getSchedules();
+      setSchedules(updated);
+      const refreshed = updated.find((s: Schedule) => s.schedule_id === selectedSchedule.schedule_id);
+      if (refreshed) setSelectedSchedule(refreshed);
+    } catch (err: any) {
+      console.error("Failed to activate schedule:", err);
+      let msg = err?.message || "Failed to activate schedule.";
+      try { const p = JSON.parse(msg); msg = p?.detail || p?.message || msg; } catch {}
+      setActivateError(msg);
+    } finally {
+      setIsActivating(false);
+    }
+  };
+
   const handleCopyCode = (code: string) => {
     navigator.clipboard.writeText(code);
     setCopySuccess("Code copied!");
@@ -336,6 +359,11 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                       )}>
                         {s.schedule_type}
                       </span>
+                      {s.status === 'draft' && (
+                        <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                          Draft
+                        </span>
+                      )}
                     </div>
                     <span className="text-[9px] text-[#374151] font-black uppercase">{formatDate(s.created_at).split(',')[0]}</span>
                   </div>
@@ -404,8 +432,16 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                           <span className="capitalize">{selectedSchedule.schedule_type}</span>
                         </div>
                         <div className="flex items-center gap-2 text-[11px] font-bold text-[#64748B] uppercase tracking-widest">
-                          <div className={cn("w-2 h-2 rounded-full", selectedSchedule.status === 'active' ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" : "bg-slate-500")} />
-                          <span className="capitalize">{selectedSchedule.status}</span>
+                          <div className={cn(
+                            "w-2 h-2 rounded-full",
+                            selectedSchedule.status === 'active' ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" :
+                            selectedSchedule.status === 'draft' ? "bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]" :
+                            "bg-slate-500"
+                          )} />
+                          <span className={cn(
+                            "capitalize",
+                            selectedSchedule.status === 'draft' ? "text-amber-400" : ""
+                          )}>{selectedSchedule.status}</span>
                         </div>
                       </div>
                     </div>
@@ -430,6 +466,28 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                 </div>
 
                 <div className="relative z-10 flex flex-col gap-3">
+                  {selectedSchedule.status === 'draft' ? (
+                    <>
+                      <Button
+                        onClick={handleActivate}
+                        disabled={isActivating}
+                        className="h-14 px-10 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-amber-500/20 transition-all active:scale-95 disabled:opacity-50 min-w-[200px] flex items-center justify-center gap-3"
+                      >
+                        {isActivating ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <Zap className="w-5 h-5" />
+                        )}
+                        {isActivating ? "ACTIVATING..." : "ACTIVATE"}
+                      </Button>
+                      {activateError && (
+                        <div className="flex items-start gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 max-w-[220px]">
+                          <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+                          <p className="text-[10px] font-bold text-red-400 leading-relaxed">{activateError}</p>
+                        </div>
+                      )}
+                    </>
+                  ) : (
                   <Button 
                     onClick={handleRunNow}
                     disabled={isRunning}
@@ -442,6 +500,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                     )}
                     {isRunning ? "RUNNING..." : "RUN NOW"}
                   </Button>
+                  )}
                   <div className="flex gap-2">
                     <Button 
                       variant="outline" 

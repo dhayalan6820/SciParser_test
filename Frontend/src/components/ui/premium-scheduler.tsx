@@ -107,6 +107,9 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
   const [timeout, setTimeoutVal] = React.useState(120);
   const [headless, setHeadless] = React.useState(true);
 
+  const [draftLoading, setDraftLoading] = React.useState(false);
+  const [draftSuccess, setDraftSuccess] = React.useState(false);
+
   // Empty tool log warning state
   const [showEmptyToolsWarning, setShowEmptyToolsWarning] = React.useState(false);
 
@@ -170,6 +173,42 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
       setScheduleError(msg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    setScheduleError("");
+    try {
+      setDraftLoading(true);
+      const data = {
+        chat_id: chatId,
+        title: taskName || "New Automation Task",
+        schedule_type: scheduleType,
+        schedule_time: scheduleTime,
+        timezone: timezone,
+        email_recipient: emailRecipient || null,
+        selected_message_ids: selectedMessages,
+        selected_tool_ids: selectedTools,
+        status: "draft",
+        advanced_options: {
+          retry_count: retryCount,
+          timeout: timeout,
+          headless: headless
+        }
+      };
+      await sciparserApi.createSchedule(data);
+      setDraftSuccess(true);
+      setTimeout(() => onClose(), 1500);
+    } catch (err: any) {
+      console.error("Failed to save draft:", err);
+      let msg = err?.message || "Failed to save draft.";
+      try {
+        const parsed = JSON.parse(msg);
+        msg = parsed?.detail || parsed?.message || msg;
+      } catch {}
+      setScheduleError(msg);
+    } finally {
+      setDraftLoading(false);
     }
   };
 
@@ -977,9 +1016,23 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                 <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto">
                   <Button 
                     variant="outline"
-                    className="h-11 sm:h-14 flex-1 sm:flex-none sm:px-8 rounded-2xl border-[#1F2937] bg-transparent text-[#CBD5E1] text-[11px] font-black uppercase tracking-[0.15em] hover:bg-white/5"
+                    onClick={handleSaveDraft}
+                    disabled={draftLoading || draftSuccess || loading || scheduleSuccess}
+                    className="h-11 sm:h-14 flex-1 sm:flex-none sm:px-8 rounded-2xl border-[#1F2937] bg-transparent text-[#CBD5E1] text-[11px] font-black uppercase tracking-[0.15em] hover:bg-white/5 disabled:opacity-50 flex items-center justify-center gap-2"
                   >
-                    Save Draft
+                    {draftLoading ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Saving…</span>
+                      </>
+                    ) : draftSuccess ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />
+                        <span className="text-amber-400">Draft Saved!</span>
+                      </>
+                    ) : (
+                      <span>Save Draft</span>
+                    )}
                   </Button>
                   <Button 
                     onClick={handleCreateSchedule}

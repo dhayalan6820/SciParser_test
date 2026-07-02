@@ -754,6 +754,14 @@ async def create_schedule(req: ScheduleRequest, db: AsyncSession = Depends(get_d
     # 1. Create schedule first so ChatService populates user_prompt/plan_data/assistant_response
     schedule = await ChatService.create_schedule(db, current_user.user_id, req)
 
+    # Draft schedules are saved as-is — no script generation or job registration needed.
+    if req.status == "draft":
+        return {
+            "schedule_id": schedule.schedule_id,
+            "status": schedule.status,
+            "created_at": schedule.created_at,
+        }
+
     # 2. Fetch the selected tool logs to build the script
     stmt = select(ToolExecutionLog).where(ToolExecutionLog.id.in_(req.selected_tool_ids))
     res = await db.execute(stmt)
@@ -894,6 +902,95 @@ async def update_schedule(schedule_id: str, req: Dict[str, Any], db: AsyncSessio
 
     await db.commit()
     return {"status": "success"}
+
+@app.post("/sciparser/v1/scheduler/{schedule_id}/activate")
+async def activate_schedule(schedule_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_user)):
+    """Promote a draft schedule to active by generating its script and registering a job."""
+    from src.database.chat_db import ToolExecutionLog, Schedule as ScheduleModel
+
+    stmt = select(ScheduleModel).where(
+        ScheduleModel.schedule_id == schedule_id,
+        ScheduleModel.user_id == current_user.user_id
+    )
+    res = await db.execute(stmt)
+    schedule_db = res.scalar_one_or_none()
+    if not schedule_db:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    if schedule_db.status != "draft":
+        raise HTTPException(status_code=400, detail="Only draft schedules can be activated")
+
+    # Extract the tool IDs that were selected when the draft was created
+    try:
+        selected_data = json.loads(schedule_db.selected_data or "{}")
+        selected_tool_ids = selected_data.get("tools", [])
+    except (json.JSONDecodeError, TypeError):
+        selected_tool_ids = []
+
+    # Fetch tool execution logs
+    tool_logs_stmt = select(ToolExecutionLog).where(ToolExecutionLog.id.in_(selected_tool_ids))
+    tool_logs_res = await db.execute(tool_logs_stmt)
+    tool_logs = tool_logs_res.scalars().all()
+
+    execution_history = [
+        {
+            "tool": log.tool_name,
+            "input": json.loads(log.tool_input) if log.tool_input else {},
+            "output": log.tool_output[:1000] if log.tool_output else "",
+            "status": log.status,
+            "error": log.error_message,
+        }
+        for log in tool_logs
+    ]
+
+    # Build tool_context from successful tool logs
+    tool_context = [
+        {"tool_name": log.tool_name, "output": (log.tool_output or "")[:500]}
+        for log in tool_logs
+        if log.status in ("SUCCESS", "COMPLETED")
+    ]
+
+    # Auto-detect framework
+    _TAVILY_TOOLS     = {"tavily_search_results_json", "ai_parser_dynamic_search"}
+    _BROWSER_PREFIXES = ("browser_", "navigate", "click", "type", "scroll", "fill", "select", "playwright")
+    all_tool_names = {
+        (item.get("tool_name") or item.get("tool") or "").lower()
+        for item in tool_context + execution_history
+    }
+    all_tool_names.discard("")
+    has_browser = any(name.startswith(p) for name in all_tool_names for p in _BROWSER_PREFIXES)
+    has_tavily  = any(name in _TAVILY_TOOLS for name in all_tool_names)
+    framework   = "tavily" if (has_tavily and not has_browser) else "playwright"
+
+    logger.info(f"[activate] Schedule {schedule_id}: framework={framework}")
+
+    # Generate script
+    generated_script = await brain.code_processor.run_script_generation(
+        schedule_db.title or "Automation",
+        execution_history,
+        framework=framework,
+        tool_context=tool_context,
+        user_goal=schedule_db.user_prompt or "",
+        plan_context=schedule_db.plan_data or "",
+    )
+
+    # Persist and activate
+    schedule_tz = schedule_db.timezone or "UTC"
+    schedule_db.generated_script = generated_script
+    schedule_db.status = "active"
+    schedule_db.next_run = _calculate_next_run(
+        schedule_db.schedule_type, schedule_db.schedule_time, schedule_tz
+    )
+    await db.commit()
+
+    # Register APScheduler job for non-manual schedules
+    if schedule_db.schedule_type not in ("manual", None):
+        _register_schedule_job(schedule_id, schedule_db.schedule_type, schedule_db.schedule_time, schedule_tz)
+
+    return {
+        "schedule_id": schedule_db.schedule_id,
+        "status": schedule_db.status,
+        "next_run": schedule_db.next_run.isoformat() if schedule_db.next_run else None,
+    }
 
 @app.post("/sciparser/v1/scheduler/{schedule_id}/run")
 async def run_schedule(schedule_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_user)):
