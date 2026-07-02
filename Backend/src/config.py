@@ -121,6 +121,26 @@ TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 # should set CORS_ALLOWED_ORIGINS to a comma-separated allowlist of origins.
 CORS_ALLOWED_ORIGINS = _list("CORS_ALLOWED_ORIGINS", default=["*"])
 
+# In production, a wildcard (or unset) CORS_ALLOWED_ORIGINS allows any site to
+# make authenticated cross-origin requests against the API. Warn loudly so
+# this is never accidentally shipped; opt into it explicitly via
+# CORS_ALLOW_WILDCARD_IN_PRODUCTION=true only if you fully understand the risk.
+if IS_PRODUCTION and CORS_ALLOWED_ORIGINS == ["*"]:
+    if not _bool("CORS_ALLOW_WILDCARD_IN_PRODUCTION", False):
+        raise RuntimeError(
+            "Refusing to start in production with CORS_ALLOWED_ORIGINS='*' (or unset). "
+            "A wildcard CORS policy lets any website make authenticated requests against "
+            "this API on behalf of your users. Set CORS_ALLOWED_ORIGINS to a comma-separated "
+            "allowlist of trusted origins (e.g. 'https://app.example.com,https://example.com'). "
+            "If you have reviewed the risk and truly need a wildcard, set "
+            "CORS_ALLOW_WILDCARD_IN_PRODUCTION=true to bypass this check."
+        )
+    _logger.warning(
+        "SECURITY WARNING: CORS_ALLOWED_ORIGINS is '*' in production. Any website can make "
+        "authenticated cross-origin requests against this API. Set CORS_ALLOWED_ORIGINS to a "
+        "comma-separated allowlist of trusted origins as soon as possible."
+    )
+
 # ---------------------------------------------------------------------------
 # Server
 # ---------------------------------------------------------------------------
