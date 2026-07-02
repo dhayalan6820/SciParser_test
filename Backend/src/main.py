@@ -756,9 +756,42 @@ async def toggle_browser_state(req: Dict[str, Any], current_user: User = Depends
 @app.post("/sciparser/v1/browser/connect-cdp")
 async def connect_cdp(req: Dict[str, Any], current_user: User = Depends(ChatService.get_current_user)):
     """Store a user-provided CDP URL and verify it is reachable before accepting it."""
+    import ipaddress, socket as _socket
+    from urllib.parse import urlparse as _urlparse
+
     cdp_url = (req.get("cdp_url") or "").strip()
     if not cdp_url:
         raise HTTPException(status_code=400, detail="cdp_url is required")
+
+    # -- SSRF guard ----------------------------------------------------------------
+    # Only allow http/https/ws/wss schemes and block private/loopback/link-local IPs.
+    _parsed = _urlparse(cdp_url)
+    if _parsed.scheme not in ("http", "https", "ws", "wss"):
+        raise HTTPException(status_code=400, detail="cdp_url must use http, https, ws, or wss")
+    _host = _parsed.hostname or ""
+    if not _host:
+        raise HTTPException(status_code=400, detail="cdp_url must include a valid hostname")
+    try:
+        _resolved_ip = _socket.gethostbyname(_host)
+        _ip_obj = ipaddress.ip_address(_resolved_ip)
+        if (
+            _ip_obj.is_loopback
+            or _ip_obj.is_private
+            or _ip_obj.is_link_local
+            or _ip_obj.is_reserved
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "CDP URL resolves to a private/internal address. "
+                    "Use a public tunnel URL (e.g. from cloudflared or ngrok)."
+                ),
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=400, detail=f"Cannot resolve hostname: {_host}")
+    # ------------------------------------------------------------------------------
 
     # Normalise ws(s):// → http(s):// for the /json/version health-check
     check_base = cdp_url.rstrip("/")

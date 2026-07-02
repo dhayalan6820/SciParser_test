@@ -2071,9 +2071,16 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                         {cdpCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
                     </div>
-                    <p className="text-[10px] text-[#6B7280]">
-                      macOS: <span className="font-mono">/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222</span>
-                    </p>
+                    <div className="space-y-1 mt-1">
+                      <p className="text-[10px] text-[#6B7280]">
+                        <span className="text-[#9CA3AF]">macOS:</span>{" "}
+                        <span className="font-mono break-all">/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222</span>
+                      </p>
+                      <p className="text-[10px] text-[#6B7280]">
+                        <span className="text-[#9CA3AF]">Windows:</span>{" "}
+                        <span className="font-mono break-all">"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222</span>
+                      </p>
+                    </div>
                   </div>
 
                   {/* Step 2: tunnel */}

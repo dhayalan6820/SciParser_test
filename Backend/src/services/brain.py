@@ -1352,7 +1352,32 @@ class Brain:
             mcp_manager = session_obj["mcp_manager"]
             
             # 3. Discover tools ONCE outside the retry loop to save time
-            all_tools = await mcp_manager.get_tools()
+            # If user's external browser is unreachable, fall back to cloud browser automatically.
+            try:
+                all_tools = await mcp_manager.get_tools()
+            except Exception as _cdp_err:
+                user_cdp_url = session_obj.get("cdp_url")
+                if user_cdp_url:
+                    logger.warning(
+                        f"External CDP browser at {user_cdp_url} is unreachable ({_cdp_err}). "
+                        "Clearing CDP URL and falling back to cloud browser."
+                    )
+                    # Broadcast fallback notice to UI
+                    if self.stream_manager:
+                        await self.stream_manager.broadcast_thought(
+                            chat_id,
+                            "Your connected browser appears to be offline. Falling back to the cloud browser for this run.",
+                        )
+                    session_obj["cdp_url"] = None
+                    try:
+                        await mcp_manager.close()
+                    except Exception:
+                        pass
+                    session_obj["mcp_manager"] = MCPToolManager(port=user_port, user_agent_index=session_obj.get("ua_index", 0))
+                    mcp_manager = session_obj["mcp_manager"]
+                    all_tools = await mcp_manager.get_tools()
+                else:
+                    raise
             if self.search_tool: 
                 all_tools = list(all_tools) + [self.search_tool]
             
