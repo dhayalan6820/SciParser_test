@@ -1075,7 +1075,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                     )}
                   </Button>
                   <Button 
-                    onClick={handleCreateSchedule}
+                    onClick={() => handleCreateSchedule()}
                     disabled={loading || !taskName || scheduleSuccess}
                     className="h-11 sm:h-14 flex-1 sm:flex-none sm:px-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-foreground text-[11px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-indigo-500/20 transition-all active:scale-95 disabled:opacity-50 sm:min-w-[200px] flex items-center justify-center gap-2 sm:gap-3"
                   >

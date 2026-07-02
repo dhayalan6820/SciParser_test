@@ -2663,7 +2663,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               title="AI Chat"
               className={cn(
                 "relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border transition-all",
-                currentView === "chat"
+                (currentView as string) === "chat"
                   ? "border-primary/35 bg-gradient-to-b from-primary/20 to-primary/15 text-foreground shadow-[0_0_16px_rgba(34,211,238,0.15)]"
                   : "border-border bg-card/50 text-muted-foreground hover:border-primary/25 hover:bg-muted hover:text-foreground",
               )}
