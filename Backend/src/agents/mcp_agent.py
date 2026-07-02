@@ -18,7 +18,7 @@ class MCPToolManager:
     def stream_manager(self):
         return getattr(self.client, 'stream_manager', None)
 
-    def __init__(self, config: Dict[str, Any] = None, cdp_url: Optional[str] = None, port: Optional[int] = None, user_agent_index: int = 0):
+    def __init__(self, config: Dict[str, Any] = None, cdp_url: Optional[str] = None, port: Optional[int] = None, user_agent_index: int = 0, own_browser: bool = True):
         if hasattr(self, '_initialized_base') and self._initialized_base:
             return
 
@@ -50,7 +50,7 @@ class MCPToolManager:
                     "BROWSER_CDP_URL": self.cdp_url, # Standard env var for some MCP servers
                     "BROWSER_USE_CDP_PORT": str(port) if port else "9222",
                     "BROWSER_USER_DATA_DIR": user_data_dir, # Pass unique profile dir
-                    "MCP_BROWSER_USE_OWN_BROWSER": "true",
+                    "MCP_BROWSER_USE_OWN_BROWSER": "true" if own_browser else "false",
                     "BROWSER_USE_HEADLESS": os.getenv("BROWSER_USE_HEADLESS", "false"),
                     "BROWSER_USE_DISABLE_SECURITY": "true",
                     "BROWSER_USER_AGENT_INDEX": str(user_agent_index),

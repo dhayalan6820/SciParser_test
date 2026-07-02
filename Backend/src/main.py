@@ -4,6 +4,7 @@ import uuid
 import json
 import asyncio
 import traceback
+import httpx as _httpx
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 
@@ -751,6 +752,63 @@ async def browser_stream(
 @app.post("/sciparser/v1/browser/state")
 async def toggle_browser_state(req: Dict[str, Any], current_user: User = Depends(ChatService.get_current_user)):
     return {"status": "success", "is_active": req.get("is_active")}
+
+@app.post("/sciparser/v1/browser/connect-cdp")
+async def connect_cdp(req: Dict[str, Any], current_user: User = Depends(ChatService.get_current_user)):
+    """Store a user-provided CDP URL and verify it is reachable before accepting it."""
+    cdp_url = (req.get("cdp_url") or "").strip()
+    if not cdp_url:
+        raise HTTPException(status_code=400, detail="cdp_url is required")
+
+    # Normalise ws(s):// → http(s):// for the /json/version health-check
+    check_base = cdp_url.rstrip("/")
+    if check_base.startswith("wss://"):
+        check_base = "https://" + check_base[6:]
+    elif check_base.startswith("ws://"):
+        check_base = "http://" + check_base[5:]
+
+    try:
+        async with _httpx.AsyncClient(timeout=6) as client:
+            resp = await client.get(f"{check_base}/json/version")
+        if resp.status_code != 200:
+            raise HTTPException(status_code=400, detail=f"CDP endpoint returned HTTP {resp.status_code}")
+    except _httpx.RequestError as exc:
+        raise HTTPException(status_code=400, detail=f"Cannot reach CDP URL: {exc}")
+
+    session = brain.session_manager.get_session(current_user.user_id)
+    session["cdp_url"] = cdp_url
+    # Tear down any existing MCP manager so the next run uses the new endpoint
+    if session.get("mcp_manager"):
+        try:
+            await session["mcp_manager"].close()
+        except Exception:
+            pass
+        session["mcp_manager"] = None
+
+    return {"status": "connected", "cdp_url": cdp_url}
+
+
+@app.delete("/sciparser/v1/browser/connect-cdp")
+async def disconnect_cdp(current_user: User = Depends(ChatService.get_current_user)):
+    """Remove the user's CDP override and reset the MCP manager."""
+    session = brain.session_manager.get_session(current_user.user_id)
+    session["cdp_url"] = None
+    if session.get("mcp_manager"):
+        try:
+            await session["mcp_manager"].close()
+        except Exception:
+            pass
+        session["mcp_manager"] = None
+    return {"status": "disconnected"}
+
+
+@app.get("/sciparser/v1/browser/cdp-status")
+async def get_cdp_status(current_user: User = Depends(ChatService.get_current_user)):
+    """Return whether the user has an external CDP browser connected."""
+    session = brain.session_manager.get_session(current_user.user_id)
+    cdp_url = session.get("cdp_url")
+    return {"connected": cdp_url is not None, "cdp_url": cdp_url}
+
 
 @app.post("/sciparser/v1/browser/close")
 async def close_browser_session(current_user: User = Depends(ChatService.get_current_user)):

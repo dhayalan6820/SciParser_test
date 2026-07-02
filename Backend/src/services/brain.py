@@ -1338,7 +1338,16 @@ class Brain:
             if not session_obj.get("mcp_manager"):
                 logger.info(f"Preparing MCP manager for user {user_id} on port {user_port}...")
                 ua_index = session_obj.get("ua_index", 0)
-                session_obj["mcp_manager"] = MCPToolManager(port=user_port, user_agent_index=ua_index)
+                user_cdp_url = session_obj.get("cdp_url")  # set when user connects their own browser
+                if user_cdp_url:
+                    logger.info(f"Using user-provided CDP URL for {user_id}: {user_cdp_url}")
+                    session_obj["mcp_manager"] = MCPToolManager(
+                        cdp_url=user_cdp_url,
+                        user_agent_index=ua_index,
+                        own_browser=False,
+                    )
+                else:
+                    session_obj["mcp_manager"] = MCPToolManager(port=user_port, user_agent_index=ua_index)
 
             mcp_manager = session_obj["mcp_manager"]
             

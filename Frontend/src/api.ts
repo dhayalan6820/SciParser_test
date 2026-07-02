@@ -448,6 +448,46 @@ export const sciparserApi = {
     return res.json();
   },
 
+  // CDP (Connect Your Browser)
+  connectCdp: async (cdpUrl: string) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/browser/connect-cdp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: formattedToken },
+      body: JSON.stringify({ cdp_url: cdpUrl }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Failed to connect CDP");
+    }
+    return res.json();
+  },
+
+  disconnectCdp: async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/browser/connect-cdp`, {
+      method: "DELETE",
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  getCdpStatus: async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/browser/cdp-status`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<{ connected: boolean; cdp_url: string | null }>;
+  },
+
   // Logout
   logout: () => {
     localStorage.removeItem("access_token");

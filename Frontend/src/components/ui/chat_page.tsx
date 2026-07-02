@@ -47,6 +47,8 @@ import {
   Calendar,
   Clock,
   Camera,
+  Link,
+  Copy,
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import Plan, { Task } from "./agent-plan";
@@ -132,6 +134,15 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
   const [agentHistory, setAgentHistory] = React.useState<any[]>([]);
   const [showHistory, setShowHistory] = React.useState(false);
+
+  // CDP (Connect Your Browser) state
+  const [cdpConnected, setCdpConnected] = React.useState(false);
+  const [cdpConnectedUrl, setCdpConnectedUrl] = React.useState<string | null>(null);
+  const [showCdpModal, setShowCdpModal] = React.useState(false);
+  const [cdpUrlInput, setCdpUrlInput] = React.useState("http://localhost:9222");
+  const [cdpConnecting, setCdpConnecting] = React.useState(false);
+  const [cdpError, setCdpError] = React.useState<string | null>(null);
+  const [cdpCopied, setCdpCopied] = React.useState(false);
 
   const togglePlanVisibility = (msgId: string) => {
     setVisiblePlans((prev) => ({
@@ -415,6 +426,47 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       });
     }
   }, []);
+
+  // Load CDP status once user profile is available
+  React.useEffect(() => {
+    if (!userProfile) return;
+    sciparserApi.getCdpStatus().then((s) => {
+      setCdpConnected(s.connected);
+      setCdpConnectedUrl(s.cdp_url);
+      if (s.cdp_url) setCdpUrlInput(s.cdp_url);
+    }).catch(() => {});
+  }, [userProfile]);
+
+  const handleConnectCdp = async () => {
+    setCdpConnecting(true);
+    setCdpError(null);
+    try {
+      await sciparserApi.connectCdp(cdpUrlInput);
+      setCdpConnected(true);
+      setCdpConnectedUrl(cdpUrlInput);
+      setShowCdpModal(false);
+    } catch (err: any) {
+      setCdpError(err.message || "Failed to connect");
+    } finally {
+      setCdpConnecting(false);
+    }
+  };
+
+  const handleDisconnectCdp = async () => {
+    try {
+      await sciparserApi.disconnectCdp();
+    } catch (_) {}
+    setCdpConnected(false);
+    setCdpConnectedUrl(null);
+    setCdpUrlInput("http://localhost:9222");
+  };
+
+  const handleCdpCopy = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCdpCopied(true);
+      setTimeout(() => setCdpCopied(false), 1500);
+    });
+  };
 
   // Re-enable auto-scroll whenever the active thread changes (thread switch or new chat)
   React.useEffect(() => {
@@ -1954,6 +2006,116 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       {isNavigating && <AiLoader text={loaderText} />}
 
       {/* Form Popup Overlay */}
+      {/* Connect Your Browser (CDP) modal */}
+      {showCdpModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowCdpModal(false)}>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-[#1A1A1A] rounded-2xl shadow-2xl border border-[#2A2A2A] overflow-hidden flex flex-col"
+          >
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-[#2A2A2A] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className={cn("w-2.5 h-2.5 rounded-full", cdpConnected ? "bg-emerald-400" : "bg-[#4B5563]")} />
+                <h3 className="font-semibold text-[#F8FAFC] text-sm">
+                  {cdpConnected ? "Your Browser Connected" : "Connect Your Browser"}
+                </h3>
+              </div>
+              <button onClick={() => setShowCdpModal(false)} className="text-[#6B7280] hover:text-[#F8FAFC] transition-colors">
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-4">
+              {cdpConnected ? (
+                /* Connected state */
+                <div className="space-y-3">
+                  <p className="text-xs text-[#9CA3AF]">
+                    The agent is using your local Chrome browser. Your residential IP bypasses
+                    WAF blocks on Verizon, Frontier, AT&T, and Cloudflare.
+                  </p>
+                  <div className="bg-[#232323] rounded-lg px-3 py-2 text-xs text-emerald-400 font-mono break-all">
+                    {cdpConnectedUrl}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDisconnectCdp}
+                    className="w-full text-red-400 border-red-900/40 hover:bg-red-900/20 text-xs"
+                  >
+                    Disconnect — switch back to cloud browser
+                  </Button>
+                </div>
+              ) : (
+                /* Not connected state */
+                <div className="space-y-4">
+                  <p className="text-xs text-[#9CA3AF]">
+                    Run Chrome with remote debugging enabled, then expose it publicly with a tunnel
+                    so this server can reach it.
+                  </p>
+
+                  {/* Step 1: launch Chrome */}
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Step 1 — Launch Chrome</p>
+                    <div className="bg-[#111] rounded-lg px-3 py-2 flex items-center justify-between gap-2">
+                      <code className="text-xs text-[#E5E7EB] font-mono flex-1 break-all">
+                        google-chrome --remote-debugging-port=9222 --no-first-run
+                      </code>
+                      <button
+                        onClick={() => handleCdpCopy("google-chrome --remote-debugging-port=9222 --no-first-run")}
+                        className="shrink-0 text-[#6B7280] hover:text-[#F8FAFC] transition-colors"
+                        title="Copy"
+                      >
+                        {cdpCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-[#6B7280]">
+                      macOS: <span className="font-mono">/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222</span>
+                    </p>
+                  </div>
+
+                  {/* Step 2: tunnel */}
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Step 2 — Expose via tunnel</p>
+                    <div className="bg-[#111] rounded-lg px-3 py-2">
+                      <code className="text-xs text-[#E5E7EB] font-mono break-all">npx cloudflared tunnel --url http://localhost:9222</code>
+                    </div>
+                    <p className="text-[10px] text-[#6B7280]">Copy the <span className="text-[#9CA3AF]">trycloudflare.com</span> URL it prints — paste it below.</p>
+                  </div>
+
+                  {/* Step 3: enter URL */}
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Step 3 — Enter the CDP URL</p>
+                    <input
+                      type="text"
+                      value={cdpUrlInput}
+                      onChange={(e) => setCdpUrlInput(e.target.value)}
+                      placeholder="https://xyz.trycloudflare.com"
+                      className="w-full bg-[#111] border border-[#2A2A2A] rounded-lg px-3 py-2 text-xs text-[#F8FAFC] font-mono placeholder-[#4B5563] focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  {cdpError && (
+                    <p className="text-xs text-red-400 bg-red-900/20 border border-red-900/30 rounded-lg px-3 py-2">{cdpError}</p>
+                  )}
+
+                  <Button
+                    size="sm"
+                    onClick={handleConnectCdp}
+                    disabled={cdpConnecting || !cdpUrlInput.trim()}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold"
+                  >
+                    {cdpConnecting ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Testing connection…</> : "Connect"}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       {activeForm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <motion.div
@@ -2766,6 +2928,24 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   >
                     <Globe className="w-4 h-4" />
                     <span className="hidden md:inline">Live Browser</span>
+                  </Button>
+
+                  {/* Connect Your Browser (CDP) button */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => { setCdpError(null); setShowCdpModal(true); }}
+                    title={cdpConnected ? `Your browser connected: ${cdpConnectedUrl}` : "Connect your local Chrome browser to avoid WAF blocks"}
+                    className={cn(
+                      "gap-1.5 text-xs font-semibold shrink-0 transition-all duration-300",
+                      cdpConnected
+                        ? "border-emerald-500 text-emerald-400 hover:bg-emerald-900/20"
+                        : "border-[#2A2A2A] text-[#9CA3AF] hover:text-[#F8FAFC] hover:border-[#3A3A3A]",
+                    )}
+                  >
+                    <span className={cn("w-2 h-2 rounded-full shrink-0", cdpConnected ? "bg-emerald-400" : "bg-[#4B5563]")} />
+                    <Link className="w-4 h-4" />
+                    <span className="hidden md:inline">{cdpConnected ? "Your Browser" : "Connect Browser"}</span>
                   </Button>
 
                   {browserActive && (
