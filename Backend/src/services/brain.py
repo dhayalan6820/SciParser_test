@@ -1428,7 +1428,7 @@ class Brain:
                         await mcp_manager.close()
                     except Exception:
                         pass
-                    session_obj["mcp_manager"] = MCPToolManager(port=user_port, user_agent_index=session_obj.get("ua_index", 0), proxy_url=session_obj.get("proxy_url"))
+                    session_obj["mcp_manager"] = MCPToolManager(port=user_port, user_agent_index=session_obj.get("ua_index", 0), proxy_url=session_obj.get("proxy_url"), browser_engine=session_obj.get("browser_engine"))
                     mcp_manager = session_obj["mcp_manager"]
                     all_tools = await mcp_manager.get_tools()
                 else:
@@ -1582,7 +1582,7 @@ class Brain:
                         next_ua = (session_obj.get("ua_index", 0) + 1) % 5
                         session_obj["ua_index"] = next_ua
                         logger.info(f"[Retry] Starting fresh browser with user-agent index {next_ua}...")
-                        session_obj["mcp_manager"] = MCPToolManager(port=user_port, user_agent_index=next_ua, proxy_url=session_obj.get("proxy_url"))
+                        session_obj["mcp_manager"] = MCPToolManager(port=user_port, user_agent_index=next_ua, proxy_url=session_obj.get("proxy_url"), browser_engine=session_obj.get("browser_engine"))
                         mcp_manager = session_obj["mcp_manager"]
 
                         # Re-discover tools from the fresh session
