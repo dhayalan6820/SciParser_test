@@ -285,6 +285,7 @@ async def _ff_type(args: dict) -> str:
             el = _CAMOUFOX_ELEMENTS.get(int(idx))
             if el:
                 await page.mouse.click(el["cx"], el["cy"])
+                _write_mouse_state(float(el["cx"]), float(el["cy"]), "click")
                 await asyncio.sleep(0.1)
         await page.keyboard.type(text, delay=30)
         return f"Typed: {text[:60]}"
@@ -360,7 +361,12 @@ async def _ff_scroll(args: dict) -> str:
         return "Error: No active camoufox page"
     direction = args.get("direction", "down")
     delta = 400
+    cx = args.get("coordinate_x")
+    cy = args.get("coordinate_y")
     try:
+        if cx is not None and cy is not None:
+            await page.mouse.move(int(cx), int(cy))
+            _write_mouse_state(float(cx), float(cy), "move")
         if direction == "down":
             await page.mouse.wheel(0, delta)
         elif direction == "up":
@@ -1210,7 +1216,34 @@ def _patch_add_human_tools() -> None:
         if cx is not None and cy is not None:
             is_click = any(k in tool_name for k in ("click", "input", "select", "type"))
             _write_mouse_state(float(cx), float(cy), "click" if is_click else "move")
-        return await _orig_execute(self, tool_name, arguments)
+        result = await _orig_execute(self, tool_name, arguments)
+        # After any index-based action (click, type, scroll on element, etc.),
+        # look up the element's bounding box and update the cursor position so the
+        # overlay doesn't stay frozen during the majority of agent interactions.
+        idx = arguments.get("index")
+        if idx is not None and cx is None and cy is None:
+            try:
+                session = getattr(self, "browser_session", None)
+                if session:
+                    element = await session.get_dom_element_by_index(int(idx))
+                    if element:
+                        coords = (
+                            getattr(element, "viewport_coordinates", None)
+                            or getattr(element, "center", None)
+                        )
+                        if coords is not None:
+                            if hasattr(coords, "x"):
+                                ex, ey = float(coords.x), float(coords.y)
+                            elif hasattr(coords, "__getitem__"):
+                                ex, ey = float(coords[0]), float(coords[1])
+                            else:
+                                ex, ey = None, None
+                            if ex is not None:
+                                is_click = any(k in tool_name for k in ("click", "input", "select", "type"))
+                                _write_mouse_state(ex, ey, "click" if is_click else "move")
+            except Exception:
+                pass
+        return result
 
     BrowserUseServer._execute_tool = _patched_execute_tool  # type: ignore[method-assign]
 
