@@ -40,6 +40,14 @@ class MCPToolManager:
         user_data_dir = os.path.join(base_temp_dir, f"user_{port}")
         os.makedirs(user_data_dir, exist_ok=True)
 
+        # NOTE: the vars below marked "per-session override" are intentional
+        # inter-process passthrough values, not stray hardcoded config. Each
+        # call to __init__ launches a dedicated browser_use_bridge.py
+        # subprocess for one user session, and these values must vary per
+        # session (different CDP endpoint/port/profile dir/proxy per user).
+        # They are read back out on the bridge side via the matching
+        # config.browser_*_override() accessors in src/config.py, which
+        # documents this contract from that end too.
         self.config = config or {
             "browser-use": {
                 "command": "python",
@@ -51,12 +59,12 @@ class MCPToolManager:
                     "OPENAI_BASE_URL": config.OPENROUTER_BASE_URL,
                     "OPENAI_API_BASE": config.OPENROUTER_BASE_URL,
                     "BROWSER_USE_MODEL": config.OPENROUTER_MODEL,
-                    "MCP_BROWSER_CDP_URL": self.cdp_url,
+                    "MCP_BROWSER_CDP_URL": self.cdp_url,  # per-session override
                     "BROWSER_CDP_URL": self.cdp_url, # Standard env var for some MCP servers
-                    "BROWSER_USE_CDP_PORT": str(port) if port else str(config.BROWSER_DEFAULT_CDP_PORT),
-                    "BROWSER_USER_DATA_DIR": user_data_dir, # Pass unique profile dir
-                    "MCP_BROWSER_USE_OWN_BROWSER": "true" if own_browser else "false",
-                    "BROWSER_PROXY_URL": proxy_url or "",
+                    "BROWSER_USE_CDP_PORT": str(port) if port else str(config.BROWSER_DEFAULT_CDP_PORT),  # per-session override
+                    "BROWSER_USER_DATA_DIR": user_data_dir, # per-session override — unique profile dir per user
+                    "MCP_BROWSER_USE_OWN_BROWSER": "true" if own_browser else "false",  # per-session override
+                    "BROWSER_PROXY_URL": proxy_url or "",  # per-session override
                     "BROWSER_ENGINE": browser_engine or config.BROWSER_ENGINE,
                     "BROWSER_USE_HEADLESS": os.getenv("BROWSER_USE_HEADLESS", "false"),
                     "BROWSER_USE_DISABLE_SECURITY": "true",

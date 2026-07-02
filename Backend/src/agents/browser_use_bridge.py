@@ -1293,19 +1293,22 @@ async def run_bridge():
     from browser_use.mcp.server import main
     import inspect
 
-    # -- Read env vars set by MCPToolManager ----------------------------------
-    cdp_url_env    = os.getenv("MCP_BROWSER_CDP_URL") or os.getenv("BROWSER_CDP_URL")
-    own_browser    = os.getenv("MCP_BROWSER_USE_OWN_BROWSER", "false").lower() == "true"
-    port_env       = os.getenv("BROWSER_USE_CDP_PORT")
+    # -- Read per-session runtime overrides injected by MCPToolManager --------
+    # These come from config.py's browser_*_override() accessors: this bridge
+    # runs as a dedicated subprocess per user session, so each one only ever
+    # sees its own copy of these env vars (never other sessions' values).
+    cdp_url_env    = config.browser_cdp_url_override()
+    own_browser    = config.browser_use_own_browser()
+    port_env       = config.browser_cdp_port_override()
     port           = int(port_env) if port_env and port_env not in ("", "0") else find_free_port()
     headless       = os.getenv("BROWSER_USE_HEADLESS", str(config.BROWSER_USE_HEADLESS_DEFAULT)).lower() != "false"
     browser_engine = os.getenv("BROWSER_ENGINE", config.BROWSER_ENGINE).lower()
-    proxy_url      = os.getenv("BROWSER_PROXY_URL", "").strip()  # e.g. http://user:pass@host:port
+    proxy_url      = config.browser_proxy_url_override()
 
     # Persistent profile directory — cookies, localStorage, and history
     # survive between runs so the browser looks like a real returning user.
     _default_profile = str(Path.home() / ".config" / "browser-use" / "profile")
-    user_data_dir = os.getenv("BROWSER_USER_DATA_DIR", _default_profile)
+    user_data_dir = config.browser_user_data_dir_override(_default_profile)
     os.makedirs(user_data_dir, exist_ok=True)
 
     cdp_url = cdp_url_env or f"http://{config.BROWSER_DEFAULT_CDP_HOST}:{port}"

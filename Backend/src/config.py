@@ -15,6 +15,7 @@ an insecure development default.
 import os
 import secrets
 import logging
+from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -154,6 +155,43 @@ BROWSER_CDP_READY_TIMEOUT_SECONDS = _float("BROWSER_CDP_READY_TIMEOUT_SECONDS", 
 BROWSER_NAVIGATION_TIMEOUT_MS = _int("BROWSER_NAVIGATION_TIMEOUT_MS", 30000)
 BROWSER_USE_HEADLESS_DEFAULT = _bool("BROWSER_USE_HEADLESS", True)
 BROWSER_USER_AGENT_INDEX_DEFAULT = _int("BROWSER_USER_AGENT_INDEX", 0)
+
+# ---------------------------------------------------------------------------
+# Browser automation — per-session runtime overrides
+# ---------------------------------------------------------------------------
+# Unlike every other value in this file, these are NOT read once at process
+# startup. mcp_agent.py (MCPToolManager) launches one browser_use_bridge.py
+# subprocess *per user session* and injects a fresh copy of these vars into
+# that subprocess's env dict so each concurrent session gets its own CDP
+# endpoint/port/profile dir/proxy. The subprocess only ever sees its own copy
+# — never the parent process's — so these MUST stay as functions read at
+# call time inside the subprocess (browser_use_bridge.py), not module-level
+# constants computed once at import time. They are legitimate inter-process
+# passthrough values, not stray hardcoded config.
+def browser_cdp_url_override() -> Optional[str]:
+    """Session-specific CDP URL injected by MCPToolManager for this bridge subprocess."""
+    return os.getenv("MCP_BROWSER_CDP_URL") or os.getenv("BROWSER_CDP_URL")
+
+
+def browser_cdp_port_override() -> Optional[str]:
+    """Session-specific CDP port injected by MCPToolManager for this bridge subprocess."""
+    return os.getenv("BROWSER_USE_CDP_PORT")
+
+
+def browser_user_data_dir_override(default: str) -> str:
+    """Session-specific browser profile directory injected by MCPToolManager (falls back to `default` if unset)."""
+    return os.getenv("BROWSER_USER_DATA_DIR", default)
+
+
+def browser_proxy_url_override() -> str:
+    """Session-specific outbound proxy URL injected by MCPToolManager, e.g. http://user:pass@host:port."""
+    return os.getenv("BROWSER_PROXY_URL", "").strip()
+
+
+def browser_use_own_browser() -> bool:
+    """Whether the bridge subprocess should launch/own its own browser instance vs. attach to an existing CDP endpoint."""
+    return os.getenv("MCP_BROWSER_USE_OWN_BROWSER", "false").lower() == "true"
+
 
 # ---------------------------------------------------------------------------
 # Third-party check endpoints / defaults
