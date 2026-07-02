@@ -139,7 +139,6 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const prevBrowserActiveRef = React.useRef(false);
 
   const [agentHistory, setAgentHistory] = React.useState<any[]>([]);
-  const [showHistory, setShowHistory] = React.useState(false);
 
   // Proxy state
   const [proxyActive, setProxyActive] = React.useState(false);
@@ -210,7 +209,6 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
   // Resizable panel states
   const [browserPanelWidth, setBrowserPanelWidth] = React.useState(50); // percentage
-  const [historyPanelWidth, setHistoryPanelWidth] = React.useState(320); // pixels
   const [sidebarWidth, setSidebarWidth] = React.useState(300); // pixels
 
   // Refs
@@ -231,10 +229,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   // Tracks whether the user has scrolled away from the bottom of the chat
   const userScrolledUpRef = React.useRef(false);
   const browserPanelRef = React.useRef<HTMLDivElement>(null);
-  const historyPanelRef = React.useRef<HTMLDivElement>(null);
-  const [resizingPanel, setResizingPanel] = React.useState<
-    "browser" | "history" | null
-  >(null);
+  const [resizingPanel, setResizingPanel] = React.useState<"browser" | null>(null);
   const [isAtBottom, setIsAtBottom] = React.useState(true);
 
   // Handle tool logs auto-scroll
@@ -335,10 +330,6 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     e.preventDefault();
   };
 
-  const handleHistoryResizeStart = (e: React.MouseEvent) => {
-    setResizingPanel("history");
-    e.preventDefault();
-  };
 
   const handleSidebarMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -373,20 +364,6 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           100 - ((e.clientX - containerRect.left) / containerRect.width) * 100;
         if (newWidth > 10 && newWidth < 90) {
           setBrowserPanelWidth(Math.round(newWidth));
-        }
-      } else if (resizingPanel === "history" && historyPanelRef.current) {
-        const containerRect =
-          historyPanelRef.current.parentElement?.getBoundingClientRect();
-        if (!containerRect) return;
-
-        // History panel is on the right of the chat column.
-        // The handle is on the LEFT of the history panel.
-        // So width = historyRect.right - mouseX
-        const historyRect = historyPanelRef.current.getBoundingClientRect();
-        const newWidth = historyRect.right - e.clientX;
-
-        if (newWidth > 160 && newWidth < 800) {
-          setHistoryPanelWidth(Math.round(newWidth));
         }
       }
     };
@@ -2619,18 +2596,6 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               <Plus className="h-5 w-5" />
             </button>
             <button
-              onClick={() => setShowHistory(!showHistory)}
-              title="History"
-              className={cn(
-                "relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border transition-all",
-                showHistory
-                  ? "border-indigo-500/35 bg-indigo-500/15 text-indigo-300"
-                  : "border-[#232B36] bg-white/[0.02] text-[#9CA3AF] hover:border-[#22D3EE]/25 hover:bg-[#161B22] hover:text-[#F8FAFC]",
-              )}
-            >
-              <Clock className="h-5 w-5" />
-            </button>
-            <button
               onClick={() =>
                 handleSwitchView(
                   currentView === "schedules" ? "chat" : "schedules",
@@ -3113,19 +3078,6 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 <div className="flex-1" />
 
                 <div className="flex items-center gap-1 sm:gap-1.5 flex-nowrap shrink-0">
-                  <Button
-                    variant={showHistory ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setShowHistory(!showHistory)}
-                    className={cn(
-                      "gap-1.5 text-xs font-semibold shrink-0",
-                      showHistory &&
-                        "bg-indigo-600 hover:bg-indigo-700 text-white border-none",
-                    )}
-                  >
-                    <Clock className="w-4 h-4" />
-                    <span className="hidden md:inline">History</span>
-                  </Button>
 
                   <Button
                     variant={isSelectionMode ? "default" : "outline"}
@@ -3380,54 +3332,6 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   )}
                 </div>
 
-                {/* History Panel */}
-                <AnimatePresence>
-                  {showHistory && (
-                    <>
-                      {/* Resize Handle for History */}
-                      <div
-                        onMouseDown={handleHistoryResizeStart}
-                        className="w-1 bg-[#2A2A2A] hover:bg-indigo-500 cursor-col-resize transition-colors z-30 relative group"
-                      >
-                        <div className="absolute inset-y-0 -left-2 -right-2 cursor-col-resize" />
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-12 rounded-full bg-[#3A3A3A] group-hover:bg-white transition-colors" />
-                      </div>
-
-                      <motion.div
-                        ref={historyPanelRef}
-                        initial={{ width: 0, opacity: 0 }}
-                        animate={{ width: historyPanelWidth, opacity: 1 }}
-                        exit={{ width: 0, opacity: 0 }}
-                        className="border-l border-[#2A2A2A] bg-[#0D0D0F] overflow-hidden flex flex-col shrink-0 max-w-[50vw] sm:max-w-xs md:max-w-sm"
-                      >
-                        <div className="p-4 border-b border-[#2A2A2A] flex items-center justify-between bg-[#1A1A1A]">
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-indigo-400" />
-                            <span className="text-xs font-bold uppercase tracking-widest text-[#F8FAFC]">
-                              Agent History
-                            </span>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setShowHistory(false)}
-                            className="h-6 w-6 rounded-full"
-                          >
-                            <X className="w-3 h-3" />
-                          </Button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto">
-                          <ProcessingPanel
-                            agentHistory={agentHistory}
-                            toolHistory={toolLogs}
-                            isBrowserActive={false}
-                            browserFrame={null}
-                          />
-                        </div>
-                      </motion.div>
-                    </>
-                  )}
-                </AnimatePresence>
               </div>
 
               {/* Chat Input Area */}
