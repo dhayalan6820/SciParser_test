@@ -1133,6 +1133,10 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     setAiThinking(null); // Clear thinking for new process
     setCurrentPlan(null); // Clear old plan steps immediately
     setTaskThoughts({}); // Clear old per-task reasoning immediately
+    // Refresh the active engine badge so it reflects what the backend will actually use
+    sciparserApi.getBrowserEngine().then((r) => {
+      setActiveBrowserEngine((r.engine as "camoufox" | "chrome") || "camoufox");
+    }).catch(() => {});
 
     try {
       const response = await sciparserApi.sendChatMessage(
