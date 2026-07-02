@@ -2,6 +2,7 @@ import json
 import os
 import re
 from typing import Any, Dict, List, Optional, Annotated, Sequence, TypedDict
+from src import config as app_config
 from langchain_core.messages import (
     HumanMessage,
     SystemMessage, 
@@ -344,7 +345,7 @@ class ATAGProcessor:
     """
     def __init__(self, llm, tavily_api_key: Optional[str] = None):
         self.llm = llm
-        self.tavily_api_key = tavily_api_key or os.getenv("TAVILY_API_KEY")
+        self.tavily_api_key = tavily_api_key or app_config.TAVILY_API_KEY
 
     def _parse_json_safely(self, text: str) -> Dict[str, Any]:
         """Robust JSON extraction from LLM responses with fallback strategies."""
@@ -386,7 +387,7 @@ class ATAGProcessor:
         ).replace(
             "{confirmed_inputs_list}", confirmed_inputs_list
         ).replace(
-            "{target_info}", f"https://{confirmed_inputs.get('website', 'google.com')}"
+            "{target_info}", f"https://{confirmed_inputs.get('website', app_config.DEFAULT_TARGET_DOMAIN)}"
         ).replace(
             "{prior_context}", prior_context
         )

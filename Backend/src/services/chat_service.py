@@ -13,12 +13,13 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from src.database.chat_db import ScheduleRun, User, Message, ChatSession, Schedule, get_db
 from src.utils import validator
 from src.utils.logger import logger
+from src.config import JWT_SECRET_KEY as SECRET_KEY, JWT_ALGORITHM as ALGORITHM
 
 security = HTTPBearer()
 
-# JWT Configuration - Should match validator.py or be centralized
-SECRET_KEY = "sciparser_super_secret_signature_key_2026_!_secure_key_12345678"
-ALGORITHM = "HS256"
+# JWT session tokens issued by ChatService use a longer expiry than the
+# short-lived tokens in validator.py. Secret/algorithm are centralized in
+# src/config.py so both stay in sync.
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 
 class ChatService:

@@ -1,0 +1,142 @@
+"""
+Central configuration module for the SciParser AI backend.
+
+This is the single place that reads environment variables and exposes every
+configurable value used across the backend — secrets, URLs, ports, and
+timeouts. No other module should read `os.getenv(...)` for these values or
+hardcode a URL/secret directly; import from here instead.
+
+Environment variables are loaded from a `.env` file in development (see
+`Backend/.env.example` for the full list) and from Replit Secrets in
+production. Set `ENVIRONMENT=production` to enable strict validation that
+fails fast on missing required secrets, instead of silently falling back to
+an insecure development default.
+"""
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development").strip().lower()
+IS_PRODUCTION = ENVIRONMENT == "production"
+
+
+def _require(name: str) -> str:
+    """Read a required environment variable, raising a clear error if unset."""
+    value = os.getenv(name)
+    if not value:
+        raise RuntimeError(
+            f"Missing required environment variable '{name}'. "
+            f"Set it via Replit Secrets (production) or a Backend/.env file (development). "
+            f"See Backend/.env.example for the full list of supported variables."
+        )
+    return value
+
+
+def _secret(name: str, dev_default: str) -> str:
+    """
+    Read a secret. In production it MUST be set (no fallback). In development
+    it falls back to a clearly-labeled insecure default so local dev keeps working.
+    """
+    if IS_PRODUCTION:
+        return _require(name)
+    return os.getenv(name) or dev_default
+
+
+def _str(name: str, default: str) -> str:
+    return os.getenv(name, default)
+
+
+def _int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    return int(raw) if raw not in (None, "") else default
+
+
+def _float(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    return float(raw) if raw not in (None, "") else default
+
+
+def _bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _list(name: str, default: list) -> list:
+    raw = os.getenv(name)
+    if not raw:
+        return default
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+# ---------------------------------------------------------------------------
+# Security / Auth
+# ---------------------------------------------------------------------------
+JWT_SECRET_KEY = _secret(
+    "JWT_SECRET_KEY",
+    dev_default="dev-only-insecure-jwt-secret-do-not-use-in-production",
+)
+JWT_ALGORITHM = _str("JWT_ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = _int("ACCESS_TOKEN_EXPIRE_MINUTES", 15 * 60)
+
+# ---------------------------------------------------------------------------
+# Database
+# ---------------------------------------------------------------------------
+DATABASE_URL = _require("DATABASE_URL") if IS_PRODUCTION else os.getenv("DATABASE_URL", "")
+
+# ---------------------------------------------------------------------------
+# LLM / third-party API keys & endpoints
+# ---------------------------------------------------------------------------
+OPENROUTER_API_KEY = _require("OPENROUTER_API_KEY") if IS_PRODUCTION else os.getenv("OPENROUTER_API_KEY", "")
+OPENROUTER_BASE_URL = _str("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+OPENROUTER_MODEL = _str("OPENROUTER_MODEL", "google/gemini-3-flash-preview")
+
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
+
+# ---------------------------------------------------------------------------
+# CORS
+# ---------------------------------------------------------------------------
+# Development default keeps the previous wide-open behavior; production
+# should set CORS_ALLOWED_ORIGINS to a comma-separated allowlist of origins.
+CORS_ALLOWED_ORIGINS = _list("CORS_ALLOWED_ORIGINS", default=["*"])
+
+# ---------------------------------------------------------------------------
+# Server
+# ---------------------------------------------------------------------------
+SERVER_HOST = _str("SERVER_HOST", "0.0.0.0")
+SERVER_PORT = _int("SERVER_PORT", 8000)
+
+# ---------------------------------------------------------------------------
+# SMTP / email notifications
+# ---------------------------------------------------------------------------
+SMTP_HOST = os.getenv("SMTP_HOST", "")
+SMTP_PORT = _int("SMTP_PORT", 587)
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASS = os.getenv("SMTP_PASS", "")
+SMTP_FROM = os.getenv("SMTP_FROM", "") or SMTP_USER
+SMTP_TIMEOUT_SECONDS = _int("SMTP_TIMEOUT_SECONDS", 15)
+
+# ---------------------------------------------------------------------------
+# HTTP client timeouts
+# ---------------------------------------------------------------------------
+HTTP_CLIENT_TIMEOUT_SECONDS = _float("HTTP_CLIENT_TIMEOUT_SECONDS", 6)
+CDP_JSON_TIMEOUT_SECONDS = _float("CDP_JSON_TIMEOUT_SECONDS", 3)
+CDP_SCREENSHOT_TIMEOUT_SECONDS = _float("CDP_SCREENSHOT_TIMEOUT_SECONDS", 8)
+PROXY_TEST_TIMEOUT_SECONDS = _float("PROXY_TEST_TIMEOUT_SECONDS", 10)
+
+# ---------------------------------------------------------------------------
+# Browser automation
+# ---------------------------------------------------------------------------
+BROWSER_ENGINE = _str("BROWSER_ENGINE", "camoufox")
+BROWSER_DEFAULT_CDP_HOST = _str("BROWSER_DEFAULT_CDP_HOST", "localhost")
+BROWSER_DEFAULT_CDP_PORT = _int("BROWSER_DEFAULT_CDP_PORT", 9222)
+BROWSER_CDP_READY_TIMEOUT_SECONDS = _float("BROWSER_CDP_READY_TIMEOUT_SECONDS", 90)
+BROWSER_NAVIGATION_TIMEOUT_MS = _int("BROWSER_NAVIGATION_TIMEOUT_MS", 30000)
+
+# ---------------------------------------------------------------------------
+# Third-party check endpoints / defaults
+# ---------------------------------------------------------------------------
+IP_CHECK_URL = _str("IP_CHECK_URL", "https://api.ipify.org?format=json")
+DEFAULT_TARGET_DOMAIN = _str("DEFAULT_TARGET_DOMAIN", "google.com")

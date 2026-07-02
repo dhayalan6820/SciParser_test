@@ -7,6 +7,9 @@ import socket
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from src import config
+
 # ---------------------------------------------------------------------------
 # Stealth JS injected into every page before any content loads
 # ---------------------------------------------------------------------------
@@ -241,7 +244,7 @@ async def _ff_navigate(args: dict) -> str:
     if not page:
         return "Error: No active camoufox page"
     try:
-        await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        await page.goto(url, wait_until="domcontentloaded", timeout=config.BROWSER_NAVIGATION_TIMEOUT_MS)
         return f"Navigated to {page.url}"
     except Exception as exc:
         return f"Navigation error: {exc}"
@@ -681,10 +684,11 @@ def find_free_port() -> int:
         return s.getsockname()[1]
 
 
-async def _wait_for_cdp(port: int, timeout_secs: int = 90) -> bool:
-    """Poll http://localhost:PORT/json/version until Chrome answers."""
+async def _wait_for_cdp(port: int, timeout_secs: int = None) -> bool:
+    """Poll http://<host>:PORT/json/version until Chrome answers."""
     import aiohttp
-    url = f"http://localhost:{port}/json/version"
+    timeout_secs = timeout_secs if timeout_secs is not None else int(config.BROWSER_CDP_READY_TIMEOUT_SECONDS)
+    url = f"http://{config.BROWSER_DEFAULT_CDP_HOST}:{port}/json/version"
     for _ in range(timeout_secs):
         try:
             async with aiohttp.ClientSession() as sess:
@@ -864,10 +868,10 @@ def _patch_mcp_server_session_retry(chrome_ready: asyncio.Event, cdp_url: str, h
         if not chrome_ready.is_set():
             print(f"Bridge [patch]: waiting for Chrome at {_cdp_url}...", file=sys.stderr)
             try:
-                await asyncio.wait_for(chrome_ready.wait(), timeout=90.0)
+                await asyncio.wait_for(chrome_ready.wait(), timeout=config.BROWSER_CDP_READY_TIMEOUT_SECONDS)
                 print("Bridge [patch]: Chrome ready — connecting", file=sys.stderr)
             except asyncio.TimeoutError:
-                print("Bridge [patch]: 90s timeout waiting for Chrome — trying anyway", file=sys.stderr)
+                print(f"Bridge [patch]: {config.BROWSER_CDP_READY_TIMEOUT_SECONDS}s timeout waiting for Chrome — trying anyway", file=sys.stderr)
 
         # ── Camoufox Firefox path ──────────────────────────────────────────────
         # When _CAMOUFOX_CONTEXT is set the Firefox context is already live.
@@ -1295,7 +1299,7 @@ async def run_bridge():
     port_env       = os.getenv("BROWSER_USE_CDP_PORT")
     port           = int(port_env) if port_env and port_env not in ("", "0") else find_free_port()
     headless       = os.getenv("BROWSER_USE_HEADLESS", "true").lower() != "false"
-    browser_engine = os.getenv("BROWSER_ENGINE", "camoufox").lower()
+    browser_engine = os.getenv("BROWSER_ENGINE", config.BROWSER_ENGINE).lower()
     proxy_url      = os.getenv("BROWSER_PROXY_URL", "").strip()  # e.g. http://user:pass@host:port
 
     # Persistent profile directory — cookies, localStorage, and history
@@ -1304,7 +1308,7 @@ async def run_bridge():
     user_data_dir = os.getenv("BROWSER_USER_DATA_DIR", _default_profile)
     os.makedirs(user_data_dir, exist_ok=True)
 
-    cdp_url = cdp_url_env or f"http://localhost:{port}"
+    cdp_url = cdp_url_env or f"http://{config.BROWSER_DEFAULT_CDP_HOST}:{port}"
 
     # Set the mouse-state file path so _write_mouse_state() can use it
     global _MOUSE_STATE_PATH

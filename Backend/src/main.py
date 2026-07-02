@@ -34,6 +34,7 @@ from src.schemas.schema import (
 from src.utils.logger import logger
 from src.services.brain import brain
 from src.services.chat_service import ChatService
+from src import config
 
 # --- WebSocket Plan Manager ---
 class PlanStreamManager:
@@ -289,7 +290,7 @@ def _sync_send_email(smtp_host: str, smtp_port: int, smtp_user: str, smtp_pass: 
     msg["From"] = from_addr
     msg["To"] = to_addr
     msg.attach(MIMEText(html_body, "html"))
-    with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
+    with smtplib.SMTP(smtp_host, smtp_port, timeout=config.SMTP_TIMEOUT_SECONDS) as server:
         server.ehlo()
         server.starttls()
         server.login(smtp_user, smtp_pass)
@@ -298,14 +299,14 @@ def _sync_send_email(smtp_host: str, smtp_port: int, smtp_user: str, smtp_pass: 
 
 async def _send_result_email(recipient: str, schedule_title: str, output: str) -> None:
     """Send a completion email if SMTP env-vars are configured."""
-    smtp_host = os.getenv("SMTP_HOST", "")
-    smtp_user = os.getenv("SMTP_USER", "")
-    smtp_pass = os.getenv("SMTP_PASS", "")
+    smtp_host = config.SMTP_HOST
+    smtp_user = config.SMTP_USER
+    smtp_pass = config.SMTP_PASS
     if not (smtp_host and smtp_user and smtp_pass):
         logger.info("SMTP not configured — skipping email notification.")
         return
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    from_addr = os.getenv("SMTP_FROM", smtp_user)
+    smtp_port = config.SMTP_PORT
+    from_addr = config.SMTP_FROM or smtp_user
 
     html_body = f"""
 <html><body style="font-family:sans-serif;background:#0a0f1a;color:#e2e8f0;padding:32px;">
@@ -536,7 +537,7 @@ app = FastAPI(title="SciParser AI API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Relaxed for development to ensure WS handshake
+    allow_origins=config.CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1191,7 +1192,7 @@ async def connect_cdp(req: Dict[str, Any], current_user: User = Depends(ChatServ
         check_base = "http://" + check_base[5:]
 
     try:
-        async with _httpx.AsyncClient(timeout=6) as client:
+        async with _httpx.AsyncClient(timeout=config.HTTP_CLIENT_TIMEOUT_SECONDS) as client:
             resp = await client.get(f"{check_base}/json/version")
         if resp.status_code != 200:
             raise HTTPException(status_code=400, detail=f"CDP endpoint returned HTTP {resp.status_code}")
@@ -1323,8 +1324,8 @@ async def test_proxy(req: Dict[str, Any], current_user: User = Depends(ChatServi
     if not proxy_url:
         raise HTTPException(status_code=400, detail="No proxy_url provided or saved")
     try:
-        async with _httpx.AsyncClient(proxy=proxy_url, timeout=10) as client:
-            resp = await client.get("https://api.ipify.org?format=json")
+        async with _httpx.AsyncClient(proxy=proxy_url, timeout=config.PROXY_TEST_TIMEOUT_SECONDS) as client:
+            resp = await client.get(config.IP_CHECK_URL)
         data = resp.json()
         return {"status": "ok", "exit_ip": data.get("ip", "unknown")}
     except Exception as exc:
@@ -1347,7 +1348,7 @@ async def get_browser_engine(current_user: User = Depends(ChatService.get_curren
         return {"engine": db_engine}
     # No explicit user choice — honour env var, DON'T write to session so
     # MCPToolManager's own fallback chain (browser_engine → BROWSER_ENGINE env → camoufox) is preserved
-    return {"engine": os.getenv("BROWSER_ENGINE", "camoufox")}
+    return {"engine": config.BROWSER_ENGINE}
 
 
 @app.post("/sciparser/v1/settings/browser-engine")
@@ -1455,4 +1456,4 @@ async def get_memory_skills(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host=config.SERVER_HOST, port=config.SERVER_PORT)

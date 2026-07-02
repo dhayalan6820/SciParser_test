@@ -7,6 +7,8 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_mcp_adapters.tools import load_mcp_tools
 from langchain_core.tools import BaseTool
 
+from src import config
+
 logger = logging.getLogger(__name__)
 
 class MCPToolManager:
@@ -23,7 +25,10 @@ class MCPToolManager:
             return
 
         # Accept direct WebSocket or HTTP CDP URL
-        self.cdp_url = cdp_url or (f"http://localhost:{port}" if port else "http://localhost:9222")
+        self.cdp_url = cdp_url or (
+            f"http://{config.BROWSER_DEFAULT_CDP_HOST}:{port}" if port
+            else f"http://{config.BROWSER_DEFAULT_CDP_HOST}:{config.BROWSER_DEFAULT_CDP_PORT}"
+        )
 
         # Configure the browser-use MCP server via the local bridge script
         # This ensures the browser is launched with the correct CDP port and config
@@ -42,17 +47,17 @@ class MCPToolManager:
                 "env": {
                     **os.environ,
                     "PYTHONPATH": os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")),
-                    "OPENAI_API_KEY": os.getenv("OPENROUTER_API_KEY", ""),
-                    "OPENAI_BASE_URL": "https://openrouter.ai/api/v1",
-                    "OPENAI_API_BASE": "https://openrouter.ai/api/v1",
-                    "BROWSER_USE_MODEL": "google/gemini-3-flash-preview",
+                    "OPENAI_API_KEY": config.OPENROUTER_API_KEY,
+                    "OPENAI_BASE_URL": config.OPENROUTER_BASE_URL,
+                    "OPENAI_API_BASE": config.OPENROUTER_BASE_URL,
+                    "BROWSER_USE_MODEL": config.OPENROUTER_MODEL,
                     "MCP_BROWSER_CDP_URL": self.cdp_url,
                     "BROWSER_CDP_URL": self.cdp_url, # Standard env var for some MCP servers
-                    "BROWSER_USE_CDP_PORT": str(port) if port else "9222",
+                    "BROWSER_USE_CDP_PORT": str(port) if port else str(config.BROWSER_DEFAULT_CDP_PORT),
                     "BROWSER_USER_DATA_DIR": user_data_dir, # Pass unique profile dir
                     "MCP_BROWSER_USE_OWN_BROWSER": "true" if own_browser else "false",
                     "BROWSER_PROXY_URL": proxy_url or "",
-                    "BROWSER_ENGINE": browser_engine or os.getenv("BROWSER_ENGINE", "camoufox"),
+                    "BROWSER_ENGINE": browser_engine or config.BROWSER_ENGINE,
                     "BROWSER_USE_HEADLESS": os.getenv("BROWSER_USE_HEADLESS", "false"),
                     "BROWSER_USE_DISABLE_SECURITY": "true",
                     "BROWSER_USER_AGENT_INDEX": str(user_agent_index),

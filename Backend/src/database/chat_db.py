@@ -10,13 +10,12 @@ from sqlalchemy.orm import Mapped, declarative_base, relationship
 from enum import Enum as PyEnum
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from dotenv import load_dotenv
 
-load_dotenv()
+from src import config
 
 from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
 
-_raw_url = os.getenv("DATABASE_URL", "")
+_raw_url = config.DATABASE_URL
 
 def _build_asyncpg_url(raw_url: str) -> str:
     if raw_url.startswith("postgresql://"):

@@ -28,6 +28,7 @@ from langgraph.checkpoint.memory import MemorySaver
 # Database and Utilities
 from src.database.chat_db import AsyncSessionLocal, Message, ChatSession, AgentExecutionLog, ToolExecutionLog
 from src.utils.logger import logger
+from src import config
 from src.agents.mcp_agent import MCPToolManager
 from src.utils.session_manager import SessionManager
 from src.services.memory_service import MemoryService
@@ -523,14 +524,14 @@ class Brain:
             return
         
         logger.info("Initializing multi-agent orchestrator system...")
-        api_key = os.getenv("OPENROUTER_API_KEY")
+        api_key = config.OPENROUTER_API_KEY
         if not api_key:
             raise ValueError("OPENROUTER_API_KEY not found in environment variables")
 
         self.llm = ChatOpenAI(
-            model="google/gemini-3-flash-preview",
-            openai_api_key=os.getenv("OPENROUTER_API_KEY"),
-            base_url="https://openrouter.ai/api/v1",
+            model=config.OPENROUTER_MODEL,
+            openai_api_key=api_key,
+            base_url=config.OPENROUTER_BASE_URL,
             temperature=0.3,
             max_tokens=16384,
             default_headers={"x-or-cache": "1"},
@@ -538,9 +539,9 @@ class Brain:
         
         # Specialized model for code generation
         self.code_llm = ChatOpenAI(
-            model="google/gemini-3-flash-preview",
-            openai_api_key=os.getenv("OPENROUTER_API_KEY"),
-            base_url="https://openrouter.ai/api/v1",
+            model=config.OPENROUTER_MODEL,
+            openai_api_key=api_key,
+            base_url=config.OPENROUTER_BASE_URL,
             temperature=0.1,
             max_tokens=8192,
             default_headers={"x-or-cache": "1"},
@@ -548,7 +549,7 @@ class Brain:
 
         self.search_tool = TavilySearch(max_results=3)
         self.atag_processor = ATAGProcessor(self.llm)
-        self.code_processor = ATAGProcessor(self.code_llm, tavily_api_key=os.getenv("TAVILY_API_KEY"))
+        self.code_processor = ATAGProcessor(self.code_llm, tavily_api_key=config.TAVILY_API_KEY)
 
         # Cognitive memory service
         self.memory_service = MemoryService(llm=self.llm)
@@ -595,7 +596,7 @@ class Brain:
             return
 
         parsed = urlparse(cdp_url)
-        host = parsed.hostname or "localhost"
+        host = parsed.hostname or config.BROWSER_DEFAULT_CDP_HOST
         port = parsed.port
         json_endpoint = f"http://{host}:{port}/json"
 
@@ -609,7 +610,7 @@ class Brain:
                 async with aiohttp.ClientSession() as http:
                     async with http.get(
                         json_endpoint,
-                        timeout=aiohttp.ClientTimeout(total=3),
+                        timeout=aiohttp.ClientTimeout(total=config.CDP_JSON_TIMEOUT_SECONDS),
                     ) as resp:
                         targets = await resp.json(content_type=None)
                 for t in targets:
@@ -632,7 +633,7 @@ class Brain:
                 async with aiohttp.ClientSession() as http:
                     async with http.ws_connect(
                         ws_url,
-                        timeout=aiohttp.ClientTimeout(total=8),
+                        timeout=aiohttp.ClientTimeout(total=config.CDP_SCREENSHOT_TIMEOUT_SECONDS),
                     ) as ws:
                         await ws.send_str(cmd)
                         async for msg in ws:
@@ -1353,8 +1354,8 @@ class Brain:
                     return url
 
                 try:
-                    async with httpx.AsyncClient(proxy=_proxy_url_preflight, timeout=10) as _pc:
-                        _ip_resp = await _pc.get("https://api.ipify.org?format=json")
+                    async with httpx.AsyncClient(proxy=_proxy_url_preflight, timeout=config.PROXY_TEST_TIMEOUT_SECONDS) as _pc:
+                        _ip_resp = await _pc.get(config.IP_CHECK_URL)
                     _ip_resp.raise_for_status()
                     _exit_ip = _ip_resp.json().get("ip")
                     if not _exit_ip:

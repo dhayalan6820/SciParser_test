@@ -1,11 +1,10 @@
 import os
 import json
-from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from langchain_core.tools import tool
 from tavily import TavilyClient
 
-load_dotenv()
+from src import config
 
 # ==========================================
 # 1. Define the Input Schema for the LLM
@@ -44,7 +43,7 @@ def dynamic_search_tool(query: str, search_depth: str = "basic", time_range: str
     - If the user asks for an image of something, set 'include_images' to True.
     - If the user needs a deep dive on a complex topic, set 'search_depth' to 'advanced'.
     """
-    client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
+    client = TavilyClient(api_key=config.TAVILY_API_KEY)
     
     # The LLM passes its chosen parameters into the actual API call here
     response = client.search(
@@ -61,9 +60,8 @@ def dynamic_search_tool(query: str, search_depth: str = "basic", time_range: str
 # ==========================================
 class AIParserAgent:
     def __init__(self):
-        load_dotenv()
-        if not os.getenv("TAVILY_API_KEY"):
-            raise ValueError("Missing TAVILY_API_KEY in .env file.")
+        if not config.TAVILY_API_KEY:
+            raise ValueError("Missing TAVILY_API_KEY. Set it in Backend/.env (dev) or Replit Secrets (production).")
         
         # We attach the tool to the agent.
         # When you add an LLM later, you will bind this tool to the LLM.

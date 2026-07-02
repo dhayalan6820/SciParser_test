@@ -1,12 +1,9 @@
 import os
 import asyncio
-from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import text
 from src.database.chat_db import Base, engine as app_engine
 from src.utils.logger import logger
-
-load_dotenv()
 
 async def init_database():
     """
