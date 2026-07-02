@@ -5,7 +5,7 @@ import atomIcon from "@/assets/atom-icon.png";
 import { Signup1 } from "./signup-1";
 import { Button } from "./button";
 import { sciparserApi, ChatMessage, UploadedFile, User } from "../../api";
-import { DEFAULT_CDP_URL, WS_BASE_URL } from "../../config";
+import { DEFAULT_CDP_URL, wsUrl } from "../../config";
 import { useTheme } from "../../contexts/ThemeContext";
 import { cn } from "../../../lib/utils";
 import { Component as AiLoader } from "./ai-loader";
@@ -561,7 +561,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
     const token = localStorage.getItem("access_token");
     const buildUrl = () =>
-      `${WS_BASE_URL}/sciparser/v1/browser/stream?chat_id=${activeThreadId}&token=${token}`;
+      wsUrl(`/sciparser/v1/browser/stream?chat_id=${activeThreadId}&token=${token}`);
 
     let ws: WebSocket;
     let heartbeatTimer: ReturnType<typeof setInterval>;
@@ -745,7 +745,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
     const token = localStorage.getItem("access_token");
     const buildUrl = () =>
-      `${WS_BASE_URL}/sciparser/v1/ws/plan/${activeThreadId}?token=${token}`;
+      wsUrl(`/sciparser/v1/ws/plan/${activeThreadId}?token=${token}`);
 
     let ws: WebSocket;
     let heartbeatTimer: ReturnType<typeof setInterval>;

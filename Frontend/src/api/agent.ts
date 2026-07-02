@@ -1,6 +1,4 @@
-import { API_BASE_URL, WS_BASE_URL } from "../config";
-
-const BASE_URL = API_BASE_URL;
+import { apiUrl, wsUrl } from "../config";
 
 export interface AgentHistory {
   id: string;
@@ -40,24 +38,24 @@ export interface AgentStatus {
 
 export const agentApi = {
   async getHistory(chatId: string): Promise<AgentHistory[]> {
-    const response = await fetch(`${BASE_URL}/sciparser/v1/agent/history/${chatId}`);
+    const response = await fetch(apiUrl(`/sciparser/v1/agent/history/${chatId}`));
     const data = await response.json();
     return data.history;
   },
 
   async getTools(chatId: string): Promise<ToolExecution[]> {
-    const response = await fetch(`${BASE_URL}/sciparser/v1/agent/tools/${chatId}`);
+    const response = await fetch(apiUrl(`/sciparser/v1/agent/tools/${chatId}`));
     const data = await response.json();
     return data.tools;
   },
 
   async getStatus(chatId: string): Promise<AgentStatus> {
-    const response = await fetch(`${BASE_URL}/sciparser/v1/agent/status/${chatId}`);
+    const response = await fetch(apiUrl(`/sciparser/v1/agent/status/${chatId}`));
     return response.json();
   },
 
   connectWebSocket(chatId: string, onMessage: (data: any) => void) {
-    const ws = new WebSocket(`${WS_BASE_URL}/sciparser/v1/agent/stream/${chatId}`);
+    const ws = new WebSocket(wsUrl(`/sciparser/v1/agent/stream/${chatId}`));
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       onMessage(data);

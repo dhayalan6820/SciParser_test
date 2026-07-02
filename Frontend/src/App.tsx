@@ -4,6 +4,7 @@ import { NotFound } from "./components/ui/ghost-404-page";
 import { Signup1 } from "./components/ui/signup-1";
 import { motion } from "framer-motion";
 import { sciparserApi } from "./api";
+import { apiUrl } from "./config";
 import { useTheme } from "./contexts/ThemeContext";
 
 const customBezier: [number, number, number, number] = [0.43, 0.13, 0.23, 0.96];
@@ -34,7 +35,7 @@ export default function App() {
   React.useEffect(() => {
     const checkServerHealth = async () => {
       try {
-        const response = await fetch(`/sciparser/v1/health`, { 
+        const response = await fetch(apiUrl("/sciparser/v1/health"), { 
           method: "GET",
           signal: AbortSignal.timeout(3000)
         });
