@@ -17,6 +17,10 @@ async def init_database():
         logger.info("Creating/verifying database tables...")
         async with app_engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            # Add session_state column to existing tables if it doesn't exist yet
+            await conn.execute(text(
+                "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS session_state TEXT"
+            ))
             logger.info("Database tables checked/created successfully.")
     except Exception as e:
         logger.error(f"Error creating tables: {e}")

@@ -117,6 +117,7 @@ class ChatSession(Base):
     status = Column(String(20), default="active")
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     state_data = Column(Text)
+    session_state = Column(Text, nullable=True)
 
     user: Mapped["User"] = relationship("User", back_populates="chat_sessions")
 

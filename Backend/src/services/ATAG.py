@@ -229,6 +229,8 @@ To avoid bot-detection systems (DataDome, Akamai, Cloudflare) the agent MUST beh
 ## OUTPUT FORMAT
 TASK: {task_summary}
 
+{prior_context}
+
 REASONING:
 [Provide a brief explanation of the strategy chosen for this task. If it's a direct navigation, explain that you are only navigating.]
 
@@ -372,7 +374,7 @@ class ATAGProcessor:
         response = await self.llm.ainvoke([SystemMessage(content=formatted_prompt)])
         return self._parse_json_safely(response.content)
 
-    async def run_execution_generation(self, user_request: str, task_summary: str, confirmed_inputs: Dict[str, Any], discovery_strategy: str) -> str:
+    async def run_execution_generation(self, user_request: str, task_summary: str, confirmed_inputs: Dict[str, Any], discovery_strategy: str, prior_context: str = "") -> str:
         """Runs Agent 2 to build the high-level mission objective for the native agent."""
         # Format confirmed_inputs for display in the prompt
         confirmed_inputs_list = "\n".join(
@@ -385,6 +387,8 @@ class ATAGProcessor:
             "{confirmed_inputs_list}", confirmed_inputs_list
         ).replace(
             "{target_info}", f"https://{confirmed_inputs.get('website', 'google.com')}"
+        ).replace(
+            "{prior_context}", prior_context
         )
         response = await self.llm.ainvoke([SystemMessage(content=formatted_prompt)])
         return response.content

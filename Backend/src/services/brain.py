@@ -827,12 +827,19 @@ class Brain:
 
             # Strip any stale SystemMessages from LangGraph state, then prepend the
             # cached static system message.  Inject dynamic context as a prefix on the
-            # first HumanMessage so the LLM always has current task info without
-            # polluting the static prefix (maximises provider-level cache hits).
+            # LAST HumanMessage so the current task description is always adjacent to
+            # the mission objective that was just submitted.  Injecting into raw_messages[0]
+            # (the oldest message) caused the context to overwrite the first message while
+            # leaving the new mission objective unmodified at the end of the chain.
             raw_messages = [m for m in messages if not isinstance(m, SystemMessage)]
-            if raw_messages and isinstance(raw_messages[0], HumanMessage):
-                raw_messages[0] = HumanMessage(
-                    content=f"## TASK CONTEXT\n{dynamic_context}\n\n---\n\n{raw_messages[0].content}"
+            last_human_idx = next(
+                (i for i in range(len(raw_messages) - 1, -1, -1)
+                 if isinstance(raw_messages[i], HumanMessage)),
+                None
+            )
+            if last_human_idx is not None:
+                raw_messages[last_human_idx] = HumanMessage(
+                    content=f"## TASK CONTEXT\n{dynamic_context}\n\n---\n\n{raw_messages[last_human_idx].content}"
                 )
             current_messages = [static_sys_msg] + raw_messages
 
@@ -1173,6 +1180,7 @@ class Brain:
             stream_task = None
             
             # --- NEW: Fetch Chat History for Context ---
+            prior_session_state: dict = {}
             async with AsyncSessionLocal() as db:
                 stmt = select(Message).where(Message.chat_id == chat_id).order_by(Message.created_at.asc())
                 res = await db.execute(stmt)
@@ -1185,6 +1193,16 @@ class Brain:
                         chat_history.append(HumanMessage(content=m.content))
                     else:
                         chat_history.append(AIMessage(content=m.content))
+
+                # Load persisted session state (what the agent accomplished last turn)
+                sess_stmt = select(ChatSession).where(ChatSession.id == chat_id)
+                sess_res = await db.execute(sess_stmt)
+                sess_row = sess_res.scalar_one_or_none()
+                if sess_row and sess_row.session_state:
+                    try:
+                        prior_session_state = json.loads(sess_row.session_state)
+                    except Exception:
+                        prior_session_state = {}
 
                 # Add current message to DB
                 human_msg = Message(
@@ -1203,6 +1221,13 @@ class Brain:
             
             # Construct a context string from history for Agent 1
             history_context = "\n".join([f"{'User' if isinstance(m, HumanMessage) else 'AI'}: {m.content}" for m in chat_history[-5:]])
+            # Append prior browser state so the analysis agent knows what was already done
+            if prior_session_state:
+                history_context += (
+                    f"\n\nPREVIOUS SESSION STATE: The agent previously completed: "
+                    f"{prior_session_state.get('accomplishment_summary', '')} "
+                    f"The browser is currently on: {prior_session_state.get('last_url', 'unknown page')}."
+                )
             understanding = await self.atag_processor.run_input_understanding(user_message, history_context=history_context)
             
             if understanding.get("status") == "NEEDS_INPUT":
@@ -1305,9 +1330,20 @@ class Brain:
                     # --- Execution via MCP Tool Graph (Standardized) ---
                     logger.info(f"Executing via MCP Tool Graph (Attempt {retry_count + 1})...")
                     
-                    # 1. Generate the mission objective
+                    # 1. Generate the mission objective (with prior browser state if available)
+                    prior_context_str = ""
+                    if prior_session_state:
+                        prior_context_str = (
+                            "## CURRENT BROWSER STATE\n"
+                            f"The agent has already completed: {prior_session_state.get('accomplishment_summary', '')}\n"
+                            f"The browser is currently on: {prior_session_state.get('last_url', 'unknown page')}\n"
+                            "IMPORTANT: Continue from this state. Do NOT re-navigate to the start URL or redo "
+                            "steps that have already been completed. Pick up exactly where the previous "
+                            "message left off."
+                        )
                     mission_objective = await self.atag_processor.run_execution_generation(
-                        user_message, task_summary, confirmed_inputs, discovery_strategy
+                        user_message, task_summary, confirmed_inputs, discovery_strategy,
+                        prior_context=prior_context_str
                     )
                     
                     # Parse reasoning and plan if present
@@ -1365,6 +1401,41 @@ class Brain:
                             await update_ui(i, "completed")
                         
                         await update_ui(1, "completed", output_data={"response": final_response}, details="Task completed successfully via MCP.")
+
+                        # --- Persist session state for multi-turn continuity ---
+                        try:
+                            exec_history = graph_output.get("execution_history", [])
+                            # Find the last URL from any navigation tool result
+                            last_url = prior_session_state.get("last_url", "")
+                            for entry in exec_history:
+                                tool_name = entry.get("tool", "")
+                                result_text = entry.get("result", "")
+                                if tool_name in ("browser_navigate", "browser_go_back", "browser_go_forward") and result_text:
+                                    # Extract URL from result text if present
+                                    url_match = re.search(r'https?://[^\s\'"]+', result_text)
+                                    if url_match:
+                                        last_url = url_match.group(0).rstrip(".,)")
+                            # Build a brief accomplishment summary from successful steps
+                            success_steps = [
+                                e["tool"] for e in exec_history if e.get("status") == "SUCCESS"
+                            ]
+                            accomplishment = f"{task_summary}. Steps completed: {', '.join(success_steps[:8])}."
+                            new_session_state = {
+                                "last_url": last_url,
+                                "accomplishment_summary": accomplishment[:500],
+                                "ts": datetime.now(timezone.utc).timestamp(),
+                            }
+                            async with AsyncSessionLocal() as db:
+                                upd_stmt = select(ChatSession).where(ChatSession.id == chat_id)
+                                upd_res = await db.execute(upd_stmt)
+                                upd_row = upd_res.scalar_one_or_none()
+                                if upd_row:
+                                    upd_row.session_state = json.dumps(new_session_state)
+                                    await db.commit()
+                            logger.info(f"[SessionState] Saved for chat {chat_id}: url={last_url}")
+                        except Exception as _ss_err:
+                            logger.warning(f"[SessionState] save error (non-fatal): {_ss_err}")
+
                         break
                     else:
                         raise Exception(f"Execution failed: {final_msg}")
