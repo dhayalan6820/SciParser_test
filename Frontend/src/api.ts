@@ -205,6 +205,19 @@ export const sciparserApi = {
     return res.json();
   },
 
+  resetSessionState: async (chatId: string) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+
+    const res = await fetch(`${BASE_URL}/sciparser/v1/chat/sessions/${chatId}/reset-session`, {
+      method: "POST",
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
   getUploadedFiles: async () => {
     const token = localStorage.getItem("access_token");
     if (!token) {

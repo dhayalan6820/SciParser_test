@@ -330,6 +330,23 @@ async def rename_session(chat_id: str, req: RenameChatRequest, db: AsyncSession 
 async def delete_session(chat_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_user)):
     return await ChatService.delete_session(db, chat_id, current_user.user_id)
 
+@app.post("/sciparser/v1/chat/sessions/{chat_id}/reset-session")
+async def reset_session_state(chat_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_user)):
+    """Wipe the persisted browser session_state for a chat so the next message starts fresh."""
+    from src.database.chat_db import ChatSession as ChatSessionModel
+    stmt = select(ChatSessionModel).where(
+        ChatSessionModel.id == chat_id,
+        ChatSessionModel.user_id == current_user.user_id
+    )
+    res = await db.execute(stmt)
+    session = res.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session.session_state = None
+    await db.commit()
+    logger.info(f"[reset-session] session_state cleared for chat_id={chat_id} by user={current_user.user_id}")
+    return {"status": "success", "message": "Session state cleared."}
+
 @app.get("/sciparser/v1/chat/sessions/{chat_id}/logs")
 async def get_agent_logs(chat_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_user)):
     from src.database.chat_db import AgentExecutionLog

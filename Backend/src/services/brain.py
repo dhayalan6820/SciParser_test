@@ -757,6 +757,19 @@ class Brain:
         except Exception as exc:
             logger.debug(f"Could not send final frame for user {user_id}: {exc}")
 
+    @staticmethod
+    def _is_reset_intent(message: str) -> bool:
+        """Return True if the message expresses an intent to start fresh / forget prior work."""
+        lower = message.lower().strip()
+        _RESET_PATTERNS = [
+            "start over", "start fresh", "start again", "start from scratch",
+            "go back to the beginning", "reset", "forget what you did",
+            "forget everything", "clear the session", "new task",
+            "ignore what you did", "scratch that", "discard previous",
+            "discard what you did", "begin again", "wipe the slate",
+        ]
+        return any(pat in lower for pat in _RESET_PATTERNS)
+
     def _extract_domain_from_task(self, user_message: str, confirmed_inputs: Dict[str, Any]) -> str:
         """Extract primary domain from confirmed inputs or raw message."""
         # Try confirmed inputs first
@@ -1203,6 +1216,16 @@ class Brain:
                         prior_session_state = json.loads(sess_row.session_state)
                     except Exception:
                         prior_session_state = {}
+
+                # --- Reset-intent detection ---
+                # If the user wants to start fresh, wipe the prior session state so
+                # the agent does not inherit the previous URL / accomplishment summary.
+                if prior_session_state and self._is_reset_intent(user_message):
+                    prior_session_state = {}
+                    if sess_row:
+                        sess_row.session_state = None
+                        await db.commit()
+                    logger.info(f"[brain] Reset intent detected for chat {chat_id} — session_state cleared.")
 
                 # Add current message to DB
                 human_msg = Message(

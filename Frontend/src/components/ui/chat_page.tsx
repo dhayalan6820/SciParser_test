@@ -1178,6 +1178,15 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     }
   };
 
+  const handleResetSession = async () => {
+    if (!activeThreadId) return;
+    try {
+      await sciparserApi.resetSessionState(activeThreadId);
+    } catch (e) {
+      console.error("Failed to reset session:", e);
+    }
+  };
+
   const handleFormSubmit = () => {
     if (!activeForm) return;
 
@@ -2817,6 +2826,19 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     >
                       <XIcon className="w-4 h-4" />
                       <span className="hidden md:inline">Close Browser</span>
+                    </Button>
+                  )}
+
+                  {activeThreadId && !isAiTyping && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleResetSession}
+                      title="Clear the saved browser session so the next message starts from scratch"
+                      className="gap-1.5 text-xs font-semibold shrink-0 text-amber-500 border-amber-200 hover:bg-amber-50 dark:border-amber-900/30 dark:hover:bg-amber-900/10"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      <span className="hidden md:inline">Reset Session</span>
                     </Button>
                   )}
                 </div>
