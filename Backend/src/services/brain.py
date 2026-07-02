@@ -658,33 +658,6 @@ class Brain:
                 pass
             return None
 
-        def _composite_cursor(b64_raw: str, ms: dict) -> str:
-            """Draw an agent cursor dot on a raw base64 JPEG at the mouse position."""
-            try:
-                import io as _io
-                from PIL import Image, ImageDraw
-                raw = base64.b64decode(b64_raw)
-                img = Image.open(_io.BytesIO(raw)).convert("RGB")
-                mx = float(ms.get("x", 0))
-                my = float(ms.get("y", 0))
-                vp_w = float(ms.get("vpW", 1280)) or 1280
-                vp_h = float(ms.get("vpH", 800)) or 800
-                sx = mx * img.width / vp_w
-                sy = my * img.height / vp_h
-                is_click = ms.get("event") == "click"
-                draw = ImageDraw.Draw(img)
-                r = 9
-                if is_click:
-                    draw.ellipse([sx - r * 2.2, sy - r * 2.2, sx + r * 2.2, sy + r * 2.2],
-                                 outline=(239, 68, 68), width=2)
-                draw.ellipse([sx - r, sy - r, sx + r, sy + r],
-                             fill=(239, 68, 68), outline=(255, 255, 255), width=2)
-                buf = _io.BytesIO()
-                img.save(buf, format="JPEG", quality=80)
-                return base64.b64encode(buf.getvalue()).decode()
-            except Exception:
-                return b64_raw
-
         async def _broadcast_frame(b64: str):
             # At screenshot cadence, also emit a mouse event so the frontend
             # overlay stays in sync even when the 150ms loop is behind.

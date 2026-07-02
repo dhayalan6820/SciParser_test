@@ -331,8 +331,11 @@ def _patch_mcp_server_session_retry(chrome_ready: asyncio.Event, cdp_url: str, h
             await session.start()
             print("Bridge [patch]: BrowserSession started successfully", file=sys.stderr)
 
-            # Patch page.mouse so ALL Playwright mouse ops emit cursor events
-            asyncio.create_task(_patch_session_mouse(session))
+            # Patch page.mouse so ALL Playwright mouse ops emit cursor events.
+            # Await the initial page patch before returning so early tool calls
+            # don't race ahead before the patch is applied; the context hook for
+            # future pages is registered inside _patch_session_mouse.
+            await _patch_session_mouse(session)
 
             # Track session for management (same as original)
             if hasattr(self, '_track_session'):
@@ -579,8 +582,8 @@ def _patch_add_human_tools() -> None:
             return await _exec_drag(self, arguments)
         # Intercept any browser_use native tool that carries pixel coordinates
         # so the cursor overlay tracks all agent click/interact operations.
-        cx = arguments.get("coordinate_x") or arguments.get("x")
-        cy = arguments.get("coordinate_y") or arguments.get("y")
+        cx = arguments.get("coordinate_x") if arguments.get("coordinate_x") is not None else arguments.get("x")
+        cy = arguments.get("coordinate_y") if arguments.get("coordinate_y") is not None else arguments.get("y")
         if cx is not None and cy is not None:
             is_click = any(k in tool_name for k in ("click", "input", "select", "type"))
             _write_mouse_state(float(cx), float(cy), "click" if is_click else "move")
