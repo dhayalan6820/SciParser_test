@@ -63,6 +63,9 @@ _DECAY_INTERVAL = timedelta(hours=6)
 _DECAY_STALE_DAYS = 7
 _DECAY_DELETE_THRESHOLD = 0.05
 
+_CAPTCHA_REFLECTION_MAX_DAYS = 30
+_CAPTCHA_SKILL_CONFIDENCE_FLOOR = 0.15
+
 
 class MemoryService:
     def __init__(self, llm=None):
@@ -155,11 +158,19 @@ class MemoryService:
                     })
 
                 # Reflections: top 5 most validated lessons for this user+domain
+                # Exclude CAPTCHA reflections older than _CAPTCHA_REFLECTION_MAX_DAYS so that
+                # stale failure lessons from superseded CAPTCHA implementations don't continue
+                # to pollute the context with misleading guidance.
+                _captcha_cutoff = datetime.now(timezone.utc) - timedelta(days=_CAPTCHA_REFLECTION_MAX_DAYS)
                 ref_res = await db.execute(
                     select(MemoryReflection)
                     .where(and_(
                         MemoryReflection.user_id == user_id,
                         MemoryReflection.domain == domain,
+                        or_(
+                            MemoryReflection.category != "CAPTCHA",
+                            MemoryReflection.created_at >= _captcha_cutoff,
+                        ),
                     ))
                     .order_by(MemoryReflection.validated_count.desc())
                     .limit(5)
@@ -311,7 +322,13 @@ class MemoryService:
                     else:
                         skill.failure_count = (skill.failure_count or 0) + 1
                     total = (skill.success_count or 0) + (skill.failure_count or 0)
-                    skill.confidence_score = (skill.success_count or 0) / total if total else 0.5
+                    raw_confidence = (skill.success_count or 0) / total if total else 0.5
+                    # CAPTCHA skills retain a minimum useful confidence so that stale failures
+                    # from a superseded CAPTCHA implementation can never permanently discard the
+                    # skill — a success streak can always recover from the floor.
+                    if skill_name.startswith("captcha_"):
+                        raw_confidence = max(raw_confidence, _CAPTCHA_SKILL_CONFIDENCE_FLOOR)
+                    skill.confidence_score = raw_confidence
                     skill.last_used = now
                 else:
                     db.add(MemoryProcedural(
@@ -429,10 +446,25 @@ class MemoryService:
                     ))
                 )
 
+                # Hard-delete CAPTCHA reflection lessons older than the max lifetime.
+                # This prevents stale failures (e.g. from a since-replaced reCAPTCHA v2
+                # implementation) from permanently accumulating and dragging down skill
+                # confidence scores through the store_reflection→confidence feedback loop.
+                captcha_expiry = now - timedelta(days=_CAPTCHA_REFLECTION_MAX_DAYS)
+                del_result = await db.execute(
+                    delete(MemoryReflection).where(and_(
+                        MemoryReflection.user_id == user_id,
+                        MemoryReflection.category == "CAPTCHA",
+                        MemoryReflection.created_at < captcha_expiry,
+                    ))
+                )
+                deleted_captcha = del_result.rowcount
+
                 await db.commit()
                 logger.debug(
                     f"[Memory] apply_decay done for {user_id}: "
-                    f"processed {len(ep_rows)} episodic, {len(sem_rows)} semantic stale rows"
+                    f"processed {len(ep_rows)} episodic, {len(sem_rows)} semantic stale rows, "
+                    f"deleted {deleted_captcha} expired CAPTCHA reflection(s)"
                 )
         except Exception as e:
             logger.error(f"[Memory] apply_decay error: {e}")
