@@ -11,6 +11,7 @@ import { Component as AiLoader } from "./ai-loader";
 import { MessageLoading } from "./message-loading";
 import { BrowserPreview } from "./browser-preview";
 import { SchedulesPage } from "./schedules-page";
+import { SettingsPage } from "./settings-page";
 import { ProcessingPanel } from "./processing-panel";
 import { PremiumScheduler } from "./premium-scheduler";
 import {
@@ -52,6 +53,7 @@ import {
   Shield,
   Eye,
   EyeOff,
+  Settings,
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import Plan, { Task } from "./agent-plan";
@@ -185,7 +187,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   );
 
   // Navigation State
-  const [currentView, setCurrentView] = React.useState<"chat" | "schedules">(
+  const [currentView, setCurrentView] = React.useState<"chat" | "schedules" | "settings">(
     "chat",
   );
 
@@ -2039,11 +2041,15 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     }
   };
 
-  const handleSwitchView = (view: "chat" | "schedules") => {
+  const handleSwitchView = (view: "chat" | "schedules" | "settings") => {
     if (currentView === view) return;
 
     setIsNavigating(true);
-    setLoaderText(view === "chat" ? "Switching to Chat" : "Opening Schedules");
+    setLoaderText(
+      view === "chat" ? "Switching to Chat" :
+      view === "schedules" ? "Opening Schedules" :
+      "Opening Settings"
+    );
 
     setTimeout(() => {
       setCurrentView(view);
@@ -2577,7 +2583,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             ? {
                 width: isSidebarCollapsed
                   ? "56px"
-                  : currentView === "schedules"
+                  : currentView === "schedules" || currentView === "settings"
                     ? "64px"
                     : `${sidebarWidth}px`,
               }
@@ -2627,6 +2633,18 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             >
               <Calendar className="h-5 w-5" />
             </button>
+            <button
+              onClick={() => handleSwitchView(currentView === "settings" ? "chat" : "settings")}
+              title="Settings"
+              className={cn(
+                "relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border transition-all",
+                currentView === "settings"
+                  ? "border-violet-500/35 bg-gradient-to-b from-violet-500/20 to-violet-600/15 text-[#F8FAFC] shadow-[0_0_16px_rgba(167,139,250,0.15)]"
+                  : "border-[#232B36] bg-white/[0.02] text-[#9CA3AF] hover:border-violet-500/25 hover:bg-[#161B22] hover:text-[#F8FAFC]",
+              )}
+            >
+              <Settings className="h-5 w-5" />
+            </button>
             <div className="flex-1" />
             <button
               onClick={toggleTheme}
@@ -2652,8 +2670,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           </div>
         )}
 
-        {/* Icon-only rail shown when on Automation page (desktop only) */}
-        {!isMobile && !isSidebarCollapsed && currentView === "schedules" && (
+        {/* Icon-only rail shown when on Automation or Settings page (desktop only) */}
+        {!isMobile && !isSidebarCollapsed && (currentView === "schedules" || currentView === "settings") && (
           <div className="flex h-full flex-col items-center py-4 gap-3">
             <div className="pointer-events-none absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_28%)]" />
             {/* Logo */}
@@ -2665,17 +2683,40 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             <button
               onClick={() => handleSwitchView("chat")}
               title="AI Chat"
-              className="relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border border-[#232B36] bg-white/[0.02] text-[#9CA3AF] hover:border-[#22D3EE]/25 hover:bg-[#161B22] hover:text-[#F8FAFC] transition-all"
+              className={cn(
+                "relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border transition-all",
+                currentView === "chat"
+                  ? "border-[#22D3EE]/35 bg-gradient-to-b from-[#10B981]/20 to-[#22D3EE]/15 text-[#F8FAFC] shadow-[0_0_16px_rgba(34,211,238,0.15)]"
+                  : "border-[#232B36] bg-white/[0.02] text-[#9CA3AF] hover:border-[#22D3EE]/25 hover:bg-[#161B22] hover:text-[#F8FAFC]",
+              )}
             >
               <MessageSquare className="h-5 w-5" />
             </button>
-            {/* Automation nav icon (active) */}
+            {/* Automation nav icon */}
             <button
               onClick={() => handleSwitchView("schedules")}
               title="Automation"
-              className="relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border border-[#22D3EE]/35 bg-gradient-to-b from-[#10B981]/20 to-[#22D3EE]/15 text-[#F8FAFC] shadow-[0_0_16px_rgba(34,211,238,0.15)] transition-all"
+              className={cn(
+                "relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border transition-all",
+                currentView === "schedules"
+                  ? "border-[#22D3EE]/35 bg-gradient-to-b from-[#10B981]/20 to-[#22D3EE]/15 text-[#F8FAFC] shadow-[0_0_16px_rgba(34,211,238,0.15)]"
+                  : "border-[#232B36] bg-white/[0.02] text-[#9CA3AF] hover:border-[#22D3EE]/25 hover:bg-[#161B22] hover:text-[#F8FAFC]",
+              )}
             >
               <Calendar className="h-5 w-5" />
+            </button>
+            {/* Settings nav icon */}
+            <button
+              onClick={() => handleSwitchView("settings")}
+              title="Settings"
+              className={cn(
+                "relative z-10 flex h-10 w-10 items-center justify-center rounded-[14px] border transition-all",
+                currentView === "settings"
+                  ? "border-violet-500/35 bg-gradient-to-b from-violet-500/20 to-violet-600/15 text-[#F8FAFC] shadow-[0_0_16px_rgba(167,139,250,0.15)]"
+                  : "border-[#232B36] bg-white/[0.02] text-[#9CA3AF] hover:border-violet-500/25 hover:bg-[#161B22] hover:text-[#F8FAFC]",
+              )}
+            >
+              <Settings className="h-5 w-5" />
             </button>
             {/* Spacer */}
             <div className="flex-1" />
@@ -2807,6 +2848,24 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     </span>
                   </div>
                   <div className="h-2 w-2 rounded-full bg-[#22D3EE]" />
+                </button>
+
+                <button
+                  onClick={() => handleSwitchView("settings")}
+                  className={cn(
+                    "col-span-2 flex items-center justify-between rounded-[14px] border px-3 py-3 text-left transition-all duration-200",
+                    currentView === "settings"
+                      ? "border-violet-500/35 bg-gradient-to-r from-violet-500/20 to-violet-600/15 text-[#F8FAFC] shadow-[0_0_24px_rgba(167,139,250,0.12)]"
+                      : "border-[#232B36] bg-white/[0.02] text-[#D1D5DB] hover:border-violet-500/25 hover:bg-[#161B22] hover:text-[#F8FAFC]",
+                  )}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Settings className="h-4 w-4 shrink-0" />
+                    <span className="truncate text-sm font-semibold">
+                      Settings
+                    </span>
+                  </div>
+                  <Shield className="h-3.5 w-3.5 shrink-0 text-violet-400/60" />
                 </button>
               </div>
             </div>
@@ -2997,7 +3056,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-row overflow-hidden h-full min-h-0 relative">
-        {currentView === "schedules" ? (
+        {currentView === "settings" ? (
+          <SettingsPage onBack={() => handleSwitchView("chat")} userProfile={userProfile} />
+        ) : currentView === "schedules" ? (
           <SchedulesPage onBack={() => handleSwitchView("chat")} />
         ) : (
           <>
@@ -3144,7 +3205,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => { setProxyError(null); setProxyTestResult(null); setShowProxyModal(true); }}
+                    onClick={() => handleSwitchView("settings")}
                     title={proxyActive ? `Proxy active: ${proxyUrlMasked}` : "Configure a residential proxy to bypass WAF blocks"}
                     className={cn(
                       "gap-1.5 text-xs font-semibold shrink-0 transition-all duration-300",

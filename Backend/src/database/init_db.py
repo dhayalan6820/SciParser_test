@@ -21,6 +21,9 @@ async def init_database():
             await conn.execute(text(
                 "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS session_state TEXT"
             ))
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS proxy_url TEXT"
+            ))
             logger.info("Database tables checked/created successfully.")
     except Exception as e:
         logger.error(f"Error creating tables: {e}")

@@ -843,9 +843,24 @@ async def get_cdp_status(current_user: User = Depends(ChatService.get_current_us
     return {"connected": cdp_url is not None, "cdp_url": cdp_url}
 
 
+def _mask_proxy_url(proxy_url: str) -> str:
+    """Return proxy URL with password replaced by *** for display."""
+    from urllib.parse import urlparse as _up, urlunparse as _uu
+    try:
+        _p = _up(proxy_url)
+        if _p.password:
+            netloc = f"{_p.username}:***@{_p.hostname}"
+            if _p.port:
+                netloc += f":{_p.port}"
+            return _uu((_p.scheme, netloc, _p.path, _p.params, _p.query, _p.fragment))
+    except Exception:
+        pass
+    return proxy_url
+
+
 @app.post("/sciparser/v1/settings/proxy")
-async def set_proxy(req: Dict[str, Any], current_user: User = Depends(ChatService.get_current_user)):
-    """Store a residential proxy URL for the current user's browser sessions."""
+async def set_proxy(req: Dict[str, Any], current_user: User = Depends(ChatService.get_current_user), db: AsyncSession = Depends(get_db)):
+    """Store a residential proxy URL for the current user's browser sessions (persisted to DB)."""
     from urllib.parse import urlparse as _urlparse
     proxy_url = (req.get("proxy_url") or "").strip()
     if not proxy_url:
@@ -855,6 +870,13 @@ async def set_proxy(req: Dict[str, Any], current_user: User = Depends(ChatServic
         raise HTTPException(status_code=400, detail="proxy_url must use http or https scheme")
     if not _parsed.hostname:
         raise HTTPException(status_code=400, detail="proxy_url must include a valid hostname")
+    # Persist to DB
+    result = await db.execute(select(User).where(User.user_id == current_user.user_id))
+    db_user = result.scalar_one_or_none()
+    if db_user:
+        db_user.proxy_url = proxy_url
+        await db.commit()
+    # Update in-memory session
     session = brain.session_manager.get_session(current_user.user_id)
     session["proxy_url"] = proxy_url
     if session.get("mcp_manager"):
@@ -863,12 +885,17 @@ async def set_proxy(req: Dict[str, Any], current_user: User = Depends(ChatServic
         except Exception:
             pass
         session["mcp_manager"] = None
-    return {"status": "saved"}
+    return {"status": "saved", "proxy_url_masked": _mask_proxy_url(proxy_url)}
 
 
 @app.delete("/sciparser/v1/settings/proxy")
-async def delete_proxy(current_user: User = Depends(ChatService.get_current_user)):
-    """Remove the user's proxy configuration."""
+async def delete_proxy(current_user: User = Depends(ChatService.get_current_user), db: AsyncSession = Depends(get_db)):
+    """Remove the user's proxy configuration (persisted to DB)."""
+    result = await db.execute(select(User).where(User.user_id == current_user.user_id))
+    db_user = result.scalar_one_or_none()
+    if db_user:
+        db_user.proxy_url = None
+        await db.commit()
     session = brain.session_manager.get_session(current_user.user_id)
     session["proxy_url"] = None
     if session.get("mcp_manager"):
@@ -881,25 +908,18 @@ async def delete_proxy(current_user: User = Depends(ChatService.get_current_user
 
 
 @app.get("/sciparser/v1/settings/proxy")
-async def get_proxy_status(current_user: User = Depends(ChatService.get_current_user)):
-    """Return the user's current proxy configuration (password masked)."""
-    from urllib.parse import urlparse as _urlparse, urlunparse as _urlunparse
+async def get_proxy_status(current_user: User = Depends(ChatService.get_current_user), db: AsyncSession = Depends(get_db)):
+    """Return the user's current proxy configuration (password masked). Loads from DB if not cached."""
     session = brain.session_manager.get_session(current_user.user_id)
     proxy_url = session.get("proxy_url")
-    masked: str | None = None
-    if proxy_url:
-        try:
-            _p = _urlparse(proxy_url)
-            if _p.password:
-                # Rebuild with password replaced by ***
-                netloc = f"{_p.username}:***@{_p.hostname}"
-                if _p.port:
-                    netloc += f":{_p.port}"
-                masked = _urlunparse((_p.scheme, netloc, _p.path, _p.params, _p.query, _p.fragment))
-            else:
-                masked = proxy_url
-        except Exception:
-            masked = proxy_url
+    # Lazy-load from DB on first access (e.g. after server restart)
+    if proxy_url is None:
+        result = await db.execute(select(User).where(User.user_id == current_user.user_id))
+        db_user = result.scalar_one_or_none()
+        if db_user and db_user.proxy_url:
+            proxy_url = db_user.proxy_url
+            session["proxy_url"] = proxy_url  # cache in session
+    masked = _mask_proxy_url(proxy_url) if proxy_url else None
     return {"active": proxy_url is not None, "proxy_url_masked": masked}
 
 
@@ -908,7 +928,6 @@ async def test_proxy(req: Dict[str, Any], current_user: User = Depends(ChatServi
     """Test a proxy URL by routing a request to an IP-check service through it."""
     proxy_url = (req.get("proxy_url") or "").strip()
     if not proxy_url:
-        # Fall back to checking the stored proxy
         session = brain.session_manager.get_session(current_user.user_id)
         proxy_url = session.get("proxy_url") or ""
     if not proxy_url:
