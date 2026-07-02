@@ -1333,10 +1333,16 @@ async def run_bridge():
                 nonlocal chrome_proc  # declared once at top to satisfy Python scoping rules
                 try:
                     print("Bridge: launching camoufox (Firefox) browser...", file=sys.stderr)
-                    async with camoufox.AsyncNewBrowser(
+                    # AsyncCamoufox is the correct async context manager — it wraps
+                    # playwright.async_api.PlaywrightContextManager and calls
+                    # AsyncNewBrowser(playwright, ...) internally, returning a
+                    # Browser or BrowserContext.  AsyncNewBrowser itself is a plain
+                    # async function that requires a Playwright object, not a CM.
+                    async with camoufox.AsyncCamoufox(
                         headless=headless,
                     ) as browser_or_ctx:
-                        # AsyncNewBrowser may yield a Browser or BrowserContext.
+                        # AsyncCamoufox may yield a Browser or BrowserContext
+                        # depending on whether persistent_context is set.
                         # Normalise to a BrowserContext and inject stealth script.
                         if hasattr(browser_or_ctx, "new_context"):
                             # It's a Playwright Browser — create/reuse a context
@@ -1344,15 +1350,30 @@ async def run_bridge():
                             ws = getattr(_br, "ws_endpoint", None)
                             if ws:
                                 _CAMOUFOX_WS_URL = ws
+                                print(
+                                    f"Bridge: camoufox ws_endpoint extracted — {ws}",
+                                    file=sys.stderr,
+                                )
+                            else:
+                                print(
+                                    "Bridge: camoufox ws_endpoint not available "
+                                    "(Firefox launched without remote-debugging — "
+                                    "using direct Playwright context instead)",
+                                    file=sys.stderr,
+                                )
                             _ctx = _br.contexts[0] if _br.contexts else await _br.new_context()
                         else:
-                            # It's already a BrowserContext
+                            # It's already a BrowserContext (persistent_context=True path)
                             _ctx = browser_or_ctx
                             _br = getattr(_ctx, "browser", None)
                             if _br:
                                 ws = getattr(_br, "ws_endpoint", None)
                                 if ws:
                                     _CAMOUFOX_WS_URL = ws
+                                    print(
+                                        f"Bridge: camoufox ws_endpoint extracted from ctx.browser — {ws}",
+                                        file=sys.stderr,
+                                    )
 
                         _CAMOUFOX_CONTEXT = _ctx
 
@@ -1368,7 +1389,7 @@ async def run_bridge():
                         print(
                             f"Bridge: camoufox Firefox ready — "
                             f"{len(_CAMOUFOX_PAGES)} page(s), "
-                            f"ws_endpoint={_CAMOUFOX_WS_URL or 'N/A'}, "
+                            f"ws_endpoint={_CAMOUFOX_WS_URL or 'N/A (direct Playwright context)'}, "
                             "Chrome-specific flags skipped (Firefox handles fingerprinting)",
                             file=sys.stderr,
                         )
