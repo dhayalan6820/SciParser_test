@@ -2248,18 +2248,40 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                             </span>
                           )}
                         </label>
-                        <input
-                          type={field.type || "text"}
-                          placeholder={field.placeholder}
-                          value={formData[field.id] || ""}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              [field.id]: e.target.value,
-                            }))
-                          }
-                          className="w-full px-4 py-2.5 text-sm rounded-xl bg-muted/50 border border-border focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-muted-foreground"
-                        />
+                        {field.type === "select" ? (
+                          <select
+                            value={formData[field.id] || ""}
+                            onChange={(e) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                [field.id]: e.target.value,
+                              }))
+                            }
+                            className="w-full px-4 py-2.5 text-sm rounded-xl bg-muted/50 border border-border focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                          >
+                            <option value="" disabled>
+                              {field.placeholder || "Select an option"}
+                            </option>
+                            {(field.options || []).map((opt: any) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type={field.type || "text"}
+                            placeholder={field.placeholder}
+                            value={formData[field.id] || ""}
+                            onChange={(e) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                [field.id]: e.target.value,
+                              }))
+                            }
+                            className="w-full px-4 py-2.5 text-sm rounded-xl bg-muted/50 border border-border focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-muted-foreground"
+                          />
+                        )}
                         {field.note && (
                           <p className="text-[10px] text-muted-foreground italic pl-1">
                             {field.note}

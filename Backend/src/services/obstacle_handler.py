@@ -159,9 +159,10 @@ def detect_otp(observation_text: str) -> Optional[str]:
 
 @dataclass
 class ObstacleMatch:
-    category: str               # "captcha" | "otp" | future obstacle categories
-    obstacle_type: str            # e.g. "recaptcha_v2", "email_or_sms_code"
-    requires_human_input: bool     # True => only a human can resolve it (OTP)
+    category: str               # "captcha" | "otp" | "address" | future obstacle categories
+    obstacle_type: str            # e.g. "recaptcha_v2", "email_or_sms_code", "low_confidence_selection"
+    requires_human_input: bool     # True => only a human can resolve it (OTP, low-confidence address)
+    candidates: Optional[List[str]] = None  # e.g. address suggestion strings, for a "pick one" form
 
     @property
     def skill_name(self) -> str:
@@ -244,6 +245,38 @@ def build_input_form(match: ObstacleMatch, site_domain: str, is_retry: bool = Fa
                 }
             ],
             "security_note": "Your verification code is used once to continue this task and is never saved.",
+            "obstacle_type": match.obstacle_type,
+            "obstacle_category": match.category,
+        }
+
+    if match.category == "address":
+        candidates = match.candidates or []
+        description = (
+            f"None of the address suggestions on {site_domain} confidently matched the address "
+            "you asked for. Please pick the correct one below (or note if none are right)."
+        )
+        options = [{"label": c, "value": c} for c in candidates]
+        options.append({"label": "None of these are correct", "value": "__none__"})
+        return {
+            "title": "Confirm Address",
+            "description": description,
+            "sections": [
+                {
+                    "section_title": None,
+                    "fields": [
+                        {
+                            "id": "selected_address",
+                            "label": "Select the correct address",
+                            "type": "select",
+                            "placeholder": None,
+                            "required": True,
+                            "options": options,
+                            "note": "Used once to continue this task.",
+                        }
+                    ],
+                }
+            ],
+            "security_note": None,
             "obstacle_type": match.obstacle_type,
             "obstacle_category": match.category,
         }

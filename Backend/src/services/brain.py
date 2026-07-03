@@ -39,6 +39,7 @@ from src.services.obstacle_handler import (
     ObstacleInputNeeded,
     build_input_form,
 )
+from src.services import address_agent
 
 # ATAG Models
 from src.services.ATAG import (
@@ -757,6 +758,12 @@ class Brain:
         # Shape when set: {"captcha_type": str, "skill_name": str}
         _captcha_state: Dict[str, Any] = {}
 
+        # Deterministic Address Agent context, shared across _call_tool invocations —
+        # tracks the requested address components (computed once) and the retry
+        # budget for a low-confidence autocomplete suggestion before escalating.
+        _address_state = address_agent.AddressAutocompleteState()
+        _requested_address = address_agent.extract_requested_address_components(confirmed_inputs)
+
         # Known secret values for THIS run (sensitive confirmed_inputs fields +
         # any obstacle answer, e.g. an OTP code, just submitted) — scrubbed out
         # of ToolExecutionLog rows before they're persisted. The LLM still sees
@@ -966,6 +973,73 @@ class Brain:
                             )
                 except Exception as _ce:
                     logger.warning(f"CAPTCHA detection error (non-fatal): {_ce}")
+
+                # ── Address Agent: deterministic address-autocomplete handling ─────────
+                # Only runs when the task actually supplied an address to enter and no
+                # CAPTCHA is blocking the page. See src/services/address_agent.py for the
+                # scoring/verification logic and address.agent.md for the agent's rules.
+                try:
+                    if not _captcha_type and _requested_address:
+                        _addr_dropdown_open = address_agent.detect_address_autocomplete_context(str(observation))
+
+                        if _addr_dropdown_open:
+                            _addr_suggestions = address_agent.extract_suggestions(str(observation))
+                            if _addr_suggestions:
+                                _addr_scored = address_agent.score_suggestions(_addr_suggestions, _requested_address)
+                                _addr_top, _addr_top_score = _addr_scored[0]
+                                if _addr_top_score >= address_agent.HIGH_CONFIDENCE_THRESHOLD:
+                                    observation = str(observation) + address_agent.build_address_guidance(
+                                        _addr_top, _addr_top_score, _addr_scored
+                                    )
+                                    _address_state.pending_selection = _addr_top
+                                    _address_state.candidates = _addr_scored
+                                elif _address_state.retries < address_agent.MAX_RETRIES:
+                                    observation = str(observation) + address_agent.build_address_retry_guidance(
+                                        _requested_address, _addr_scored
+                                    )
+                                    _address_state.retries += 1
+                                    _address_state.candidates = _addr_scored
+                                else:
+                                    raise ObstacleInputNeeded(
+                                        ObstacleMatch(
+                                            category="address",
+                                            obstacle_type="low_confidence_selection",
+                                            requires_human_input=True,
+                                            candidates=[s for s, _ in _addr_scored[:5]],
+                                        ),
+                                        _task_domain,
+                                    )
+                        elif _address_state.pending_selection:
+                            # Dropdown just closed after an auto-selected suggestion —
+                            # verify the field's resulting value actually reflects it.
+                            _verified = address_agent.verify_selected_value(
+                                str(observation), _address_state.pending_selection
+                            )
+                            if _verified:
+                                _address_state.pending_selection = None
+                            elif _address_state.retries < address_agent.MAX_RETRIES:
+                                observation = str(observation) + (
+                                    "\n\n[ADDRESS_VERIFICATION_FAILED]\n"
+                                    f"The field does not appear to reflect the selected suggestion "
+                                    f"\"{_address_state.pending_selection}\". Re-open the address field, "
+                                    "retype it, and re-select the correct suggestion from the dropdown."
+                                )
+                                _address_state.retries += 1
+                                _address_state.pending_selection = None
+                            else:
+                                raise ObstacleInputNeeded(
+                                    ObstacleMatch(
+                                        category="address",
+                                        obstacle_type="verification_failed",
+                                        requires_human_input=True,
+                                        candidates=[s for s, _ in _address_state.candidates[:5]],
+                                    ),
+                                    _task_domain,
+                                )
+                except ObstacleInputNeeded:
+                    raise
+                except Exception as _ae:
+                    logger.warning(f"Address agent detection error (non-fatal): {_ae}")
 
                 # ── Obstacle detection (generic framework) — human-input types like OTP ──
                 # CAPTCHA is handled above (agent attempts to self-solve). Obstacles that
