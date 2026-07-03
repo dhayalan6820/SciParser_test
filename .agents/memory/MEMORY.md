@@ -1,2 +1,3 @@
 - [browser-use CDP bridge fix](browser-use-cdp-bridge.md) — BrowserSession must be created with explicit cdp_url + is_local=False kwargs to bypass LocalBrowserWatchdog
 - [Chrome LD_LIBRARY_PATH in Replit](chrome-nix-ldpath.md) — Chrome needs 19 Nix store lib paths; start.sh sets them before exec; do NOT use `source start.sh` (hits exec, LD_LIBRARY_PATH captured empty)
+- [CrewAI in server processes](crewai-server-processes.md) — must disable telemetry env vars or CrewAI can prompt on stdin ("view traces? y/N") and hang non-interactive server startups

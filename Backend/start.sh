@@ -56,6 +56,11 @@ export LD_LIBRARY_PATH="${EXTRA_LD#:}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 # Tell Playwright not to validate host requirements (we handle libs ourselves)
 export PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
 
+# Disable CrewAI's telemetry/trace-viewer prompt — it can block on stdin in
+# non-interactive environments (server processes have no tty to answer y/N).
+export CREWAI_DISABLE_TELEMETRY=true
+export OTEL_SDK_DISABLED=true
+
 echo "[start.sh] LD_LIBRARY_PATH set (${#PKG_PATHS[@]} Nix lib paths injected)"
 
 # ---------------------------------------------------------------------------

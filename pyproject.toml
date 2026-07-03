@@ -9,6 +9,7 @@ dependencies = [
     "asyncpg>=0.31.0",
     "bcrypt>=5.0.0",
     "browser-use>=0.13.1",
+    "crewai>=0.193.2",
     "email-validator>=2.3.0",
     "fastapi>=0.138.1",
     "groq>=1.0.0",

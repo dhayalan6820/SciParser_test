@@ -1,4 +1,5 @@
 import os
+import json
 import asyncio
 import logging
 from typing import List, Dict, Any, Optional
@@ -10,6 +11,46 @@ from langchain_core.tools import BaseTool
 from src import config
 
 logger = logging.getLogger(__name__)
+
+_EXTRA_SERVERS_PATH = os.path.join(os.path.dirname(__file__), "mcp_servers.json")
+
+
+def load_extra_mcp_servers() -> Dict[str, Any]:
+    """
+    Loads additional MCP server definitions from `Backend/src/agents/mcp_servers.json`.
+
+    This is the ONLY place a new MCP server needs to be registered — no other
+    code change is required. Each top-level key is a server name, mapped to a
+    standard langchain-mcp-adapters server config dict, e.g.:
+
+        {
+          "my_new_server": {
+            "command": "python",
+            "args": ["/path/to/server.py"],
+            "env": {"SOME_KEY": "value"},
+            "transport": "stdio"
+          }
+        }
+
+    Every tool exposed by every configured server is aggregated together by
+    `get_tools()`, so agent specs (`*.agent.md`) simply reference tools by
+    name/pattern (`tool_filter`) — they never need to know which server a
+    tool came from. Adding a server here means its tools become available to
+    any agent whose `tool_filter` matches them (or that uses `tool_filter: "*"`).
+    """
+    if not os.path.exists(_EXTRA_SERVERS_PATH):
+        return {}
+    try:
+        with open(_EXTRA_SERVERS_PATH, "r") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            logger.warning(f"{_EXTRA_SERVERS_PATH} must contain a JSON object of server_name -> config; ignoring.")
+            return {}
+        return data
+    except Exception as e:
+        logger.warning(f"Failed to load extra MCP servers from {_EXTRA_SERVERS_PATH}: {e}")
+        return {}
+
 
 class MCPToolManager:
     """
@@ -73,6 +114,19 @@ class MCPToolManager:
                 "transport": "stdio",
             }
         }
+
+        # Merge in any additional MCP servers declared in mcp_servers.json.
+        # This is what makes tool discovery extensible: dropping a new server
+        # config into that file is enough to expose its tools to every agent
+        # (subject to each agent spec's tool_filter) — no code change here.
+        extra_servers = load_extra_mcp_servers()
+        if extra_servers:
+            overlapping = set(extra_servers) & set(self.config)
+            if overlapping:
+                logger.warning(f"mcp_servers.json redefines built-in server name(s) {overlapping}; built-in config takes precedence.")
+                extra_servers = {k: v for k, v in extra_servers.items() if k not in overlapping}
+            self.config = {**self.config, **extra_servers}
+            logger.info(f">>> Loaded {len(extra_servers)} additional MCP server(s) from mcp_servers.json: {list(extra_servers.keys())}")
 
         self.client = MultiServerMCPClient(self.config)
         self.stack = AsyncExitStack()

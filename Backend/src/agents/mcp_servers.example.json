@@ -1,0 +1,9 @@
+{
+  "_readme": "Copy any entries you need into mcp_servers.json (not this file). Each key is a server name; the value is a standard langchain-mcp-adapters server config. Every tool the server exposes is automatically discovered and merged into the shared tool list — agents pick tools up via their `tool_filter` glob pattern in *.agent.md, so you rarely need to touch agent code when adding a server.",
+  "example_filesystem_server": {
+    "command": "python",
+    "args": ["-m", "mcp_server_filesystem", "--root", "/tmp"],
+    "env": {},
+    "transport": "stdio"
+  }
+}
