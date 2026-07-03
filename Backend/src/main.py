@@ -1178,6 +1178,44 @@ async def get_token_user(token: str, db: AsyncSession):
     except Exception:
         return None
 
+# Task #130: how often an open websocket re-checks the user's suspension status.
+# Suspension used to only be enforced at handshake time (or on the user's next
+# HTTP request/reconnect), so an already-connected suspended user could keep
+# streaming/acting until they happened to reconnect. This watcher polls the DB
+# directly (bypassing get_current_user's request-scoped session) so it can run
+# alongside the long-lived `websocket.receive()` loop.
+SUSPENSION_CHECK_INTERVAL_SECONDS = 10
+SUSPENDED_CLOSE_CODE = 4403  # custom app-level code in the 4000-4999 (private use) range
+SUSPENDED_MESSAGE = "Your account has been suspended. Please contact an administrator."
+
+async def _is_user_suspended(user_id: str) -> bool:
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(User.status).where(User.user_id == user_id))
+        status = result.scalar_one_or_none()
+        return status == "suspended"
+
+async def _watch_suspension(websocket: WebSocket, user_id: str):
+    """Background task run alongside an open websocket's receive loop. Closes the
+    socket the moment the user is suspended instead of waiting for their next
+    request or reconnect attempt."""
+    try:
+        while True:
+            await asyncio.sleep(SUSPENSION_CHECK_INTERVAL_SECONDS)
+            if await _is_user_suspended(user_id):
+                try:
+                    await websocket.send_json({"type": "suspended", "error": SUSPENDED_MESSAGE})
+                except Exception:
+                    pass
+                try:
+                    await websocket.close(code=SUSPENDED_CLOSE_CODE)
+                except Exception:
+                    pass
+                return
+    except asyncio.CancelledError:
+        raise
+    except Exception as e:
+        logger.error(f"Suspension watcher error for user {user_id}: {e}")
+
 @app.websocket("/sciparser/v1/ws/plan/{chat_id}")
 async def websocket_plan_endpoint(
     websocket: WebSocket, 
@@ -1207,12 +1245,14 @@ async def websocket_plan_endpoint(
             "data": brain.active_plans[chat_id]
         })
 
+    suspension_watcher = asyncio.create_task(_watch_suspension(websocket, user.user_id))
     try:
         while True:
             await websocket.receive()
     except WebSocketDisconnect:
         plan_stream_manager.disconnect(chat_id, websocket)
-        # Auto-cancel the running agent when the last client disconnects (e.g. page reload)
+        # Auto-cancel the running agent when the last client disconnects (e.g. page reload,
+        # or a suspension forcing the socket closed)
         remaining = plan_stream_manager.active_connections.get(chat_id, [])
         if not remaining and chat_id in brain.active_tasks:
             logger.info(f"Last WS for {chat_id} closed — auto-cancelling agent task.")
@@ -1230,6 +1270,8 @@ async def websocket_plan_endpoint(
         if not remaining and chat_id in brain.active_tasks:
             logger.info(f"Last WS for {chat_id} closed — auto-cancelling agent task.")
             asyncio.create_task(brain.stop_process(chat_id, user_id=user.user_id))
+    finally:
+        suspension_watcher.cancel()
 
 @app.websocket("/sciparser/v1/browser/stream")
 async def browser_stream(
@@ -1258,6 +1300,7 @@ async def browser_stream(
         except Exception:
             pass
 
+    suspension_watcher = asyncio.create_task(_watch_suspension(websocket, user.user_id))
     try:
         while True:
             # Keep connection alive — receive() handles text, binary, and ping/pong
@@ -1271,6 +1314,8 @@ async def browser_stream(
         else:
             logger.error(f"Browser stream error: {e}")
         plan_stream_manager.disconnect(user.user_id, websocket, is_browser=True)
+    finally:
+        suspension_watcher.cancel()
 
 @app.post("/sciparser/v1/browser/state")
 async def toggle_browser_state(req: Dict[str, Any], current_user: User = Depends(ChatService.get_current_user)):
@@ -1545,6 +1590,7 @@ async def websocket_schedule_endpoint(
         return
 
     await plan_stream_manager.connect(schedule_id, websocket, is_schedule=True)
+    suspension_watcher = asyncio.create_task(_watch_suspension(websocket, user.user_id))
     try:
         while True:
             # Keep connection alive, updates are pushed via broadcast_schedule_update
@@ -1553,6 +1599,8 @@ async def websocket_schedule_endpoint(
         plan_stream_manager.disconnect(schedule_id, websocket, is_schedule=True)
     except Exception as e:
         logger.error(f"Schedule stream error: {e}")
+    finally:
+        suspension_watcher.cancel()
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  COGNITIVE MEMORY API

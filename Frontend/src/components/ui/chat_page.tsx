@@ -5,7 +5,7 @@ import logoDark from "@/assets/logo-dark.png";
 import atomIcon from "@/assets/atom-icon.png";
 import { Signup1 } from "./signup-1";
 import { Button } from "./button";
-import { sciparserApi, ChatMessage, UploadedFile, User } from "../../api";
+import { sciparserApi, ChatMessage, UploadedFile, User, handleSuspendedSession } from "../../api";
 import { DEFAULT_CDP_URL, wsUrl } from "../../config";
 import { useTheme } from "../../contexts/ThemeContext";
 import { cn } from "../../../lib/utils";
@@ -527,6 +527,14 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       requestAnimationFrame(() => {
         try {
           const msg = JSON.parse(event.data);
+
+          // Task #130: the backend pushes this the moment an admin suspends the
+          // account while a stream is open, so we don't wait for the next request.
+          if (msg.type === "suspended") {
+            handleSuspendedSession(msg.error);
+            return;
+          }
+
           const eventType = msg.event || (msg.frame ? "frame" : null);
           const rawData = msg.data || msg.frame;
 
@@ -685,9 +693,15 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
       ws.onmessage = handleMessage;
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         clearInterval(heartbeatTimer);
         setMousePos(null);
+        // Fallback in case the "suspended" message never arrived (e.g. send failed
+        // right before close) — the custom close code alone is enough to react to.
+        if (event.code === 4403) {
+          handleSuspendedSession();
+          return;
+        }
         console.log("Browser stream disconnected — reconnecting in 3s");
         if (!destroyed) {
           reconnectTimer = setTimeout(connect, 3000);
@@ -741,6 +755,10 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
+          if (msg.type === "suspended") {
+            handleSuspendedSession(msg.error);
+            return;
+          }
           if (msg.type === "plan_update") {
             setCurrentPlan(msg.data);
             // Only mark as typing if the plan has a task that is actually still running.
@@ -770,8 +788,14 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         }
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         clearInterval(heartbeatTimer);
+        // Fallback in case the "suspended" message never arrived (e.g. send failed
+        // right before close) — the custom close code alone is enough to react to.
+        if (event.code === 4403) {
+          handleSuspendedSession();
+          return;
+        }
         console.log("Plan stream disconnected — reconnecting in 3s");
         if (!destroyed) {
           reconnectTimer = setTimeout(connect, 3000);

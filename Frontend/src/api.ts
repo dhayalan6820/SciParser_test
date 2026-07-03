@@ -23,6 +23,39 @@ function handleUnauthorized() {
   }
 }
 
+const SUSPENSION_MESSAGE_KEY = "suspension_message";
+
+// Task #130: called when an *already open* websocket (chat plan stream, browser
+// stream, schedule monitor) is closed mid-session because the account was just
+// suspended by an admin. We stash the reason so the login screen can surface a
+// clear "account suspended" message instead of a silent logout / generic error,
+// then reload so the whole app resets to its logged-out state.
+export function handleSuspendedSession(detail?: string) {
+  setStoredToken(null);
+  if (typeof window !== "undefined") {
+    try {
+      sessionStorage.setItem(
+        SUSPENSION_MESSAGE_KEY,
+        detail || "Your account has been suspended. Please contact an administrator.",
+      );
+    } catch {
+      /* sessionStorage unavailable — the reload will still log the user out */
+    }
+    window.location.reload();
+  }
+}
+
+export function consumeSuspensionMessage(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const msg = sessionStorage.getItem(SUSPENSION_MESSAGE_KEY);
+    if (msg) sessionStorage.removeItem(SUSPENSION_MESSAGE_KEY);
+    return msg;
+  } catch {
+    return null;
+  }
+}
+
 export const sciparserApi = {
   // Auth
   signup: async (username: string, email: string, password: string) => {

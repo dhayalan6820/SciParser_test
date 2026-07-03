@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Button } from "./button";
-import { sciparserApi } from "../../api";
+import { sciparserApi, handleSuspendedSession } from "../../api";
 import { wsUrl } from "../../config";
 import { useTheme } from "../../contexts/ThemeContext";
 import { cn } from "../../../lib/utils";
@@ -192,6 +192,10 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
+          if (msg.type === 'suspended') {
+            handleSuspendedSession(msg.error);
+            return;
+          }
           if (msg.type === 'log') {
             setLiveLogs(prev => [...prev, msg]);
           } else if (msg.type === 'pipeline_update') {
@@ -215,7 +219,13 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
         }
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
+        // Fallback in case the "suspended" message never arrived (e.g. send failed
+        // right before close) — the custom close code alone is enough to react to.
+        if (event.code === 4403) {
+          handleSuspendedSession();
+          return;
+        }
         if (!cancelled && isRunning) {
           reconnectTimer = setTimeout(connect, 2000);
         }

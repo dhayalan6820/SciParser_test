@@ -4,7 +4,7 @@ import { AdminDashboard } from './components/ui/admin-dashboard';
 import { NotFound } from "./components/ui/ghost-404-page";
 import { Signup1 } from "./components/ui/signup-1";
 import { motion } from "framer-motion";
-import { sciparserApi, User } from "./api";
+import { sciparserApi, User, consumeSuspensionMessage } from "./api";
 import { apiUrl } from "./config";
 import { useTheme } from "./contexts/ThemeContext";
 
@@ -67,6 +67,13 @@ export default function App() {
     
     // Initial check
     checkAuth();
+
+    // Task #130: a suspended user's open websocket forces a logout+reload; surface
+    // the reason on the login screen instead of leaving them with no explanation.
+    const suspensionMessage = consumeSuspensionMessage();
+    if (suspensionMessage) {
+      setAuthError(suspensionMessage);
+    }
     
     // Listen for storage changes (in case token is added in another tab)
     window.addEventListener("storage", checkAuth);
