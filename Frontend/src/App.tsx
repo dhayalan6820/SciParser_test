@@ -33,6 +33,10 @@ export default function App() {
   const [isLoginMode, setIsLoginMode] = React.useState(true);  // ← Add this line
   const [currentUser, setCurrentUser] = React.useState<User | null>(null);
   const [isCheckingRole, setIsCheckingRole] = React.useState(false);
+  // Separate from `hasError` (which drives the full-page NotFound view for
+  // app/server-level failures) so a failed sign-in attempt just shows an
+  // inline message on the login form instead of navigating away from it.
+  const [authError, setAuthError] = React.useState<string>("");
 
   // Check server health
   React.useEffect(() => {
@@ -155,7 +159,7 @@ export default function App() {
               onSubmit={async (formData) => {
                 try {
                   setIsLoading(true);
-                  setHasError("");
+                  setAuthError("");
                   
                   if (isLoginMode) {
                     const res = await sciparserApi.signin(formData.username, formData.password);
@@ -176,13 +180,13 @@ export default function App() {
                   setIsLoggedIn(true);
                 } catch (error) {
                   const errorMessage = error instanceof Error ? error.message : "Authentication failed";
-                  setHasError(errorMessage);
+                  setAuthError(errorMessage);
                 } finally {
                   setIsLoading(false);
                 }
               }}
               loading={isLoading}
-              error={hasError ? "Authentication failed" : ""}
+              error={authError}
               success=""
             />
           </div>

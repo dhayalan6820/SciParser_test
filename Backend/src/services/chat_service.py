@@ -4,7 +4,7 @@ import os
 import json
 from typing import Optional, List, Union
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends, HTTPException, status, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -31,12 +31,22 @@ class ChatService:
         if result.scalar_one_or_none():
             raise HTTPException(status_code=400, detail="Username or email already registered")
 
+        # Task #127: the very first account on a fresh deployment is made an
+        # admin so there's always a way into the Admin Dashboard without a
+        # server restart or manual DB edit. (init_db's startup bootstrap
+        # covers the case of pre-existing users from before this migration.)
+        admin_count_result = await db.execute(
+            select(func.count()).select_from(User).where(User.role == "admin")
+        )
+        is_first_admin = admin_count_result.scalar_one() == 0
+
         hashed_pw = validator.hash_password(password)
         new_user = User(
             user_id=str(uuid.uuid4()),
             username=username,
             email=email,
-            hashed_password=hashed_pw
+            hashed_password=hashed_pw,
+            role="admin" if is_first_admin else "user",
         )
         db.add(new_user)
         await db.commit()

@@ -32,8 +32,8 @@ export const sciparserApi = {
       body: JSON.stringify({ username, email, password }),
     });
     if (!res.ok) {
-      const errorText = await res.text();
-      throw new Error(errorText || "Signup failed");
+      const errorData = await res.json().catch(() => null);
+      throw new Error(errorData?.detail || "Signup failed");
     }
     return res.json();
   },
@@ -45,8 +45,11 @@ export const sciparserApi = {
       body: JSON.stringify({ username, password }),
     });
     if (!res.ok) {
-      const errorText = await res.text();
-      throw new Error(errorText || "Signin failed");
+      const errorData = await res.json().catch(() => null);
+      // Surface the backend's specific reason (e.g. "Your account has been
+      // suspended...") instead of a generic message, so suspended users
+      // understand what happened rather than seeing a plain auth failure.
+      throw new Error(errorData?.detail || "Signin failed");
     }
     return res.json();
   },

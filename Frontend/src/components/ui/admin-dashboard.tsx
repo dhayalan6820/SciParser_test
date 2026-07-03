@@ -25,6 +25,9 @@ import {
   ChevronRight,
   Sun,
   Moon,
+  Pencil,
+  X,
+  Save,
 } from "lucide-react";
 
 interface AdminDashboardProps {
@@ -114,6 +117,7 @@ const UsersTab: React.FC<{ currentUsername?: string }> = ({ currentUsername }) =
   const [actionError, setActionError] = React.useState<string | null>(null);
   const [busyUserId, setBusyUserId] = React.useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null);
+  const [editingUser, setEditingUser] = React.useState<User | null>(null);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -259,6 +263,15 @@ const UsersTab: React.FC<{ currentUsername?: string }> = ({ currentUsername }) =
                           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                         ) : (
                           <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setEditingUser(u)}
+                              className="h-7 px-2 text-xs gap-1"
+                            >
+                              <Pencil className="h-3 w-3" />
+                              Edit
+                            </Button>
                             {u.status === "active" ? (
                               <Button
                                 variant="outline"
@@ -359,6 +372,102 @@ const UsersTab: React.FC<{ currentUsername?: string }> = ({ currentUsername }) =
           </div>
         </div>
       )}
+
+      {editingUser && (
+        <EditUserModal
+          user={editingUser}
+          onClose={() => setEditingUser(null)}
+          onSaved={async () => {
+            setEditingUser(null);
+            await loadUsers(page, search);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+const EditUserModal: React.FC<{ user: User; onClose: () => void; onSaved: () => void }> = ({
+  user,
+  onClose,
+  onSaved,
+}) => {
+  const [username, setUsername] = React.useState(user.username);
+  const [email, setEmail] = React.useState(user.email);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const changes: Partial<{ username: string; email: string }> = {};
+      if (username !== user.username) changes.username = username;
+      if (email !== user.email) changes.email = email;
+      if (Object.keys(changes).length > 0) {
+        await sciparserApi.adminUpdateUser(user.user_id, changes);
+      }
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save changes");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-sm rounded-lg border border-slate-200 dark:border-slate-800 bg-background p-5 space-y-4 shadow-xl">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold">Edit user details</h3>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {error && (
+          <div className="flex items-center gap-2 p-2.5 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/40 rounded-lg text-red-600 dark:text-red-400 text-xs">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+            {error}
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Username</label>
+            <Input value={username} onChange={(e) => setUsername(e.target.value)} disabled={saving} />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Email</label>
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={saving} />
+          </div>
+          <div className="grid grid-cols-2 gap-3 pt-1 text-xs text-muted-foreground">
+            <div>
+              <div className="uppercase tracking-wide text-[10px]">Role</div>
+              <div className="font-medium text-foreground">{user.role}</div>
+            </div>
+            <div>
+              <div className="uppercase tracking-wide text-[10px]">Status</div>
+              <div className="font-medium text-foreground">{user.status}</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 pt-1">
+          <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={saving || !username.trim() || !email.trim()}
+            className="gap-1.5"
+          >
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            Save
+          </Button>
+        </div>
+      </div>
     </div>
   );
 };
