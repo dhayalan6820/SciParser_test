@@ -32,6 +32,7 @@ import {
   Menu,
   X,
   ChevronDown,
+  ChevronUp,
   Globe,
   Send,
   PanelLeftClose,
@@ -1379,10 +1380,18 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           }
         }}
       >
-        {/* Agent Plan Section (Above AI Response) */}
+        {/* Agent Plan Section (Above AI Response) — always available, never permanently hidden.
+            Visible by default; the user can collapse/re-expand it at any time via the toggle. */}
         {!isUser && msg.plan && msg.plan.length > 0 && (
           <div className="w-full max-w-2xl ml-12 mb-2">
-            <div className="flex items-center gap-3 mb-3 px-1">
+            <button
+              type="button"
+              onClick={() => {
+                const msgId = msg.id || "";
+                setVisiblePlans((prev) => ({ ...prev, [msgId]: !isPlanVisible }));
+              }}
+              className="w-full flex items-center gap-3 mb-3 px-1 group"
+            >
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
                 <span className="text-[10px] font-black text-foreground uppercase tracking-[0.2em]">
@@ -1390,8 +1399,16 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 </span>
               </div>
               <div className="h-px flex-1 bg-border" />
-            </div>
-            <Plan tasks={msg.plan} />
+              <span className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground group-hover:text-foreground transition-colors">
+                {isPlanVisible ? "Hide" : "View"}
+                {isPlanVisible ? (
+                  <ChevronUp className="h-3 w-3" />
+                ) : (
+                  <ChevronDown className="h-3 w-3" />
+                )}
+              </span>
+            </button>
+            {isPlanVisible && <Plan tasks={msg.plan} />}
           </div>
         )}
 
