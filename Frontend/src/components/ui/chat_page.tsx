@@ -32,6 +32,7 @@ import {
   Menu,
   X,
   ChevronDown,
+  ChevronUp,
   Globe,
   Send,
   PanelLeftClose,
@@ -1314,9 +1315,14 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
   const renderMessage = (msg: ChatMessage) => {
     const isSelected = selectedMessages.includes(msg.id || "");
+    const planTasks = msg.plan || [];
+    const isPlanComplete =
+      planTasks.length > 0 &&
+      planTasks.every((t: any) => t.status === "completed" || t.status === "failed");
+    // Once the run finishes (all tasks completed/failed), collapse the
+    // execution trace by default — the user can expand it with "Show Flow".
     const isPlanVisible =
-      visiblePlans[msg.id || ""] ??
-      (msg.role === "ai" && msg.plan && msg.plan.length > 0);
+      visiblePlans[msg.id || ""] ?? !isPlanComplete;
     const isUser = msg.role === "user" || msg.role === "human";
 
     return (
@@ -1342,14 +1348,41 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           <div className="w-full max-w-2xl ml-12 mb-2">
             <div className="flex items-center gap-3 mb-3 px-1">
               <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                <div
+                  className={cn(
+                    "w-1.5 h-1.5 rounded-full",
+                    isPlanComplete ? "bg-emerald-400" : "bg-cyan-400 animate-pulse",
+                  )}
+                />
                 <span className="text-[10px] font-black text-foreground uppercase tracking-[0.2em]">
                   Execution Trace
                 </span>
               </div>
               <div className="h-px flex-1 bg-border" />
+              {isPlanComplete && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (msg.id) togglePlanVisibility(msg.id);
+                  }}
+                  className="flex items-center gap-1 shrink-0 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-muted"
+                >
+                  {isPlanVisible ? (
+                    <>
+                      <ChevronUp className="w-3 h-3" />
+                      Hide Flow
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="w-3 h-3" />
+                      Show Flow
+                    </>
+                  )}
+                </button>
+              )}
             </div>
-            <Plan tasks={msg.plan} />
+            {isPlanVisible && <Plan tasks={msg.plan} />}
           </div>
         )}
 
