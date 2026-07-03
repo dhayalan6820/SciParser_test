@@ -51,6 +51,40 @@ interface SchedulesPageProps {
   onBack: () => void;
 }
 
+const ModalShell: React.FC<{
+  title: string;
+  icon: React.ElementType;
+  onClose: () => void;
+  children: React.ReactNode;
+  maxWidth?: string;
+  headerAction?: React.ReactNode;
+}> = ({ title, icon: Icon, onClose, children, maxWidth = "max-w-3xl", headerAction }) => (
+  <div className="fixed inset-0 z-[130] flex items-center justify-center bg-background/80 backdrop-blur-xl p-4">
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      className={cn("w-full bg-card rounded-[32px] shadow-2xl border border-border flex flex-col max-h-[85vh]", maxWidth)}
+    >
+      <div className="px-6 sm:px-8 py-5 sm:py-6 border-b border-border flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
+            <Icon className="w-5 h-5 text-indigo-500" />
+          </div>
+          <h3 className="font-black text-base sm:text-xl text-foreground uppercase tracking-tight">{title}</h3>
+        </div>
+        <div className="flex items-center gap-2">
+          {headerAction}
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground shrink-0">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto p-6 sm:p-8">{children}</div>
+    </motion.div>
+  </div>
+);
+
 export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
   const { theme } = useTheme();
   const [schedules, setSchedules] = React.useState<Schedule[]>([]);
@@ -60,11 +94,10 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
   const [isRunning, setIsRunning] = React.useState(false);
   const [isActivating, setIsActivating] = React.useState(false);
   const [activateError, setActivateError] = React.useState<string | null>(null);
-  const [showScript, setShowScript] = React.useState(false);
   const [isEditing, setIsEditing] = React.useState(false);
   const [editData, setEditData] = React.useState({ title: "", type: "", email: "" });
   const [deleteConfirmId, setDeleteConfirmId] = React.useState<string | null>(null);
-  const [activeTab, setActiveTab] = React.useState("pipeline");
+  const [activeModal, setActiveModal] = React.useState<null | "script" | "aiplan" | "history" | "browser" | "result">(null);
   const [currentProgress, setCurrentProgress] = React.useState(0);
   const [liveLogs, setLiveLogs] = React.useState<any[]>([]);
   const [liveScreenshot, setLiveScreenshot] = React.useState<string | null>(null);
@@ -522,13 +555,13 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
 
               {/* Main Dashboard Grid */}
               <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-                
-                {/* Left Column - Progress & Pipeline */}
+
+                {/* Left Column - Progress, Pipeline & Live Logs */}
                 <div className="col-span-1 xl:col-span-8 space-y-6 min-w-0">
-                  
+
                   {/* Current Run Progress */}
-                  <div className="bg-card/40 rounded-[32px] border border-border p-4 sm:p-8 flex flex-col sm:flex-row items-center gap-6 sm:gap-10">
-                    <div className="relative w-32 h-32 shrink-0">
+                  <div className="bg-card/40 rounded-[32px] border border-border p-4 sm:p-6 flex flex-col sm:flex-row items-center gap-6 sm:gap-8">
+                    <div className="relative w-24 h-24 shrink-0">
                       <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
                         <circle className="text-border" strokeWidth="8" stroke="currentColor" fill="transparent" r="42" cx="50" cy="50" />
                         <motion.circle 
@@ -544,20 +577,24 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                         />
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-2xl font-black text-foreground">{currentProgress}%</span>
-                        <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest">Progress</span>
+                        <span className="text-lg font-black text-foreground">{currentProgress}%</span>
+                        <span className="text-[7px] font-black text-muted-foreground uppercase tracking-widest">Progress</span>
                       </div>
                     </div>
                     
-                    <div className="flex-1 space-y-4">
+                    <div className="flex-1 space-y-3 w-full">
                       <div className="flex items-center justify-between">
                         <div className="space-y-1">
                           <div className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">Current Status</div>
-                          <div className="text-lg font-black text-foreground uppercase tracking-tight">Running Automation...</div>
+                          <div className="text-base font-black text-foreground uppercase tracking-tight">
+                            {isRunning ? "Running Automation..." : "Idle"}
+                          </div>
                         </div>
                         <div className="text-right space-y-1">
                           <div className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">ETA</div>
-                          <div className="text-lg font-black text-foreground uppercase tracking-tight">30s</div>
+                          <div className="text-base font-black text-foreground uppercase tracking-tight">
+                            {isRunning ? `${Math.max(0, Math.round(((100 - currentProgress) / 100) * 30))}s` : "--"}
+                          </div>
                         </div>
                       </div>
                       <div className="h-2 w-full bg-border rounded-full overflow-hidden">
@@ -567,49 +604,44 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                           animate={{ width: `${currentProgress}%` }}
                         />
                       </div>
-                      <div className="flex items-center justify-between text-[9px] font-black text-muted-foreground uppercase tracking-widest">
-                        <span>Started: 04:42:10 PM</span>
-                        <span>3 / 4 Steps Completed</span>
-                      </div>
                     </div>
                   </div>
 
                   {/* Execution Pipeline */}
-                  <div className="bg-card/40 rounded-[32px] border border-border p-4 sm:p-8 space-y-6 sm:space-y-8">
+                  <div className="bg-card/40 rounded-[32px] border border-border p-4 sm:p-6 space-y-4 sm:space-y-6">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <Workflow className="w-5 h-5 text-indigo-500" />
                         <h3 className="text-xs font-black text-foreground uppercase tracking-[0.2em]">Execution Pipeline</h3>
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-                        <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Live Tracking</span>
+                        <div className={cn("w-2 h-2 rounded-full bg-indigo-500", isRunning && "animate-pulse")} />
+                        <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">{isRunning ? "Live Tracking" : "Idle"}</span>
                       </div>
                     </div>
 
                     <div className="overflow-x-auto scroll-x-smooth -mx-4 px-4">
-                      <div className="relative flex items-center justify-between px-4 min-w-[480px]">
+                      <div className="relative flex items-center justify-between px-2 min-w-[420px]">
                       {/* Connector Line */}
-                      <div className="absolute top-6 left-10 right-10 h-0.5 bg-border z-0" />
+                      <div className="absolute top-5 left-8 right-8 h-0.5 bg-border z-0" />
                       
-                      {pipelineSteps.map((step, i) => (
-                        <div key={step.id} className="relative z-10 flex flex-col items-center gap-4 group">
+                      {pipelineSteps.map((step) => (
+                        <div key={step.id} className="relative z-10 flex flex-col items-center gap-2 group">
                           <div className={cn(
-                            "w-12 h-12 rounded-2xl border flex items-center justify-center transition-all duration-500 shadow-xl",
+                            "w-10 h-10 rounded-xl border flex items-center justify-center transition-all duration-500 shadow-xl",
                             step.status === 'completed' ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-500" :
                             step.status === 'running' ? "bg-indigo-500/10 border-indigo-500 text-indigo-500 animate-pulse" :
                             "bg-background border-border text-muted-foreground/60"
                           )}>
-                            {step.status === 'completed' ? <Check className="w-6 h-6" /> : 
-                             step.status === 'running' ? <RefreshCw className="w-5 h-5 animate-spin-slow" /> :
-                             <span className="text-sm font-black">{step.id}</span>}
+                            {step.status === 'completed' ? <Check className="w-5 h-5" /> : 
+                             step.status === 'running' ? <RefreshCw className="w-4 h-4 animate-spin-slow" /> :
+                             <span className="text-xs font-black">{step.id}</span>}
                           </div>
-                          <div className="text-center space-y-1">
+                          <div className="text-center space-y-0.5 max-w-[70px]">
                             <div className={cn(
-                              "text-[10px] font-black uppercase tracking-widest transition-colors",
+                              "text-[9px] font-black uppercase tracking-widest leading-tight transition-colors",
                               step.status === 'pending' ? "text-muted-foreground/60" : "text-foreground"
                             )}>{step.name}</div>
-                            <div className="text-[8px] font-bold text-muted-foreground uppercase tracking-tighter">{step.time}</div>
                             {step.status === 'completed' && (
                               <div className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">{step.duration}</div>
                             )}
@@ -620,234 +652,81 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                     </div>
                   </div>
 
-                  {/* Tabs for AI Context & Logs */}
-                  <div className="bg-card/40 rounded-[32px] border border-border overflow-hidden flex flex-col min-h-[400px] sm:min-h-[500px]">
-                    <div className="px-4 sm:px-8 pt-4 sm:pt-6 flex items-center gap-4 sm:gap-8 border-b border-border shrink-0 overflow-x-auto scroll-x-smooth">
-                      {[
-                        { id: 'pipeline', label: 'Live Logs', icon: Terminal },
-                        { id: 'ai', label: 'AI Planning', icon: Brain },
-                        { id: 'script', label: 'Script', icon: Code },
-                        { id: 'history', label: 'History', icon: History }
-                      ].map((tab) => (
-                        <button
-                          key={tab.id}
-                          onClick={() => setActiveTab(tab.id)}
-                          className={cn(
-                            "flex shrink-0 items-center gap-2 pb-4 text-[11px] font-black uppercase tracking-[0.15em] transition-all relative",
-                            activeTab === tab.id ? "text-indigo-500" : "text-muted-foreground hover:text-muted-foreground"
-                          )}
+                  {/* Live Logs Panel */}
+                  <div className="bg-card/40 rounded-[32px] border border-border overflow-hidden flex flex-col">
+                    <div className="px-4 sm:px-6 py-4 border-b border-border shrink-0 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <Terminal className="w-4 h-4 text-indigo-500" />
+                        <h3 className="text-[11px] font-black text-foreground uppercase tracking-[0.2em]">Live Logs</h3>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => setActiveModal('aiplan')}
+                          className="h-8 px-3 rounded-lg border-border bg-transparent text-muted-foreground text-[10px] font-black uppercase tracking-widest hover:bg-foreground/5 gap-1.5"
                         >
-                          <tab.icon className="w-4 h-4" />
-                          {tab.label}
-                          {activeTab === tab.id && (
-                            <motion.div layoutId="activeTabSchedules" className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
-                          )}
-                        </button>
-                      ))}
+                          <Brain className="w-3.5 h-3.5" /> AI Plan
+                        </Button>
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => setActiveModal('script')}
+                          className="h-8 px-3 rounded-lg border-border bg-transparent text-muted-foreground text-[10px] font-black uppercase tracking-widest hover:bg-foreground/5 gap-1.5"
+                        >
+                          <Code className="w-3.5 h-3.5" /> Script
+                        </Button>
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => setActiveModal('history')}
+                          className="h-8 px-3 rounded-lg border-border bg-transparent text-muted-foreground text-[10px] font-black uppercase tracking-widest hover:bg-foreground/5 gap-1.5"
+                        >
+                          <History className="w-3.5 h-3.5" /> History
+                        </Button>
+                      </div>
                     </div>
 
-                    <div className="flex-1 p-6 overflow-y-auto hide-scrollbar">
-                      <AnimatePresence mode="wait">
-                        {activeTab === 'pipeline' && (
-                          <motion.div
-                            key="logs"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="space-y-2 font-mono"
-                          >
-                            {liveLogs.length > 0 ? (
-                              liveLogs.map((log, i) => (
-                                <div key={i} className="flex items-start gap-4 text-[11px] py-1 group hover:bg-foreground/5 rounded px-2 transition-colors">
-                                  <span className="text-muted-foreground/60 shrink-0">{log.time}</span>
-                                  <span className={cn("font-black shrink-0 w-20", log.type === 'error' ? 'text-red-400' : 'text-indigo-400')}>[{log.engine || 'SYS'}]</span>
-                                  <span className="text-muted-foreground">{log.message}</span>
-                                </div>
-                              ))
-                            ) : (
-                              <div className="py-20 text-center">
-                                <Terminal className="w-8 h-8 text-border mx-auto mb-3" />
-                                <p className="text-[10px] font-black text-muted-foreground/60 uppercase tracking-widest">Waiting for execution logs...</p>
-                              </div>
-                            )}
-                            {isRunning && (
-                              <div className="flex items-center gap-2 text-[11px] py-1 px-2">
-                                <Loader2 className="w-3 h-3 animate-spin text-indigo-500" />
-                                <span className="text-indigo-500 animate-pulse">Processing next instruction...</span>
-                              </div>
-                            )}
-                          </motion.div>
-                        )}
-
-                        {activeTab === 'ai' && (
-                          <motion.div
-                            key="ai"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="space-y-6"
-                          >
-                            {/* User Goal */}
-                            {selectedSchedule.user_prompt && (
-                              <div className="p-5 rounded-2xl bg-background border border-indigo-500/20 space-y-3">
-                                <div className="flex items-center gap-2.5">
-                                  <UserIcon className="w-4 h-4 text-indigo-400" />
-                                  <h4 className="text-[11px] font-black text-foreground uppercase tracking-widest">User Goal</h4>
-                                </div>
-                                <p className="text-sm text-muted-foreground leading-relaxed">{selectedSchedule.user_prompt}</p>
-                              </div>
-                            )}
-
-                            {/* Execution Strategy */}
-                            <div className="p-6 rounded-2xl bg-background border border-border space-y-4">
-                              <div className="flex items-center gap-2.5">
-                                <Target className="w-4 h-4 text-purple-500" />
-                                <h4 className="text-[11px] font-black text-foreground uppercase tracking-widest">Execution Strategy</h4>
-                              </div>
-                              <p className="text-sm text-muted-foreground leading-relaxed">
-                                {selectedSchedule.assistant_response || "No strategy recorded for this schedule."}
-                              </p>
-                            </div>
-
-                            {/* Rehydrated Plan */}
-                            <div className="space-y-3">
-                              <div className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">Original Agent Plan</div>
-                              {selectedSchedule.plan_data ? (() => {
-                                try {
-                                  const tasks = JSON.parse(selectedSchedule.plan_data) as any[];
-                                  return tasks.map((task: any, i: number) => (
-                                    <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-background border border-border">
-                                      <div className="w-5 h-5 rounded-md bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-[9px] font-black text-indigo-500">{i + 1}</div>
-                                      <span className="text-xs text-muted-foreground font-medium">{task.title || String(task)}</span>
-                                    </div>
-                                  ));
-                                } catch {
-                                  return <p className="text-xs text-muted-foreground ml-1 leading-relaxed">{selectedSchedule.plan_data}</p>;
-                                }
-                              })() : (
-                                <p className="text-[10px] text-muted-foreground/60 italic ml-1">No plan data stored for this schedule.</p>
-                              )}
-                            </div>
-                          </motion.div>
-                        )}
-
-                        {activeTab === 'script' && (
-                          <motion.div
-                            key="script"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="space-y-6"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
-                                  <Code className="w-5 h-5 text-indigo-500" />
-                                </div>
-                                <div>
-                                  <h4 className="text-sm font-black text-foreground uppercase tracking-widest">Automation Script</h4>
-                                  <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Production-ready Python code</p>
-                                </div>
-                              </div>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => handleCopyCode(selectedSchedule.generated_script)}
-                                className="h-9 px-4 rounded-xl border-border bg-white/5 text-muted-foreground text-[10px] font-black uppercase tracking-widest hover:bg-white/10 gap-2"
-                              >
-                                {copySuccess ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                                {copySuccess || "COPY CODE"}
-                              </Button>
-                            </div>
-                            <div className="rounded-2xl border border-border bg-background overflow-hidden">
-                              <div className="px-4 py-2 border-b border-border bg-white/[0.02] flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-2 h-2 rounded-full bg-red-500/50" />
-                                  <div className="w-2 h-2 rounded-full bg-yellow-500/50" />
-                                  <div className="w-2 h-2 rounded-full bg-green-500/50" />
-                                </div>
-                                <span className="text-[9px] font-black text-muted-foreground/60 uppercase tracking-widest">automation_script.py</span>
-                              </div>
-                              <pre className="p-6 text-[12px] font-mono text-muted-foreground overflow-x-auto leading-relaxed hide-scrollbar max-h-[600px]">
-                                <code>{selectedSchedule.generated_script || "# No script generated yet."}</code>
-                              </pre>
-                            </div>
-                          </motion.div>
-                        )}
-
-                        {activeTab === 'history' && (
-                          <motion.div
-                            key="history"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="space-y-4"
-                          >
-                            <div className="overflow-x-auto scroll-x-smooth">
-                            <table className="w-full text-left text-[11px] min-w-[480px]">
-                              <thead>
-                                <tr className="text-muted-foreground font-black uppercase tracking-widest border-b border-border">
-                                  <th className="pb-4 px-2">Run ID</th>
-                                  <th className="pb-4 px-2">Date</th>
-                                  <th className="pb-4 px-2">Status</th>
-                                  <th className="pb-4 px-2">Engine</th>
-                                  <th className="pb-4 px-2">Duration</th>
-                                  <th className="pb-4 px-2 text-right">Action</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-border">
-                                {runs.map((run) => (
-                                  <tr key={run.run_id} className="group hover:bg-foreground/5 transition-colors">
-                                    <td className="py-4 px-2 font-mono text-indigo-400 truncate max-w-[100px]">{run.run_id}</td>
-                                    <td className="py-4 px-2 text-muted-foreground whitespace-nowrap">{formatDate(run.created_at).split(',')[0]}</td>
-                                    <td className="py-4 px-2">
-                                      <span className={cn(
-                                        "px-2 py-0.5 rounded-md text-[9px] font-black uppercase whitespace-nowrap",
-                                        run.status === 'completed' ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-500"
-                                      )}>{run.status}</span>
-                                    </td>
-                                    <td className="py-4 px-2 text-muted-foreground font-bold">{run.engine}</td>
-                                    <td className="py-4 px-2 text-muted-foreground font-bold">{run.duration_seconds}s</td>
-                                    <td className="py-4 px-2 text-right">
-                                      <button className="p-2 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all">
-                                        <ExternalLink className="w-3.5 h-3.5" />
-                                      </button>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                    <div className="h-64 sm:h-80 p-4 sm:p-6 overflow-y-auto hide-scrollbar space-y-2 font-mono">
+                      {liveLogs.length > 0 ? (
+                        liveLogs.map((log, i) => (
+                          <div key={i} className="flex items-start gap-4 text-[11px] py-1 group hover:bg-foreground/5 rounded px-2 transition-colors">
+                            <span className="text-muted-foreground/60 shrink-0">{log.time}</span>
+                            <span className={cn("font-black shrink-0 w-20", log.type === 'error' ? 'text-red-400' : 'text-indigo-400')}>[{log.engine || 'SYS'}]</span>
+                            <span className="text-muted-foreground">{log.message}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="py-16 text-center">
+                          <Terminal className="w-8 h-8 text-border mx-auto mb-3" />
+                          <p className="text-[10px] font-black text-muted-foreground/60 uppercase tracking-widest">Waiting for execution logs...</p>
+                        </div>
+                      )}
+                      {isRunning && (
+                        <div className="flex items-center gap-2 text-[11px] py-1 px-2">
+                          <Loader2 className="w-3 h-3 animate-spin text-indigo-500" />
+                          <span className="text-indigo-500 animate-pulse">Processing next instruction...</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
 
                 {/* Right Column - Summary & Browser */}
                 <div className="col-span-1 xl:col-span-4 space-y-6 min-w-0">
-                  
-                  {/* Execution Summary */}
-                  <div className="bg-card/40 rounded-[32px] border border-border p-8 space-y-6">
-                    <div className="flex items-center gap-3">
-                      <Gauge className="w-5 h-5 text-indigo-500" />
-                      <h3 className="text-xs font-black text-foreground uppercase tracking-[0.2em]">Execution Summary</h3>
-                    </div>
-                    
-                    <div className="space-y-4">
+
+                  {/* Execution Summary - compact strip */}
+                  <div className="bg-card/40 rounded-[32px] border border-border p-4 sm:p-5">
+                    <div className="grid grid-cols-2 gap-3">
                       {[
-                        { label: 'Memory Usage', val: '245 MB', icon: Database, color: 'text-indigo-500' },
-                        { label: 'CPU Usage', val: '12%', icon: Activity, color: 'text-emerald-500' },
-                        { label: 'Network Status', val: 'Stable', icon: Network, color: 'text-blue-500' },
-                        { label: 'Browser Status', val: 'Active', icon: Globe, color: 'text-purple-500' }
+                        { label: 'Memory', val: '245 MB', icon: Database, color: 'text-indigo-500' },
+                        { label: 'CPU', val: '12%', icon: Activity, color: 'text-emerald-500' },
+                        { label: 'Network', val: 'Stable', icon: Network, color: 'text-blue-500' },
+                        { label: 'Browser', val: 'Active', icon: Globe, color: 'text-purple-500' }
                       ].map((item, i) => (
-                        <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-background border border-border">
-                          <div className="flex items-center gap-3">
-                            <item.icon className={cn("w-4 h-4", item.color)} />
-                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{item.label}</span>
+                        <div key={i} className="flex items-center gap-2 p-2.5 rounded-xl bg-background border border-border min-w-0">
+                          <item.icon className={cn("w-3.5 h-3.5 shrink-0", item.color)} />
+                          <div className="min-w-0">
+                            <div className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest truncate">{item.label}</div>
+                            <div className="text-[10px] font-black text-foreground uppercase truncate">{item.val}</div>
                           </div>
-                          <span className="text-xs font-black text-foreground uppercase">{item.val}</span>
                         </div>
                       ))}
                     </div>
@@ -861,12 +740,15 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                         <span className="text-[10px] font-black text-foreground uppercase tracking-widest">Live Browser</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button className="p-1.5 rounded-lg hover:bg-foreground/5 text-muted-foreground hover:text-foreground transition-all">
+                        <button
+                          onClick={() => setActiveModal('browser')}
+                          className="p-1.5 rounded-lg hover:bg-foreground/5 text-muted-foreground hover:text-foreground transition-all"
+                        >
                           <Maximize2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
-                    <div className="aspect-video bg-black relative group">
+                    <div className="aspect-video bg-black relative group cursor-pointer" onClick={() => setActiveModal('browser')}>
                       {liveScreenshot ? (
                         <img 
                           src={liveScreenshot.startsWith('data:') ? liveScreenshot : `data:image/jpeg;base64,${liveScreenshot}`} 
@@ -888,25 +770,11 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                           </div>
                         </>
                       )}
-                      
-                      {/* Browser Toolbar Overlay */}
-                      <div className="absolute bottom-4 left-4 right-4 p-3 rounded-xl bg-background/80 backdrop-blur-md border border-white/10 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <div className="flex items-center gap-3">
-                          <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                          <span className="text-[9px] font-black text-muted-foreground uppercase truncate max-w-[150px]">
-                            {liveLogs.filter(l => l.message.includes('https://')).pop()?.message.match(/https?:\/\/[^\s]+/)?.[0] || "https://browser.live"}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground"><RefreshCw className="w-3 h-3" /></button>
-                          <button className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground"><ZoomIn className="w-3 h-3" /></button>
-                        </div>
-                      </div>
                     </div>
                   </div>
 
                   {/* Final Result Card */}
-                  <div className="bg-gradient-to-br from-indigo-600/20 to-purple-600/20 rounded-[32px] border border-indigo-500/30 p-8 space-y-6 relative overflow-hidden">
+                  <div className="bg-gradient-to-br from-indigo-600/20 to-purple-600/20 rounded-[32px] border border-indigo-500/30 p-6 space-y-4 relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-6 opacity-10">
                       <Shield className="w-20 h-20 text-foreground" />
                     </div>
@@ -923,26 +791,36 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                           </div>
                         )}
                       </div>
-                      <div className="p-5 rounded-2xl bg-background/60 border border-white/5 backdrop-blur-sm max-h-48 overflow-y-auto hide-scrollbar">
+                      <div className="p-4 rounded-2xl bg-background/60 border border-white/5 backdrop-blur-sm max-h-28 overflow-y-auto hide-scrollbar">
                         <p className="text-xs text-muted-foreground leading-relaxed font-medium whitespace-pre-wrap">
                           {selectedSchedule.extracted_content || "No results available yet. Run the schedule to see data."}
                         </p>
                       </div>
                       {selectedSchedule.extracted_content && (
-                        <Button
-                          onClick={() => {
-                            const blob = new Blob([selectedSchedule.extracted_content], { type: 'text/plain' });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = `report-${selectedSchedule.schedule_id}.txt`;
-                            a.click();
-                          }}
-                          className="w-full h-12 rounded-xl bg-white text-indigo-600 text-[10px] font-black uppercase tracking-widest hover:bg-background transition-all gap-2"
-                        >
-                          <Download className="w-4 h-4" />
-                          DOWNLOAD FULL REPORT
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            onClick={() => setActiveModal('result')}
+                            className="flex-1 h-11 rounded-xl border-white/20 bg-transparent text-foreground text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all gap-2"
+                          >
+                            <Maximize2 className="w-3.5 h-3.5" />
+                            View Full
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              const blob = new Blob([selectedSchedule.extracted_content], { type: 'text/plain' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `report-${selectedSchedule.schedule_id}.txt`;
+                              a.click();
+                            }}
+                            className="flex-1 h-11 rounded-xl bg-white text-indigo-600 text-[10px] font-black uppercase tracking-widest hover:bg-background transition-all gap-2"
+                          >
+                            <Download className="w-4 h-4" />
+                            Download
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -968,6 +846,222 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
           )}
         </div>
       </div>
+
+      {/* Script Modal */}
+      <AnimatePresence>
+        {activeModal === 'script' && selectedSchedule && (
+          <ModalShell
+            title="Automation Script"
+            icon={Code}
+            onClose={() => setActiveModal(null)}
+            maxWidth="max-w-4xl"
+            headerAction={
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => handleCopyCode(selectedSchedule.generated_script)}
+                className="h-9 px-4 rounded-xl border-border bg-white/5 text-muted-foreground text-[10px] font-black uppercase tracking-widest hover:bg-white/10 gap-2"
+              >
+                {copySuccess ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                {copySuccess || "COPY CODE"}
+              </Button>
+            }
+          >
+            <div className="rounded-2xl border border-border bg-background overflow-hidden">
+              <div className="px-4 py-2 border-b border-border bg-white/[0.02] flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-red-500/50" />
+                  <div className="w-2 h-2 rounded-full bg-yellow-500/50" />
+                  <div className="w-2 h-2 rounded-full bg-green-500/50" />
+                </div>
+                <span className="text-[9px] font-black text-muted-foreground/60 uppercase tracking-widest">automation_script.py</span>
+              </div>
+              <pre className="p-6 text-[12px] font-mono text-muted-foreground overflow-x-auto leading-relaxed hide-scrollbar">
+                <code>{selectedSchedule.generated_script || "# No script generated yet."}</code>
+              </pre>
+            </div>
+          </ModalShell>
+        )}
+      </AnimatePresence>
+
+      {/* AI Planning Modal */}
+      <AnimatePresence>
+        {activeModal === 'aiplan' && selectedSchedule && (
+          <ModalShell title="AI Planning" icon={Brain} onClose={() => setActiveModal(null)}>
+            <div className="space-y-6">
+              {selectedSchedule.user_prompt && (
+                <div className="p-5 rounded-2xl bg-background border border-indigo-500/20 space-y-3">
+                  <div className="flex items-center gap-2.5">
+                    <UserIcon className="w-4 h-4 text-indigo-400" />
+                    <h4 className="text-[11px] font-black text-foreground uppercase tracking-widest">User Goal</h4>
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{selectedSchedule.user_prompt}</p>
+                </div>
+              )}
+
+              <div className="p-6 rounded-2xl bg-background border border-border space-y-4">
+                <div className="flex items-center gap-2.5">
+                  <Target className="w-4 h-4 text-purple-500" />
+                  <h4 className="text-[11px] font-black text-foreground uppercase tracking-widest">Execution Strategy</h4>
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {selectedSchedule.assistant_response || "No strategy recorded for this schedule."}
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">Original Agent Plan</div>
+                {selectedSchedule.plan_data ? (() => {
+                  try {
+                    const tasks = JSON.parse(selectedSchedule.plan_data) as any[];
+                    return tasks.map((task: any, i: number) => (
+                      <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-background border border-border">
+                        <div className="w-5 h-5 rounded-md bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-[9px] font-black text-indigo-500">{i + 1}</div>
+                        <span className="text-xs text-muted-foreground font-medium">{task.title || String(task)}</span>
+                      </div>
+                    ));
+                  } catch {
+                    return <p className="text-xs text-muted-foreground ml-1 leading-relaxed">{selectedSchedule.plan_data}</p>;
+                  }
+                })() : (
+                  <p className="text-[10px] text-muted-foreground/60 italic ml-1">No plan data stored for this schedule.</p>
+                )}
+              </div>
+            </div>
+          </ModalShell>
+        )}
+      </AnimatePresence>
+
+      {/* History Modal */}
+      <AnimatePresence>
+        {activeModal === 'history' && selectedSchedule && (
+          <ModalShell title="Run History" icon={History} onClose={() => setActiveModal(null)} maxWidth="max-w-3xl">
+            {runs.length > 0 ? (
+              <div className="overflow-x-auto scroll-x-smooth">
+                <table className="w-full text-left text-[11px] min-w-[480px]">
+                  <thead>
+                    <tr className="text-muted-foreground font-black uppercase tracking-widest border-b border-border">
+                      <th className="pb-4 px-2">Run ID</th>
+                      <th className="pb-4 px-2">Date</th>
+                      <th className="pb-4 px-2">Status</th>
+                      <th className="pb-4 px-2">Engine</th>
+                      <th className="pb-4 px-2">Duration</th>
+                      <th className="pb-4 px-2 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {runs.map((run) => (
+                      <tr key={run.run_id} className="group hover:bg-foreground/5 transition-colors">
+                        <td className="py-4 px-2 font-mono text-indigo-400 truncate max-w-[100px]">{run.run_id}</td>
+                        <td className="py-4 px-2 text-muted-foreground whitespace-nowrap">{formatDate(run.created_at).split(',')[0]}</td>
+                        <td className="py-4 px-2">
+                          <span className={cn(
+                            "px-2 py-0.5 rounded-md text-[9px] font-black uppercase whitespace-nowrap",
+                            run.status === 'completed' ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-500"
+                          )}>{run.status}</span>
+                        </td>
+                        <td className="py-4 px-2 text-muted-foreground font-bold">{run.engine}</td>
+                        <td className="py-4 px-2 text-muted-foreground font-bold">{run.duration_seconds}s</td>
+                        <td className="py-4 px-2 text-right">
+                          <button className="p-2 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all">
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="py-16 text-center">
+                <History className="w-8 h-8 text-border mx-auto mb-3" />
+                <p className="text-[10px] font-black text-muted-foreground/60 uppercase tracking-widest">No runs recorded yet.</p>
+              </div>
+            )}
+          </ModalShell>
+        )}
+      </AnimatePresence>
+
+      {/* Live Browser Expanded Modal */}
+      <AnimatePresence>
+        {activeModal === 'browser' && selectedSchedule && (
+          <ModalShell title="Live Browser" icon={Globe} onClose={() => setActiveModal(null)} maxWidth="max-w-4xl">
+            <div className="aspect-video bg-black relative rounded-2xl overflow-hidden border border-border">
+              {liveScreenshot ? (
+                <img 
+                  src={liveScreenshot.startsWith('data:') ? liveScreenshot : `data:image/jpeg;base64,${liveScreenshot}`} 
+                  alt="Live Browser" 
+                  className="w-full h-full object-contain"
+                />
+              ) : (
+                <>
+                  <img 
+                    src="https://images.unsplash.com/photo-1614064641938-3bbee52942c7?q=80&w=1000&auto=format&fit=crop" 
+                    alt="Browser Preview" 
+                    className="w-full h-full object-cover opacity-40 grayscale"
+                  />
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
+                    <div className="w-12 h-12 rounded-full border-2 border-indigo-500/30 border-t-indigo-500 animate-spin" />
+                    <span className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em] animate-pulse">
+                      {isRunning ? "Streaming CDP..." : "Waiting for execution..."}
+                    </span>
+                  </div>
+                </>
+              )}
+              <div className="absolute bottom-4 left-4 right-4 p-3 rounded-xl bg-background/80 backdrop-blur-md border border-white/10 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="text-[9px] font-black text-muted-foreground uppercase truncate max-w-[220px]">
+                    {liveLogs.filter(l => l.message.includes('https://')).pop()?.message.match(/https?:\/\/[^\s]+/)?.[0] || "https://browser.live"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground"><RefreshCw className="w-3 h-3" /></button>
+                  <button className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground"><ZoomIn className="w-3 h-3" /></button>
+                </div>
+              </div>
+            </div>
+          </ModalShell>
+        )}
+      </AnimatePresence>
+
+      {/* Final Result Modal */}
+      <AnimatePresence>
+        {activeModal === 'result' && selectedSchedule && (
+          <ModalShell
+            title="Final Result"
+            icon={CheckCircle2}
+            onClose={() => setActiveModal(null)}
+            maxWidth="max-w-2xl"
+            headerAction={
+              selectedSchedule.extracted_content ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const blob = new Blob([selectedSchedule.extracted_content], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `report-${selectedSchedule.schedule_id}.txt`;
+                    a.click();
+                  }}
+                  className="h-9 px-4 rounded-xl border-border bg-white/5 text-muted-foreground text-[10px] font-black uppercase tracking-widest hover:bg-white/10 gap-2"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  DOWNLOAD
+                </Button>
+              ) : undefined
+            }
+          >
+            <div className="p-5 rounded-2xl bg-background border border-border">
+              <p className="text-sm text-muted-foreground leading-relaxed font-medium whitespace-pre-wrap">
+                {selectedSchedule.extracted_content || "No results available yet. Run the schedule to see data."}
+              </p>
+            </div>
+          </ModalShell>
+        )}
+      </AnimatePresence>
 
       {/* Modals (Edit/Delete) - Reusing existing logic but with premium styling */}
       <AnimatePresence>
