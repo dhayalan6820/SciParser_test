@@ -701,11 +701,19 @@ export const sciparserApi = {
   },
 
   // Admin: Recent Activity
-  adminGetActivity: async (limit: number = 20) => {
+  adminGetActivity: async (
+    limit: number = 20,
+    filters?: { startDate?: string; endDate?: string; type?: string; user?: string }
+  ) => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/activity?limit=${limit}`, {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (filters?.startDate) params.set("start_date", filters.startDate);
+    if (filters?.endDate) params.set("end_date", filters.endDate);
+    if (filters?.type) params.set("type", filters.type);
+    if (filters?.user) params.set("user", filters.user);
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/activity?${params.toString()}`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
@@ -818,11 +826,16 @@ export const sciparserApi = {
   },
 
   // Admin: Security Overview
-  adminGetSecurity: async () => {
+  adminGetSecurity: async (filters?: { startDate?: string; endDate?: string; user?: string }) => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/security`, {
+    const params = new URLSearchParams();
+    if (filters?.startDate) params.set("start_date", filters.startDate);
+    if (filters?.endDate) params.set("end_date", filters.endDate);
+    if (filters?.user) params.set("user", filters.user);
+    const qs = params.toString();
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/security${qs ? `?${qs}` : ""}`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());

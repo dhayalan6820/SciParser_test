@@ -765,10 +765,16 @@ async def admin_metrics_overview(
 @app.get("/sciparser/v1/admin/activity", response_model=AdminActivityResponse)
 async def admin_activity(
     limit: int = Query(20, ge=1, le=100),
+    start_date: Optional[str] = Query(None, description="Inclusive start date, YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="Inclusive end date, YYYY-MM-DD"),
+    type: Optional[str] = Query(None, description="Filter to a single activity type"),
+    user: Optional[str] = Query(None, description="Fuzzy match against username/email"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    return await ChatService.admin_get_recent_activity(db, limit=limit)
+    return await ChatService.admin_get_recent_activity(
+        db, limit=limit, start_date=start_date, end_date=end_date, type_filter=type, user=user,
+    )
 
 @app.get("/sciparser/v1/admin/agents", response_model=AdminAgentRunsResponse)
 async def admin_agents(
@@ -864,10 +870,13 @@ async def admin_usage(
 
 @app.get("/sciparser/v1/admin/security", response_model=AdminSecurityResponse)
 async def admin_security(
+    start_date: Optional[str] = Query(None, description="Inclusive start date, YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="Inclusive end date, YYYY-MM-DD"),
+    user: Optional[str] = Query(None, description="Fuzzy match against username/email"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    return await ChatService.admin_get_security_overview(db)
+    return await ChatService.admin_get_security_overview(db, start_date=start_date, end_date=end_date, user=user)
 # --- Upload Endpoints ---
 
 @app.post("/sciparser/v1/upload/metadata")

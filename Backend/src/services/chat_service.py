@@ -566,65 +566,144 @@ class ChatService:
             "tokens_sparkline": tokens_sparkline,
         }
 
+    # ── Admin: shared date-range parsing for activity/security filters ──
+    @staticmethod
+    def _parse_admin_date_range(start_date: Optional[str], end_date: Optional[str]):
+        """Parse YYYY-MM-DD start/end date strings into inclusive UTC datetime bounds.
+
+        Raises HTTPException(422) on malformed dates so invalid input from the admin filter UI
+        surfaces as a clean client error instead of a 500.
+        """
+        start_dt = None
+        end_dt = None
+        try:
+            if start_date:
+                start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            if end_date:
+                end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(
+                    hour=23, minute=59, second=59, microsecond=999999, tzinfo=timezone.utc
+                )
+        except ValueError:
+            raise HTTPException(status_code=422, detail="start_date/end_date must be in YYYY-MM-DD format")
+        return start_dt, end_dt
+
     # ── Admin: recent activity timeline ─────────────────────────────────
     @staticmethod
-    async def admin_get_recent_activity(db: AsyncSession, limit: int = 20) -> dict:
-        """Merge real signups, logins, automation runs, and agent run lifecycle events into one timeline."""
+    async def admin_get_recent_activity(
+        db: AsyncSession, limit: int = 20,
+        start_date: Optional[str] = None, end_date: Optional[str] = None,
+        type_filter: Optional[str] = None, user: Optional[str] = None,
+    ) -> dict:
+        """Merge real signups, logins, automation runs, and agent run lifecycle events into one timeline.
+
+        Supports optional date-range (start_date/end_date, YYYY-MM-DD, inclusive), activity `type`
+        (matching the item's `type` field, e.g. user_signup/login/login_failed/automation_run/
+        agent_failure/agent_run_started/agent_run_completed), and a fuzzy `user` match against
+        username/email where the event carries that information.
+        """
         from src.database.chat_db import AgentExecutionLog, LoginEvent
+        from sqlalchemy import or_
+
+        start_dt, end_dt = ChatService._parse_admin_date_range(start_date, end_date)
+        user_pattern = f"%{user.strip()}%" if user and user.strip() else None
+        fetch_limit = max(limit * 5, limit)  # over-fetch per-source since filters/merge reduce results
 
         items = []
+        include_signups = type_filter is None or type_filter == "user_signup"
+        include_logins = type_filter is None or type_filter in ("login", "login_failed")
+        include_runs = type_filter is None or type_filter == "automation_run"
+        include_agent_logs = type_filter is None or type_filter in (
+            "agent_failure", "agent_run_started", "agent_run_completed"
+        )
 
-        signups = (
-            await db.execute(select(User).order_by(User.created_at.desc()).limit(limit))
-        ).scalars().all()
-        for u in signups:
-            items.append({
-                "type": "user_signup",
-                "title": f"New user registered: {u.username}",
-                "detail": u.email,
-                "status": u.status,
-                "timestamp": u.created_at,
-            })
+        if include_signups:
+            stmt = select(User).order_by(User.created_at.desc()).limit(fetch_limit)
+            if start_dt:
+                stmt = stmt.where(User.created_at >= start_dt)
+            if end_dt:
+                stmt = stmt.where(User.created_at <= end_dt)
+            if user_pattern:
+                stmt = stmt.where(or_(User.username.ilike(user_pattern), User.email.ilike(user_pattern)))
+            signups = (await db.execute(stmt)).scalars().all()
+            for u in signups:
+                items.append({
+                    "type": "user_signup",
+                    "title": f"New user registered: {u.username}",
+                    "detail": u.email,
+                    "status": u.status,
+                    "timestamp": u.created_at,
+                })
 
-        logins = (
-            await db.execute(select(LoginEvent).order_by(LoginEvent.created_at.desc()).limit(limit))
-        ).scalars().all()
-        for le in logins:
-            items.append({
-                "type": "login" if le.success else "login_failed",
-                "title": (
-                    f"{le.username_attempted} logged in" if le.success
-                    else f"Failed login attempt for \"{le.username_attempted}\""
-                ),
-                "detail": le.failure_reason,
-                "status": "SUCCESS" if le.success else "FAILED",
-                "timestamp": le.created_at,
-            })
+        if include_logins:
+            stmt = select(LoginEvent).order_by(LoginEvent.created_at.desc()).limit(fetch_limit)
+            if start_dt:
+                stmt = stmt.where(LoginEvent.created_at >= start_dt)
+            if end_dt:
+                stmt = stmt.where(LoginEvent.created_at <= end_dt)
+            if user_pattern:
+                stmt = stmt.where(LoginEvent.username_attempted.ilike(user_pattern))
+            if type_filter == "login":
+                stmt = stmt.where(LoginEvent.success == True)
+            elif type_filter == "login_failed":
+                stmt = stmt.where(LoginEvent.success == False)
+            logins = (await db.execute(stmt)).scalars().all()
+            for le in logins:
+                items.append({
+                    "type": "login" if le.success else "login_failed",
+                    "title": (
+                        f"{le.username_attempted} logged in" if le.success
+                        else f"Failed login attempt for \"{le.username_attempted}\""
+                    ),
+                    "detail": le.failure_reason,
+                    "status": "SUCCESS" if le.success else "FAILED",
+                    "timestamp": le.created_at,
+                })
 
-        runs = (
-            await db.execute(
+        if include_runs:
+            stmt = (
                 select(ScheduleRun, Schedule)
                 .join(Schedule, Schedule.schedule_id == ScheduleRun.schedule_id)
                 .order_by(ScheduleRun.created_at.desc())
-                .limit(limit)
+                .limit(fetch_limit)
             )
-        ).all()
-        for run, schedule in runs:
-            items.append({
-                "type": "automation_run",
-                "title": f"Automation \"{schedule.title or schedule.schedule_id[:8]}\" {run.status.lower()}",
-                "detail": run.error_log[:200] if run.error_log else None,
-                "status": run.status,
-                "timestamp": run.created_at,
-            })
+            if start_dt:
+                stmt = stmt.where(ScheduleRun.created_at >= start_dt)
+            if end_dt:
+                stmt = stmt.where(ScheduleRun.created_at <= end_dt)
+            if user_pattern:
+                stmt = stmt.join(User, User.user_id == Schedule.user_id).where(
+                    or_(User.username.ilike(user_pattern), User.email.ilike(user_pattern))
+                )
+            runs = (await db.execute(stmt)).all()
+            for run, schedule in runs:
+                items.append({
+                    "type": "automation_run",
+                    "title": f"Automation \"{schedule.title or schedule.schedule_id[:8]}\" {run.status.lower()}",
+                    "detail": run.error_log[:200] if run.error_log else None,
+                    "status": run.status,
+                    "timestamp": run.created_at,
+                })
 
-        agent_logs = (
-            await db.execute(
-                select(AgentExecutionLog)
-                .order_by(AgentExecutionLog.created_at.desc())
-                .limit(limit)
-            )
-        ).scalars().all()
+        agent_logs = []
+        if include_agent_logs:
+            stmt = select(AgentExecutionLog).order_by(AgentExecutionLog.created_at.desc()).limit(fetch_limit)
+            if start_dt:
+                stmt = stmt.where(AgentExecutionLog.created_at >= start_dt)
+            if end_dt:
+                stmt = stmt.where(AgentExecutionLog.created_at <= end_dt)
+            if user_pattern:
+                matching_user_ids = (
+                    await db.execute(
+                        select(User.user_id).where(
+                            or_(User.username.ilike(user_pattern), User.email.ilike(user_pattern))
+                        )
+                    )
+                ).scalars().all()
+                if not matching_user_ids:
+                    stmt = stmt.where(False)
+                else:
+                    stmt = stmt.where(AgentExecutionLog.user_id.in_(matching_user_ids))
+            agent_logs = (await db.execute(stmt)).scalars().all()
         for log in agent_logs:
             status_upper = (log.status or "").upper()
             if status_upper in ("FAILED", "ERROR"):
@@ -914,25 +993,56 @@ class ChatService:
 
     # ── Admin: security overview ──────────────────────────────────────────
     @staticmethod
-    async def admin_get_security_overview(db: AsyncSession) -> dict:
-        from src.database.chat_db import LoginEvent
+    async def admin_get_security_overview(
+        db: AsyncSession,
+        start_date: Optional[str] = None, end_date: Optional[str] = None, user: Optional[str] = None,
+    ) -> dict:
+        """Suspended accounts, recent signups, and recent login events.
 
-        suspended = (
-            await db.execute(select(User).where(User.status == "suspended").order_by(User.updated_at.desc()))
-        ).scalars().all()
-        recent = (
-            await db.execute(select(User).order_by(User.created_at.desc()).limit(10))
-        ).scalars().all()
-        recent_logins = (
-            await db.execute(
-                select(LoginEvent).where(LoginEvent.success == True).order_by(LoginEvent.created_at.desc()).limit(20)
-            )
-        ).scalars().all()
-        failed_logins = (
-            await db.execute(
-                select(LoginEvent).where(LoginEvent.success == False).order_by(LoginEvent.created_at.desc()).limit(20)
-            )
-        ).scalars().all()
+        Supports an optional inclusive date range (start_date/end_date, YYYY-MM-DD) applied to each
+        list's own date column (suspended_users: updated_at, recent_signups: created_at, logins:
+        created_at), plus a fuzzy `user` match against username/email (or username_attempted for
+        login events).
+        """
+        from src.database.chat_db import LoginEvent
+        from sqlalchemy import or_
+
+        start_dt, end_dt = ChatService._parse_admin_date_range(start_date, end_date)
+        user_pattern = f"%{user.strip()}%" if user and user.strip() else None
+
+        suspended_stmt = select(User).where(User.status == "suspended").order_by(User.updated_at.desc())
+        if start_dt:
+            suspended_stmt = suspended_stmt.where(User.updated_at >= start_dt)
+        if end_dt:
+            suspended_stmt = suspended_stmt.where(User.updated_at <= end_dt)
+        if user_pattern:
+            suspended_stmt = suspended_stmt.where(or_(User.username.ilike(user_pattern), User.email.ilike(user_pattern)))
+        suspended = (await db.execute(suspended_stmt)).scalars().all()
+
+        recent_stmt = select(User).order_by(User.created_at.desc())
+        if start_dt:
+            recent_stmt = recent_stmt.where(User.created_at >= start_dt)
+        if end_dt:
+            recent_stmt = recent_stmt.where(User.created_at <= end_dt)
+        if user_pattern:
+            recent_stmt = recent_stmt.where(or_(User.username.ilike(user_pattern), User.email.ilike(user_pattern)))
+        recent_stmt = recent_stmt.limit(50 if (start_dt or end_dt or user_pattern) else 10)
+        recent = (await db.execute(recent_stmt)).scalars().all()
+
+        recent_logins_stmt = select(LoginEvent).where(LoginEvent.success == True).order_by(LoginEvent.created_at.desc())
+        failed_logins_stmt = select(LoginEvent).where(LoginEvent.success == False).order_by(LoginEvent.created_at.desc())
+        if start_dt:
+            recent_logins_stmt = recent_logins_stmt.where(LoginEvent.created_at >= start_dt)
+            failed_logins_stmt = failed_logins_stmt.where(LoginEvent.created_at >= start_dt)
+        if end_dt:
+            recent_logins_stmt = recent_logins_stmt.where(LoginEvent.created_at <= end_dt)
+            failed_logins_stmt = failed_logins_stmt.where(LoginEvent.created_at <= end_dt)
+        if user_pattern:
+            recent_logins_stmt = recent_logins_stmt.where(LoginEvent.username_attempted.ilike(user_pattern))
+            failed_logins_stmt = failed_logins_stmt.where(LoginEvent.username_attempted.ilike(user_pattern))
+        limit_n = 50 if (start_dt or end_dt or user_pattern) else 20
+        recent_logins = (await db.execute(recent_logins_stmt.limit(limit_n))).scalars().all()
+        failed_logins = (await db.execute(failed_logins_stmt.limit(limit_n))).scalars().all()
 
         return {
             "suspended_users": [

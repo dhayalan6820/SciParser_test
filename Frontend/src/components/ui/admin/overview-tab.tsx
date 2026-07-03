@@ -16,6 +16,8 @@ import {
   ShieldAlert,
   PlayCircle,
   CheckCircle2,
+  Search,
+  X,
 } from "lucide-react";
 
 const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
@@ -28,11 +30,34 @@ const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
   agent_run_completed: <CheckCircle2 className="h-3.5 w-3.5" />,
 };
 
+const ACTIVITY_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "All activity" },
+  { value: "user_signup", label: "Signups" },
+  { value: "login", label: "Logins" },
+  { value: "login_failed", label: "Failed logins" },
+  { value: "automation_run", label: "Automation runs" },
+  { value: "agent_run_started", label: "Agent started" },
+  { value: "agent_run_completed", label: "Agent completed" },
+  { value: "agent_failure", label: "Agent failures" },
+];
+
 export const OverviewTab: React.FC = () => {
   const [overview, setOverview] = React.useState<AdminOverview | null>(null);
   const [activity, setActivity] = React.useState<AdminActivityItem[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [activityLoading, setActivityLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  const [typeFilter, setTypeFilter] = React.useState("");
+  const [startDate, setStartDate] = React.useState("");
+  const [endDate, setEndDate] = React.useState("");
+  const [userInput, setUserInput] = React.useState("");
+  const [userFilter, setUserFilter] = React.useState("");
+
+  React.useEffect(() => {
+    const handle = setTimeout(() => setUserFilter(userInput.trim()), 350);
+    return () => clearTimeout(handle);
+  }, [userInput]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -40,14 +65,8 @@ export const OverviewTab: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const [ov, act] = await Promise.all([
-          sciparserApi.adminGetOverviewMetrics(30),
-          sciparserApi.adminGetActivity(15),
-        ]);
-        if (!cancelled) {
-          setOverview(ov);
-          setActivity(act.items);
-        }
+        const ov = await sciparserApi.adminGetOverviewMetrics(30);
+        if (!cancelled) setOverview(ov);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load overview");
       } finally {
@@ -58,6 +77,38 @@ export const OverviewTab: React.FC = () => {
       cancelled = true;
     };
   }, []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setActivityLoading(true);
+      try {
+        const act = await sciparserApi.adminGetActivity(15, {
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          type: typeFilter || undefined,
+          user: userFilter || undefined,
+        });
+        if (!cancelled) setActivity(act.items);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load activity");
+      } finally {
+        if (!cancelled) setActivityLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [startDate, endDate, typeFilter, userFilter]);
+
+  const hasActiveFilters = !!(startDate || endDate || typeFilter || userFilter);
+  const clearFilters = () => {
+    setTypeFilter("");
+    setStartDate("");
+    setEndDate("");
+    setUserInput("");
+    setUserFilter("");
+  };
 
   if (loading) return <LoadingState />;
   if (error || !overview) return <div className="text-sm text-red-500">{error || "No data"}</div>;
@@ -123,9 +174,58 @@ export const OverviewTab: React.FC = () => {
         />
       </motion.div>
 
-      <Panel title="Recent Activity" subtitle="Live feed of signups, automation runs, and agent failures">
-        {activity.length === 0 ? (
-          <EmptyState label="No recent activity." />
+      <Panel title="Recent Activity" subtitle="Live feed of signups, logins, automation runs, and agent lifecycle events">
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Filter by user..."
+              value={userInput}
+              onChange={(e) => setUserInput(e.target.value)}
+              className="pl-8 pr-3 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-800 bg-transparent w-44 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="text-sm rounded-md border border-slate-200 dark:border-slate-800 bg-transparent px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          >
+            {ACTIVITY_TYPE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="text-sm rounded-md border border-slate-200 dark:border-slate-800 bg-transparent px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            aria-label="Start date"
+          />
+          <span className="text-xs text-muted-foreground">to</span>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="text-sm rounded-md border border-slate-200 dark:border-slate-800 bg-transparent px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            aria-label="End date"
+          />
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2 py-1.5"
+            >
+              <X className="h-3 w-3" /> Clear
+            </button>
+          )}
+        </div>
+
+        {activityLoading ? (
+          <LoadingState />
+        ) : activity.length === 0 ? (
+          <EmptyState label={hasActiveFilters ? "No activity matches these filters." : "No recent activity."} />
         ) : (
           <ol className="relative border-l border-slate-200 dark:border-slate-800 ml-2 space-y-4">
             {activity.map((item, idx) => (
