@@ -730,7 +730,7 @@ class Brain:
         cost = (input_tokens / 1_000_000 * p["input"]) + (output_tokens / 1_000_000 * p["output"])
         return round(cost, 6)
 
-    async def _execute_tool_graph(self, graph_input: Dict[str, Any], tools: List[BaseTool], user_id: str, chat_id: str, task_summary: str, confirmed_inputs: Dict[str, Any], update_ui_func=None, memory_block: str = "", obstacle_answer: Optional[str] = None) -> Dict[str, Any]:
+    async def _execute_tool_graph(self, graph_input: Dict[str, Any], tools: List[BaseTool], user_id: str, chat_id: str, task_summary: str, confirmed_inputs: Dict[str, Any], update_ui_func=None, memory_block: str = "", obstacle_answer: Optional[str] = None, suppress_address_agent: bool = False) -> Dict[str, Any]:
         """Executes a LangGraph tool-calling graph for the given input and tools."""
 
         # `tools` is the LIVE, MCP-discovered tool list for this session (see
@@ -762,7 +762,15 @@ class Brain:
         # tracks the requested address components (computed once) and the retry
         # budget for a low-confidence autocomplete suggestion before escalating.
         _address_state = address_agent.AddressAutocompleteState()
-        _requested_address = address_agent.extract_requested_address_components(confirmed_inputs)
+        # `suppress_address_agent=True` means we just resumed from the user
+        # manually confirming/typing an address after a low-confidence or
+        # verification-failure escalation — per address.agent.md step 7, once
+        # the user has picked a value we use it exactly and do NOT re-run the
+        # deterministic scoring/escalation logic against it this run.
+        _requested_address = (
+            {} if suppress_address_agent
+            else address_agent.extract_requested_address_components(confirmed_inputs)
+        )
         _address_spec_guidance: Optional[str] = None
         if _requested_address:
             try:
@@ -1685,6 +1693,11 @@ class Brain:
             # here so it's always defined at the _execute_tool_graph call site below,
             # regardless of which branch (resume vs. fresh) executes on a given retry.
             _otp_answer_for_redaction: Optional[str] = None
+            # Set True on the first resumed attempt after an address obstacle
+            # answer (candidate selection or manual entry) so the Address
+            # Agent's scoring/escalation logic is suppressed for this run —
+            # the user's value is authoritative and must not be re-evaluated.
+            _address_resume_active = False
 
             while retry_count < max_retries:
                 # --- Cooperative cancellation: exit cleanly if user pressed Stop ---
@@ -1713,7 +1726,113 @@ class Brain:
                     reasoning = ""
                     plan_data = []
 
-                    if pending_obstacle and retry_count == 0:
+                    if (
+                        pending_obstacle and retry_count == 0
+                        and pending_obstacle.get("obstacle_category") == "address"
+                        and pending_obstacle.get("obstacle_type") != "manual_entry"
+                    ):
+                        # Resuming after the user picked (or rejected) an address
+                        # candidate — per address.agent.md step 7, use exactly what
+                        # they chose and do not re-run scoring/escalation on it.
+                        _selected_address = _extract_form_answer(user_message)
+                        if not _selected_address or _selected_address.strip() == "__none__":
+                            # "None of these are correct" — never type the sentinel
+                            # value into the page. Ask the user to type the exact
+                            # address manually instead of guessing or looping.
+                            _manual_form = {
+                                "title": "Enter the Correct Address",
+                                "description": (
+                                    "None of the suggested addresses were correct. Please type the "
+                                    "exact address to enter (street, house/unit number, city, and "
+                                    "postal code)."
+                                ),
+                                "sections": [
+                                    {
+                                        "section_title": None,
+                                        "fields": [
+                                            {
+                                                "id": "manual_address",
+                                                "label": "Full address",
+                                                "type": "text",
+                                                "placeholder": "e.g. 123 Main St, Springfield, IL 62704",
+                                                "required": True,
+                                                "options": None,
+                                                "note": "Used once to continue this task.",
+                                            }
+                                        ],
+                                    }
+                                ],
+                                "security_note": None,
+                                "obstacle_type": "manual_entry",
+                                "obstacle_category": "address",
+                            }
+                            await update_ui(1, "completed", details="Paused — needs the correct address typed in manually.")
+                            self.pending_confirmed_inputs[chat_id] = confirmed_inputs
+                            _manual_obstacle_state = {
+                                "obstacle_type": "manual_entry",
+                                "obstacle_category": "address",
+                                "skill_name": "address_manual_entry",
+                                "site_domain": pending_obstacle.get("site_domain", ""),
+                                "task_summary": task_summary,
+                                "confirmed_inputs": self._redact_confirmed_inputs(confirmed_inputs),
+                                "discovery_strategy": discovery_strategy,
+                                "attempt": _obstacle_attempt_count,
+                                "created_at": datetime.now(timezone.utc).isoformat(),
+                            }
+                            async with AsyncSessionLocal() as db:
+                                upd_stmt = select(ChatSession).where(ChatSession.id == chat_id)
+                                upd_res = await db.execute(upd_stmt)
+                                upd_row = upd_res.scalar_one_or_none()
+                                if upd_row:
+                                    _existing_state = {}
+                                    if upd_row.session_state:
+                                        try:
+                                            _existing_state = json.loads(upd_row.session_state)
+                                        except Exception:
+                                            _existing_state = {}
+                                    _existing_state["pending_obstacle"] = _manual_obstacle_state
+                                    upd_row.session_state = json.dumps(_existing_state)
+                                    await db.commit()
+                                ai_msg = Message(
+                                    message_id=str(uuid.uuid4()),
+                                    chat_id=chat_id,
+                                    user_id=user_id,
+                                    role="ai",
+                                    content=_manual_form["description"],
+                                    form_data=json.dumps(_manual_form),
+                                    created_at=datetime.now(timezone.utc)
+                                )
+                                db.add(ai_msg)
+                                await db.commit()
+                            obstacle_paused = True
+                            return {"status": "NEEDS_INPUT", "form": _manual_form}
+                        _address_resume_active = True
+                        mission_objective = (
+                            f"The user confirmed the exact address to use: '{_selected_address}'. "
+                            "Type/select exactly this address (do not modify it, do not pick a "
+                            "different suggestion, and do not re-evaluate other candidates), "
+                            "verify the field reflects it, then submit/continue. "
+                            f"Then proceed with the original task: {task_summary}."
+                        )
+                        pending_obstacle = None  # only bypass planning on this first resumed attempt
+                    elif (
+                        pending_obstacle and retry_count == 0
+                        and pending_obstacle.get("obstacle_category") == "address"
+                        and pending_obstacle.get("obstacle_type") == "manual_entry"
+                    ):
+                        # Resuming after the user typed a fully manual address
+                        # (they rejected every suggested candidate previously).
+                        _manual_address = _extract_form_answer(user_message)
+                        _address_resume_active = True
+                        mission_objective = (
+                            f"The user typed the exact address to use: '{_manual_address}'. "
+                            "Type exactly this address into the address field. If a suggestion "
+                            "dropdown appears, only select it if it is an exact match for this "
+                            "value; otherwise dismiss the dropdown and keep the typed value. "
+                            f"Then proceed with the original task: {task_summary}."
+                        )
+                        pending_obstacle = None
+                    elif pending_obstacle and retry_count == 0:
                         # Resuming after the user answered an obstacle prompt (e.g. an
                         # OTP code) — feed their answer straight into the graph instead
                         # of re-planning from scratch.
@@ -1763,7 +1882,7 @@ class Brain:
                     graph_input = {"messages": [HumanMessage(content=mission_objective)]}
                     graph_output = await self._execute_tool_graph(
                         graph_input, all_tools, user_id, chat_id, task_summary, confirmed_inputs, update_ui_func=update_ui, memory_block=memory_block,
-                        obstacle_answer=_otp_answer_for_redaction
+                        obstacle_answer=_otp_answer_for_redaction, suppress_address_agent=_address_resume_active
                     )
                     
                     # Capture tool calls from the graph execution — this list is
