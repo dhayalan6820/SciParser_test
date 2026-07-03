@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Globe, RefreshCw, ChevronLeft, ChevronRight,
+  Globe, RefreshCw,
   Maximize2, Minimize2, X, Terminal, Code, Check,
   Search, Trash2, ZoomIn, ZoomOut, Grid3X3,
   Loader2, AlertCircle, ShieldCheck, Wifi, WifiOff, CheckCircle2,
@@ -176,19 +176,6 @@ export function BrowserPreview({
               {browserEngine === "camoufox" ? "Firefox · Camoufox" : "Chrome · Headless"}
             </div>
           )}
-
-          {/* Nav buttons */}
-          <div className="flex items-center gap-0.5 shrink-0">
-            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent">
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent">
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent">
-              <RefreshCw className="h-3 w-3" />
-            </Button>
-          </div>
 
           {/* URL bar */}
           <div className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/40 border border-border min-w-0">

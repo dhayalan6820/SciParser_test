@@ -82,6 +82,49 @@ interface Thread {
   createdAt: string;
 }
 
+const SUCCESS_TOOL_STATUSES = new Set(["SUCCESS", "COMPLETED"]);
+
+// Tools have no direct message_id link in the schema, so we associate a
+// message with the tool calls executed while that response was produced —
+// i.e. tool logs whose created_at falls between the preceding message and
+// the AI response for that exchange. Only successful tool calls qualify.
+const getSuccessToolIdsForMessage = (
+  msg: ChatMessage,
+  allMessages: ChatMessage[],
+  allToolLogs: any[],
+): string[] => {
+  const idx = allMessages.findIndex((m) => m.id === msg.id);
+  if (idx === -1) return [];
+
+  const isUser = msg.role === "user" || msg.role === "human";
+  let startMsg: ChatMessage | undefined;
+  let endMsg: ChatMessage | undefined;
+
+  if (isUser) {
+    startMsg = msg;
+    endMsg = allMessages
+      .slice(idx + 1)
+      .find((m) => m.role === "ai" || m.role === "assistant");
+  } else {
+    endMsg = msg;
+    startMsg = allMessages[idx - 1];
+  }
+
+  if (!endMsg) return [];
+
+  const startTime = startMsg ? new Date(startMsg.timestamp).getTime() : 0;
+  const endTime = new Date(endMsg.timestamp).getTime();
+  if (Number.isNaN(endTime)) return [];
+
+  return (allToolLogs || [])
+    .filter((log) => {
+      if (!SUCCESS_TOOL_STATUSES.has(log.status)) return false;
+      const t = new Date(log.created_at || log.timestamp).getTime();
+      return !Number.isNaN(t) && t >= startTime && t <= endTime;
+    })
+    .map((log) => log.id);
+};
+
 const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const { theme, toggleTheme } = useTheme();
   const [userProfile, setUserProfile] = React.useState<UserProfile | null>(
@@ -1290,11 +1333,47 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         )}
         onClick={() => {
           if (isSelectionMode && msg.id) {
-            setSelectedMessages((prev) =>
-              prev.includes(msg.id)
-                ? prev.filter((id) => id !== msg.id)
-                : [...prev, msg.id],
+            const willSelect = !selectedMessages.includes(msg.id);
+            const assocToolIds = getSuccessToolIdsForMessage(
+              msg,
+              messages,
+              toolLogs,
             );
+
+            setSelectedMessages((prev) =>
+              willSelect
+                ? [...prev, msg.id]
+                : prev.filter((id) => id !== msg.id),
+            );
+
+            if (willSelect) {
+              if (assocToolIds.length > 0) {
+                setSelectedToolIds((prev) =>
+                  Array.from(new Set([...prev, ...assocToolIds])),
+                );
+              }
+            } else if (assocToolIds.length > 0) {
+              // Keep tools still needed by other selected messages
+              const otherSelectedIds = selectedMessages.filter(
+                (id) => id !== msg.id,
+              );
+              const stillNeeded = new Set<string>();
+              otherSelectedIds.forEach((id) => {
+                const otherMsg = messages.find((m) => m.id === id);
+                if (otherMsg) {
+                  getSuccessToolIdsForMessage(
+                    otherMsg,
+                    messages,
+                    toolLogs,
+                  ).forEach((tid) => stillNeeded.add(tid));
+                }
+              });
+              setSelectedToolIds((prev) =>
+                prev.filter(
+                  (tid) => !assocToolIds.includes(tid) || stillNeeded.has(tid),
+                ),
+              );
+            }
           }
         }}
       >
