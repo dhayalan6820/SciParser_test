@@ -12,12 +12,20 @@ import {
   UserPlus,
   Clock,
   AlertTriangle,
+  LogIn,
+  ShieldAlert,
+  PlayCircle,
+  CheckCircle2,
 } from "lucide-react";
 
 const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
   user_signup: <UserPlus className="h-3.5 w-3.5" />,
   automation_run: <Calendar className="h-3.5 w-3.5" />,
   agent_failure: <AlertTriangle className="h-3.5 w-3.5" />,
+  login: <LogIn className="h-3.5 w-3.5" />,
+  login_failed: <ShieldAlert className="h-3.5 w-3.5" />,
+  agent_run_started: <PlayCircle className="h-3.5 w-3.5" />,
+  agent_run_completed: <CheckCircle2 className="h-3.5 w-3.5" />,
 };
 
 export const OverviewTab: React.FC = () => {

@@ -35,7 +35,8 @@ from src.schemas.schema import (
     AdminUpdateUserRequest, AdminUserListResponse, OperationsMetricsResponse,
     AdminOverviewResponse, AdminActivityResponse, AdminAgentRunsResponse,
     AdminAutomationsResponse, AdminBrowserSessionsResponse, AdminUsageResponse,
-    AdminSecurityResponse,
+    AdminSecurityResponse, AdminAgentRunTimelineResponse, AdminAgentActionResponse,
+    AdminAnalyticsResponse,
 )
 from src.utils.logger import logger
 from src.services.brain import brain
@@ -713,17 +714,54 @@ async def admin_agents(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     status: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    sort_by: str = Query("created_at"),
+    sort_dir: str = Query("desc"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    return await ChatService.admin_list_agent_runs(db, page=page, page_size=page_size, status_filter=status)
+    return await ChatService.admin_list_agent_runs(
+        db, page=page, page_size=page_size, status_filter=status,
+        search=search, sort_by=sort_by, sort_dir=sort_dir,
+    )
+
+@app.get("/sciparser/v1/admin/agents/{chat_id}/timeline", response_model=AdminAgentRunTimelineResponse)
+async def admin_agent_run_timeline(
+    chat_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_agent_run_timeline(db, chat_id)
+
+@app.post("/sciparser/v1/admin/agents/{chat_id}/cancel", response_model=AdminAgentActionResponse)
+async def admin_agent_run_cancel(
+    chat_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_cancel_agent_run(db, chat_id)
 
 @app.get("/sciparser/v1/admin/automations", response_model=AdminAutomationsResponse)
 async def admin_automations(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: Optional[str] = Query(None),
+    sort_by: str = Query("created_at"),
+    sort_dir: str = Query("desc"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    return await ChatService.admin_list_automations(db)
+    return await ChatService.admin_list_automations(
+        db, page=page, page_size=page_size, search=search, sort_by=sort_by, sort_dir=sort_dir,
+    )
+
+@app.get("/sciparser/v1/admin/analytics", response_model=AdminAnalyticsResponse)
+async def admin_analytics(
+    days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_analytics(db, days=days)
 
 @app.get("/sciparser/v1/admin/browser-sessions", response_model=AdminBrowserSessionsResponse)
 async def admin_browser_sessions(

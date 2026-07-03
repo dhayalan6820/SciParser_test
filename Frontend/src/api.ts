@@ -713,12 +713,22 @@ export const sciparserApi = {
   },
 
   // Admin: Agent Monitoring
-  adminGetAgentRuns: async (page: number = 1, pageSize: number = 20, status?: string) => {
+  adminGetAgentRuns: async (
+    page: number = 1,
+    pageSize: number = 20,
+    status?: string,
+    search?: string,
+    sortBy?: string,
+    sortDir?: string
+  ) => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
     const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
     if (status) params.set("status", status);
+    if (search) params.set("search", search);
+    if (sortBy) params.set("sort_by", sortBy);
+    if (sortDir) params.set("sort_dir", sortDir);
     const res = await fetch(`${BASE_URL}/sciparser/v1/admin/agents?${params.toString()}`, {
       headers: { Authorization: formattedToken },
     });
@@ -726,16 +736,61 @@ export const sciparserApi = {
     return res.json() as Promise<AdminAgentRunsResponse>;
   },
 
-  // Admin: Automation Monitoring
-  adminGetAutomations: async () => {
+  adminGetAgentRunTimeline: async (chatId: string) => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/automations`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/agents/${encodeURIComponent(chatId)}/timeline`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
-    return res.json() as Promise<{ automations: AdminAutomation[] }>;
+    return res.json() as Promise<AdminAgentRunTimeline>;
+  },
+
+  adminCancelAgentRun: async (chatId: string) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/agents/${encodeURIComponent(chatId)}/cancel`, {
+      method: "POST",
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<{ chat_id: string; action: string; success: boolean; detail?: string | null }>;
+  },
+
+  // Admin: Automation Monitoring
+  adminGetAutomations: async (
+    page: number = 1,
+    pageSize: number = 20,
+    search?: string,
+    sortBy?: string,
+    sortDir?: string
+  ) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+    if (search) params.set("search", search);
+    if (sortBy) params.set("sort_by", sortBy);
+    if (sortDir) params.set("sort_dir", sortDir);
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/automations?${params.toString()}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<{ automations: AdminAutomation[]; total: number }>;
+  },
+
+  // Admin: Unified Analytics
+  adminGetAnalytics: async (days: number = 30) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/analytics?days=${days}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<AdminAnalytics>;
   },
 
   // Admin: Browser Sessions
@@ -909,6 +964,34 @@ export interface AdminUsage {
 export interface AdminSecurity {
   suspended_users: Array<{ user_id: string; username: string; email: string; updated_at: string | null }>;
   recent_signups: Array<{ user_id: string; username: string; email: string; created_at: string | null; role: string; status: string }>;
+  recent_logins: Array<{ user_id: string | null; username: string; created_at: string | null }>;
+  failed_logins: Array<{ username: string; reason: string | null; created_at: string | null }>;
+}
+
+export interface AdminAgentRunTimeline {
+  chat_id: string;
+  stages: Array<{
+    id: string;
+    agent_stage: string;
+    stage_name: string;
+    status: string;
+    tokens: number;
+    cost: number;
+    error_message?: string | null;
+    created_at: string;
+    updated_at: string;
+  }>;
+}
+
+export interface AdminAnalytics {
+  days: number;
+  daily_runs: Array<{ date: string; total: number; success: number; failed: number }>;
+  daily_tokens: Array<{ date: string; tokens: number }>;
+  daily_sessions: Array<{ date: string; sessions: number }>;
+  total_runs: number;
+  total_success: number;
+  total_failed: number;
+  overall_success_rate: number;
 }
 
 export interface AgentStage {

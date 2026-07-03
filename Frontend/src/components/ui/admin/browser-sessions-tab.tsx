@@ -1,11 +1,12 @@
 import * as React from "react";
 import { sciparserApi, AdminBrowserSession } from "../../../api";
 import { KPICard, Panel, EmptyState, LoadingState, StatusBadge } from "./shared";
-import { Globe, Wifi, Shield, MonitorPlay } from "lucide-react";
+import { Globe, Wifi, Shield, MonitorPlay, Search } from "lucide-react";
 
 export const BrowserSessionsTab: React.FC = () => {
   const [sessions, setSessions] = React.useState<AdminBrowserSession[]>([]);
   const [activeCount, setActiveCount] = React.useState(0);
+  const [search, setSearch] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -31,6 +32,12 @@ export const BrowserSessionsTab: React.FC = () => {
 
   const proxyCount = sessions.filter((s) => s.proxy_configured).length;
 
+  const filteredSessions = React.useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return sessions;
+    return sessions.filter((s) => (s.username || s.user_id).toLowerCase().includes(q) || (s.browser_engine || "").toLowerCase().includes(q));
+  }, [sessions, search]);
+
   if (loading && sessions.length === 0) return <LoadingState />;
   if (error) return <div className="text-sm text-red-500">{error}</div>;
 
@@ -42,9 +49,23 @@ export const BrowserSessionsTab: React.FC = () => {
         <KPICard index={2} icon={<Shield className="h-4 w-4" />} label="Using Proxy" value={proxyCount.toLocaleString()} />
       </div>
 
-      <Panel title="Live Browser Sessions" subtitle="Real-time in-memory session state — refreshes every 15s">
-        {sessions.length === 0 ? (
-          <EmptyState label="No active browser sessions right now." />
+      <Panel
+        title="Live Browser Sessions"
+        subtitle="Real-time in-memory session state — refreshes every 15s"
+        action={
+          <div className="relative">
+            <Search className="h-3.5 w-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search user or engine…"
+              className="bg-transparent border border-slate-200 dark:border-slate-700 rounded pl-7 pr-2 py-1.5 text-sm w-48"
+            />
+          </div>
+        }
+      >
+        {filteredSessions.length === 0 ? (
+          <EmptyState label={sessions.length === 0 ? "No active browser sessions right now." : "No sessions match your search."} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -58,7 +79,7 @@ export const BrowserSessionsTab: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {sessions.map((s) => (
+                {filteredSessions.map((s) => (
                   <tr key={s.user_id} className="border-t border-slate-100 dark:border-slate-800">
                     <td className="px-3 py-2 font-medium">{s.username || s.user_id.slice(0, 8)}</td>
                     <td className="px-3 py-2">

@@ -139,6 +139,7 @@ class AdminAutomationSummary(BaseModel):
 
 class AdminAutomationsResponse(BaseModel):
     automations: List[AdminAutomationSummary]
+    total: int
 
 
 class AdminBrowserSession(BaseModel):
@@ -165,6 +166,33 @@ class AdminUsageResponse(BaseModel):
 class AdminSecurityResponse(BaseModel):
     suspended_users: List[Dict[str, Any]]
     recent_signups: List[Dict[str, Any]]
+    recent_logins: List[Dict[str, Any]]
+    failed_logins: List[Dict[str, Any]]
+
+
+class AdminAgentRunTimelineResponse(BaseModel):
+    chat_id: str
+    stages: List[Dict[str, Any]]
+
+
+class AdminAgentActionResponse(BaseModel):
+    chat_id: str
+    action: str
+    success: bool
+    detail: Optional[str] = None
+
+
+class AdminAnalyticsResponse(BaseModel):
+    """Unified analytics data for the Analytics section, covering runs, success/error rate,
+    token consumption, and browser session volume over a selectable date range."""
+    days: int
+    daily_runs: List[Dict[str, Any]]
+    daily_tokens: List[Dict[str, Any]]
+    daily_sessions: List[Dict[str, Any]]
+    total_runs: int
+    total_success: int
+    total_failed: int
+    overall_success_rate: float
 
 class BackendChatMessage(BaseModel):
     id: Optional[str] = None # Added to match frontend 'id'

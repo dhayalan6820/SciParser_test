@@ -54,6 +54,22 @@ class ChatService:
         return new_user
 
     @staticmethod
+    async def _record_login_event(db: AsyncSession, username: str, success: bool, user_id: Optional[str] = None, failure_reason: Optional[str] = None) -> None:
+        """Persist a login attempt (success or failure) for admin security monitoring."""
+        from src.database.chat_db import LoginEvent
+        try:
+            db.add(LoginEvent(
+                user_id=user_id,
+                username_attempted=username,
+                success=success,
+                failure_reason=failure_reason,
+            ))
+            await db.commit()
+        except Exception as e:
+            logger.warning(f"Failed to record login event: {e}")
+            await db.rollback()
+
+    @staticmethod
     async def authenticate_user(db: AsyncSession, username: str, password: str) -> dict:
         """Authenticate user and return JWT token."""
         stmt = select(User).where(User.username == username)
@@ -61,14 +77,17 @@ class ChatService:
         user = result.scalar_one_or_none()
 
         if not user or not validator.verify_password(password, user.hashed_password):
+            await ChatService._record_login_event(db, username, success=False, failure_reason="invalid_credentials")
             raise HTTPException(status_code=401, detail="Invalid username or password")
 
         if user.status == "suspended":
+            await ChatService._record_login_event(db, username, success=False, user_id=user.user_id, failure_reason="suspended")
             raise HTTPException(
                 status_code=403,
                 detail="Your account has been suspended. Please contact an administrator.",
             )
 
+        await ChatService._record_login_event(db, username, success=True, user_id=user.user_id)
         access_token = ChatService.create_access_token(data={"sub": user.user_id})
         return {"access_token": access_token, "token_type": "bearer"}
 
@@ -397,8 +416,8 @@ class ChatService:
     # ── Admin: recent activity timeline ─────────────────────────────────
     @staticmethod
     async def admin_get_recent_activity(db: AsyncSession, limit: int = 20) -> dict:
-        """Merge real signups, automation runs, and agent failures into one timeline."""
-        from src.database.chat_db import AgentExecutionLog
+        """Merge real signups, logins, automation runs, and agent run lifecycle events into one timeline."""
+        from src.database.chat_db import AgentExecutionLog, LoginEvent
 
         items = []
 
@@ -412,6 +431,21 @@ class ChatService:
                 "detail": u.email,
                 "status": u.status,
                 "timestamp": u.created_at,
+            })
+
+        logins = (
+            await db.execute(select(LoginEvent).order_by(LoginEvent.created_at.desc()).limit(limit))
+        ).scalars().all()
+        for le in logins:
+            items.append({
+                "type": "login" if le.success else "login_failed",
+                "title": (
+                    f"{le.username_attempted} logged in" if le.success
+                    else f"Failed login attempt for \"{le.username_attempted}\""
+                ),
+                "detail": le.failure_reason,
+                "status": "SUCCESS" if le.success else "FAILED",
+                "timestamp": le.created_at,
             })
 
         runs = (
@@ -431,22 +465,39 @@ class ChatService:
                 "timestamp": run.created_at,
             })
 
-        failed_logs = (
+        agent_logs = (
             await db.execute(
                 select(AgentExecutionLog)
-                .where(AgentExecutionLog.status.in_(["FAILED", "ERROR"]))
                 .order_by(AgentExecutionLog.created_at.desc())
                 .limit(limit)
             )
         ).scalars().all()
-        for log in failed_logs:
-            items.append({
-                "type": "agent_failure",
-                "title": f"Agent stage \"{log.stage_name}\" failed",
-                "detail": (log.error_message or "")[:200] or None,
-                "status": log.status,
-                "timestamp": log.created_at,
-            })
+        for log in agent_logs:
+            status_upper = (log.status or "").upper()
+            if status_upper in ("FAILED", "ERROR"):
+                items.append({
+                    "type": "agent_failure",
+                    "title": f"Agent stage \"{log.stage_name}\" failed",
+                    "detail": (log.error_message or "")[:200] or None,
+                    "status": log.status,
+                    "timestamp": log.created_at,
+                })
+            elif status_upper in ("PENDING", "IN_PROGRESS"):
+                items.append({
+                    "type": "agent_run_started",
+                    "title": f"Agent stage \"{log.stage_name}\" started",
+                    "detail": f"chat {log.chat_id[:12]}",
+                    "status": log.status,
+                    "timestamp": log.created_at,
+                })
+            elif status_upper in ("COMPLETED", "SUCCESS", "DONE"):
+                items.append({
+                    "type": "agent_run_completed",
+                    "title": f"Agent stage \"{log.stage_name}\" completed",
+                    "detail": f"chat {log.chat_id[:12]}",
+                    "status": log.status,
+                    "timestamp": log.updated_at or log.created_at,
+                })
 
         items.sort(key=lambda i: i["timestamp"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
         return {"items": items[:limit]}
@@ -454,17 +505,32 @@ class ChatService:
     # ── Admin: agent monitoring ──────────────────────────────────────────
     @staticmethod
     async def admin_list_agent_runs(
-        db: AsyncSession, page: int = 1, page_size: int = 20, status_filter: Optional[str] = None
+        db: AsyncSession, page: int = 1, page_size: int = 20, status_filter: Optional[str] = None,
+        search: Optional[str] = None, sort_by: str = "created_at", sort_dir: str = "desc",
     ) -> dict:
         from src.database.chat_db import AgentExecutionLog
+        from sqlalchemy import or_
 
         base_stmt = select(AgentExecutionLog)
         if status_filter:
             base_stmt = base_stmt.where(AgentExecutionLog.status == status_filter.upper())
+        if search:
+            like = f"%{search}%"
+            base_stmt = base_stmt.where(
+                or_(AgentExecutionLog.chat_id.ilike(like), AgentExecutionLog.stage_name.ilike(like), AgentExecutionLog.user_id.ilike(like))
+            )
 
         total = (await db.execute(select(func.count()).select_from(base_stmt.subquery()))).scalar() or 0
 
-        stmt = base_stmt.order_by(AgentExecutionLog.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+        sort_column_map = {
+            "created_at": AgentExecutionLog.created_at,
+            "status": AgentExecutionLog.status,
+            "stage_name": AgentExecutionLog.stage_name,
+        }
+        sort_column = sort_column_map.get(sort_by, AgentExecutionLog.created_at)
+        order_clause = sort_column.asc() if sort_dir == "asc" else sort_column.desc()
+
+        stmt = base_stmt.order_by(order_clause).offset((page - 1) * page_size).limit(page_size)
         logs = (await db.execute(stmt)).scalars().all()
 
         all_logs = (await db.execute(select(AgentExecutionLog))).scalars().all()
@@ -511,11 +577,107 @@ class ChatService:
             "avg_runtime_seconds": avg_runtime,
         }
 
+    # ── Admin: agent run drill-in timeline ───────────────────────────────
+    @staticmethod
+    async def admin_get_agent_run_timeline(db: AsyncSession, chat_id: str) -> dict:
+        """All execution stages recorded for a given chat_id, ordered chronologically, so an
+        admin can drill into a single run and see its full step-by-step timeline."""
+        from src.database.chat_db import AgentExecutionLog
+
+        logs = (
+            await db.execute(
+                select(AgentExecutionLog)
+                .where(AgentExecutionLog.chat_id == chat_id)
+                .order_by(AgentExecutionLog.created_at.asc())
+            )
+        ).scalars().all()
+        if not logs:
+            raise HTTPException(status_code=404, detail="No agent run found for that chat_id")
+
+        stages = []
+        for l in logs:
+            usage = ChatService._parse_token_usage(l.token_usage)
+            try:
+                cost = float(l.cost) if l.cost else 0.0
+            except Exception:
+                cost = 0.0
+            stages.append({
+                "id": l.id,
+                "agent_stage": l.agent_stage,
+                "stage_name": l.stage_name,
+                "status": l.status,
+                "tokens": int(usage.get("total") or usage.get("total_tokens") or 0),
+                "cost": cost,
+                "error_message": l.error_message,
+                "created_at": l.created_at,
+                "updated_at": l.updated_at,
+            })
+
+        return {"chat_id": chat_id, "stages": stages}
+
+    # ── Admin: cancel an in-progress agent run ───────────────────────────
+    @staticmethod
+    async def admin_cancel_agent_run(db: AsyncSession, chat_id: str) -> dict:
+        """Cancel a running/queued agent execution for the given chat_id by delegating to the
+        brain's real stop_process (the same mechanism used when a user stops their own chat)."""
+        from src.database.chat_db import AgentExecutionLog
+        from src.services.brain import brain
+
+        logs = (
+            await db.execute(
+                select(AgentExecutionLog)
+                .where(AgentExecutionLog.chat_id == chat_id, AgentExecutionLog.status.in_(["PENDING", "IN_PROGRESS"]))
+            )
+        ).scalars().all()
+        if not logs:
+            raise HTTPException(status_code=404, detail="No in-progress or queued run found for that chat_id")
+
+        user_id = logs[0].user_id
+        try:
+            await brain.stop_process(chat_id, user_id)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to cancel run: {e}")
+
+        now = datetime.now(timezone.utc)
+        for l in logs:
+            l.status = "CANCELLED"
+            l.updated_at = now
+        await db.commit()
+
+        return {"chat_id": chat_id, "action": "cancel", "success": True, "detail": f"Cancelled {len(logs)} stage(s)"}
+
     # ── Admin: automation monitoring ─────────────────────────────────────
     @staticmethod
-    async def admin_list_automations(db: AsyncSession) -> dict:
-        schedules = (await db.execute(select(Schedule).order_by(Schedule.created_at.desc()))).scalars().all()
-        runs = (await db.execute(select(ScheduleRun))).scalars().all()
+    async def admin_list_automations(
+        db: AsyncSession, page: int = 1, page_size: int = 20, search: Optional[str] = None,
+        sort_by: str = "created_at", sort_dir: str = "desc",
+    ) -> dict:
+        base_stmt = select(Schedule)
+        if search:
+            like = f"%{search}%"
+            base_stmt = base_stmt.where(Schedule.title.ilike(like))
+
+        total = (await db.execute(select(func.count()).select_from(base_stmt.subquery()))).scalar() or 0
+
+        sort_column_map = {
+            "created_at": Schedule.created_at,
+            "status": Schedule.status,
+            "title": Schedule.title,
+            "next_run": Schedule.next_run,
+            "last_run": Schedule.last_run,
+        }
+        sort_column = sort_column_map.get(sort_by, Schedule.created_at)
+        order_clause = sort_column.asc() if sort_dir == "asc" else sort_column.desc()
+
+        stmt = base_stmt.order_by(order_clause).offset((page - 1) * page_size).limit(page_size)
+        schedules = (await db.execute(stmt)).scalars().all()
+
+        schedule_ids = [s.schedule_id for s in schedules]
+        runs = []
+        if schedule_ids:
+            runs = (
+                await db.execute(select(ScheduleRun).where(ScheduleRun.schedule_id.in_(schedule_ids)))
+            ).scalars().all()
 
         runs_by_schedule: dict = {}
         for r in runs:
@@ -541,7 +703,7 @@ class ChatService:
                 "success_rate": success_rate,
             })
 
-        return {"automations": automations}
+        return {"automations": automations, "total": total}
 
     # ── Admin: usage dashboard ────────────────────────────────────────────
     @staticmethod
@@ -600,11 +762,23 @@ class ChatService:
     # ── Admin: security overview ──────────────────────────────────────────
     @staticmethod
     async def admin_get_security_overview(db: AsyncSession) -> dict:
+        from src.database.chat_db import LoginEvent
+
         suspended = (
             await db.execute(select(User).where(User.status == "suspended").order_by(User.updated_at.desc()))
         ).scalars().all()
         recent = (
             await db.execute(select(User).order_by(User.created_at.desc()).limit(10))
+        ).scalars().all()
+        recent_logins = (
+            await db.execute(
+                select(LoginEvent).where(LoginEvent.success == True).order_by(LoginEvent.created_at.desc()).limit(20)
+            )
+        ).scalars().all()
+        failed_logins = (
+            await db.execute(
+                select(LoginEvent).where(LoginEvent.success == False).order_by(LoginEvent.created_at.desc()).limit(20)
+            )
         ).scalars().all()
 
         return {
@@ -616,6 +790,78 @@ class ChatService:
                 {"user_id": u.user_id, "username": u.username, "email": u.email, "created_at": u.created_at.isoformat() if u.created_at else None, "role": u.role, "status": u.status}
                 for u in recent
             ],
+            "recent_logins": [
+                {"user_id": le.user_id, "username": le.username_attempted, "created_at": le.created_at.isoformat() if le.created_at else None}
+                for le in recent_logins
+            ],
+            "failed_logins": [
+                {"username": le.username_attempted, "reason": le.failure_reason, "created_at": le.created_at.isoformat() if le.created_at else None}
+                for le in failed_logins
+            ],
+        }
+
+    # ── Admin: unified analytics ──────────────────────────────────────────
+    @staticmethod
+    async def admin_get_analytics(db: AsyncSession, days: int = 30) -> dict:
+        """Runs-over-time, success/error rate, token consumption, and browser-session volume,
+        all computed from real AgentExecutionLog rows over the requested date range."""
+        from src.database.chat_db import AgentExecutionLog
+
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+        logs = (
+            await db.execute(select(AgentExecutionLog).where(AgentExecutionLog.created_at >= since))
+        ).scalars().all()
+
+        daily_runs_map: dict = {}
+        daily_tokens_map: dict = {}
+        daily_sessions_map: dict = {}
+        total_success = 0
+        total_failed = 0
+
+        for l in logs:
+            day_key = l.created_at.strftime("%Y-%m-%d") if l.created_at else "unknown"
+            status_upper = (l.status or "").upper()
+            is_success = status_upper in ("COMPLETED", "SUCCESS", "DONE")
+            is_failed = status_upper in ("FAILED", "ERROR")
+            if is_success:
+                total_success += 1
+            if is_failed:
+                total_failed += 1
+
+            run_entry = daily_runs_map.setdefault(day_key, {"date": day_key, "total": 0, "success": 0, "failed": 0})
+            run_entry["total"] += 1
+            if is_success:
+                run_entry["success"] += 1
+            if is_failed:
+                run_entry["failed"] += 1
+
+            usage = ChatService._parse_token_usage(l.token_usage)
+            tokens = int(usage.get("total") or usage.get("total_tokens") or 0)
+            token_entry = daily_tokens_map.setdefault(day_key, {"date": day_key, "tokens": 0})
+            token_entry["tokens"] += tokens
+
+            session_entry = daily_sessions_map.setdefault(day_key, {"date": day_key, "chat_ids": set()})
+            session_entry["chat_ids"].add(l.chat_id)
+
+        daily_runs = sorted(daily_runs_map.values(), key=lambda d: d["date"])
+        daily_tokens = sorted(daily_tokens_map.values(), key=lambda d: d["date"])
+        daily_sessions = sorted(
+            [{"date": d["date"], "sessions": len(d["chat_ids"])} for d in daily_sessions_map.values()],
+            key=lambda d: d["date"],
+        )
+
+        total_runs = len(logs)
+        overall_success_rate = round((total_success / total_runs) * 100, 2) if total_runs else 0.0
+
+        return {
+            "days": days,
+            "daily_runs": daily_runs,
+            "daily_tokens": daily_tokens,
+            "daily_sessions": daily_sessions,
+            "total_runs": total_runs,
+            "total_success": total_success,
+            "total_failed": total_failed,
+            "overall_success_rate": overall_success_rate,
         }
 
     @staticmethod

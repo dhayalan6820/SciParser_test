@@ -1,7 +1,7 @@
 import * as React from "react";
 import { sciparserApi, AdminSecurity } from "../../../api";
 import { KPICard, Panel, EmptyState, LoadingState, StatusBadge, formatRelativeTime } from "./shared";
-import { ShieldAlert, UserPlus, ShieldCheck } from "lucide-react";
+import { ShieldAlert, UserPlus, ShieldCheck, LogIn, XOctagon } from "lucide-react";
 
 export const SecurityTab: React.FC = () => {
   const [security, setSecurity] = React.useState<AdminSecurity | null>(null);
@@ -93,6 +93,51 @@ export const SecurityTab: React.FC = () => {
           </div>
         )}
       </Panel>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Panel title="Recent Logins" subtitle="Most recent successful sign-ins">
+          {security.recent_logins.length === 0 ? (
+            <EmptyState label="No successful logins recorded yet." />
+          ) : (
+            <div className="space-y-2">
+              {security.recent_logins.map((l, idx) => (
+                <div
+                  key={`${l.user_id || l.username}-${l.created_at}-${idx}`}
+                  className="flex items-center justify-between text-sm py-1.5 border-b border-slate-100 dark:border-slate-800 last:border-0"
+                >
+                  <div className="flex items-center gap-2">
+                    <LogIn className="h-3.5 w-3.5 text-emerald-500" />
+                    <span className="font-medium">{l.username}</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">{formatRelativeTime(l.created_at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
+
+        <Panel title="Failed Login Attempts" subtitle="Most recent unsuccessful sign-in attempts">
+          {security.failed_logins.length === 0 ? (
+            <EmptyState label="No failed login attempts recorded." />
+          ) : (
+            <div className="space-y-2">
+              {security.failed_logins.map((l, idx) => (
+                <div
+                  key={`${l.username}-${l.created_at}-${idx}`}
+                  className="flex items-center justify-between text-sm py-1.5 border-b border-slate-100 dark:border-slate-800 last:border-0"
+                >
+                  <div className="flex items-center gap-2">
+                    <XOctagon className="h-3.5 w-3.5 text-red-500" />
+                    <span className="font-medium">{l.username}</span>
+                    {l.reason && <span className="text-xs text-muted-foreground">({l.reason})</span>}
+                  </div>
+                  <span className="text-xs text-muted-foreground">{formatRelativeTime(l.created_at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
+      </div>
     </div>
   );
 };

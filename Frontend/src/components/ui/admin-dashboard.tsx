@@ -16,12 +16,14 @@ import {
   Globe,
   BarChart3,
   ShieldAlert,
+  Coins,
   Menu,
   X,
 } from "lucide-react";
 import { UsersTab } from "./admin/users-tab";
 import { OperationsTab } from "./admin/operations-tab";
 import { OverviewTab } from "./admin/overview-tab";
+import { AnalyticsTab } from "./admin/analytics-tab";
 import { AgentMonitoringTab } from "./admin/agent-monitoring-tab";
 import { AutomationMonitoringTab } from "./admin/automation-monitoring-tab";
 import { BrowserSessionsTab } from "./admin/browser-sessions-tab";
@@ -37,6 +39,7 @@ type Tab =
   | "overview"
   | "users"
   | "operations"
+  | "analytics"
   | "agents"
   | "automations"
   | "browser-sessions"
@@ -47,10 +50,11 @@ const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "overview", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" /> },
   { id: "users", label: "Users", icon: <Users className="h-4 w-4" /> },
   { id: "operations", label: "Operations", icon: <Activity className="h-4 w-4" /> },
+  { id: "analytics", label: "Analytics", icon: <BarChart3 className="h-4 w-4" /> },
   { id: "agents", label: "Agent Monitoring", icon: <Bot className="h-4 w-4" /> },
   { id: "automations", label: "Automation Monitoring", icon: <Calendar className="h-4 w-4" /> },
   { id: "browser-sessions", label: "Browser Sessions", icon: <Globe className="h-4 w-4" /> },
-  { id: "usage", label: "Usage", icon: <BarChart3 className="h-4 w-4" /> },
+  { id: "usage", label: "Usage", icon: <Coins className="h-4 w-4" /> },
   { id: "security", label: "Security", icon: <ShieldAlert className="h-4 w-4" /> },
 ];
 
@@ -72,6 +76,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         return <UsersTab currentUsername={currentUser?.username} />;
       case "operations":
         return <OperationsTab />;
+      case "analytics":
+        return <AnalyticsTab />;
       case "agents":
         return <AgentMonitoringTab />;
       case "automations":

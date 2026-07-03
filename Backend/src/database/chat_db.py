@@ -201,6 +201,17 @@ class AgentExecutionLog(Base):
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
+class LoginEvent(Base):
+    """Tracks login attempts (success and failure) for admin security monitoring."""
+    __tablename__ = "login_events"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), nullable=True, index=True)
+    username_attempted = Column(String(50), nullable=False)
+    success = Column(Boolean, nullable=False, default=False)
+    failure_reason = Column(String(100), nullable=True)
+    created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+
 class ToolExecutionLog(Base):
     """Tracks tool executions by Agent 3."""
     __tablename__ = "tool_execution_logs"
