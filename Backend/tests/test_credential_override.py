@@ -177,6 +177,64 @@ def test_tool_output_text_scrubbed_of_known_secret_values():
     assert "Success" in scrubbed
 
 
+def test_tool_call_history_entries_scrubbed_before_message_tool_calls_write():
+    """Message.tool_calls (persisted verbatim as JSON) must go through the same
+    value-based scrub as ToolExecutionLog — this is a second, separate write
+    site for the same execution_history entries."""
+    entry_result = "Filled OTP field with 998877 and submitted. Success."
+    secret_values = ["998877"]
+    scrubbed = Brain._redact_secret_values_in_text(entry_result[:1000], secret_values)
+    assert "998877" not in scrubbed
+    assert "Success" in scrubbed
+
+
+@pytest.mark.asyncio
+async def test_free_text_secret_disclosure_redacted_using_confirmed_inputs(sqlite_session_factory):
+    """A user message with a free-text secret disclosure that doesn't match the
+    'label: value' regex (e.g. 'use hunter2 as my password') must still be
+    scrubbed from the persisted Message.content once Agent-1 extracts the
+    value into confirmed_inputs — using ground-truth extraction rather than
+    guessing at secret detection ourselves."""
+    from src.database.chat_db import Message
+    from sqlalchemy import select
+    from datetime import datetime, timezone
+    import uuid
+
+    raw_message = "Log in with my email user@example.com, use hunter2 as my password"
+    confirmed_inputs = {"email": "user@example.com", "password": "hunter2"}
+
+    stored_content = Brain._mask_labeled_secrets(raw_message)
+    assert "hunter2" in stored_content
+
+    async with sqlite_session_factory() as db:
+        msg = Message(
+            message_id=str(uuid.uuid4()),
+            chat_id="chat-free-text",
+            user_id="user-1",
+            role="user",
+            content=stored_content,
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(msg)
+        await db.commit()
+
+    post_understanding_secrets = Brain._extract_sensitive_values(confirmed_inputs)
+    assert any(v in stored_content for v in post_understanding_secrets)
+    redacted_content = Brain._redact_secret_values_in_text(stored_content, post_understanding_secrets)
+
+    async with sqlite_session_factory() as db:
+        result = await db.execute(select(Message).where(Message.chat_id == "chat-free-text"))
+        row = result.scalar_one()
+        row.content = redacted_content
+        await db.commit()
+
+    async with sqlite_session_factory() as db:
+        result = await db.execute(select(Message).where(Message.chat_id == "chat-free-text"))
+        row = result.scalar_one()
+        assert "hunter2" not in row.content
+        assert "user@example.com" in row.content
+
+
 def test_run_secret_values_combines_confirmed_inputs_and_obstacle_answer():
     confirmed_inputs = {"email": "user@example.com", "password": "hunter2"}
     secret_values = Brain._extract_sensitive_values(confirmed_inputs)

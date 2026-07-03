@@ -1323,6 +1323,23 @@ class Brain:
                 confirmed_inputs = understanding.get("confirmed_inputs", {})
                 discovery_strategy = understanding.get("discovery_strategy", "direct_execution")
 
+                # Retroactively scrub the just-stored Message.content using the
+                # ground-truth sensitive values Agent-1 itself extracted into
+                # confirmed_inputs (e.g. password/card fields). This catches free-
+                # text disclosures the label:value regex above can't reliably parse
+                # (e.g. "use hunter2 as the password") without guessing at secret
+                # detection ourselves — we trust Agent-1's own field extraction.
+                _post_understanding_secrets = self._extract_sensitive_values(confirmed_inputs)
+                if _post_understanding_secrets and any(v in _stored_content for v in _post_understanding_secrets if v):
+                    _redacted_stored_content = self._redact_secret_values_in_text(_stored_content, _post_understanding_secrets)
+                    async with AsyncSessionLocal() as db:
+                        upd_stmt = select(Message).where(Message.message_id == human_msg.message_id)
+                        upd_res = await db.execute(upd_stmt)
+                        upd_row = upd_res.scalar_one_or_none()
+                        if upd_row:
+                            upd_row.content = _redacted_stored_content
+                            await db.commit()
+
                 # ── Memory routing: extract domain + retrieve relevant memories ──
                 domain = self._extract_domain_from_task(user_message, confirmed_inputs)
                 if self.memory_service:
@@ -1593,14 +1610,22 @@ class Brain:
                         obstacle_answer=_otp_answer_for_redaction
                     )
                     
-                    # Capture tool calls from the graph execution
+                    # Capture tool calls from the graph execution — this list is
+                    # persisted verbatim to Message.tool_calls below, so it must go
+                    # through the exact same value-based secret scrub as
+                    # ToolExecutionLog (sensitive confirmed_inputs values + the
+                    # current obstacle answer), or a typed password/OTP surfaces in
+                    # the messages table even though ToolExecutionLog is clean.
                     if "execution_history" in graph_output:
+                        _msg_secret_values = self._extract_sensitive_values(confirmed_inputs)
+                        if _otp_answer_for_redaction:
+                            _msg_secret_values.append(str(_otp_answer_for_redaction))
                         for entry in graph_output["execution_history"]:
                             all_tool_calls.append({
                                 "id": str(uuid.uuid4()),
                                 "tool_name": entry["tool"],
                                 "tool_input": {}, # Input is not easily available here, but we have the result
-                                "tool_output": entry["result"][:1000],
+                                "tool_output": self._redact_secret_values_in_text(entry["result"][:1000], _msg_secret_values),
                                 "status": entry["status"],
                                 "created_at": datetime.now(timezone.utc).isoformat()
                             })
