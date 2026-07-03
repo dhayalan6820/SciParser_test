@@ -2456,6 +2456,11 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       <PremiumScheduler
         isOpen={isSchedulerOpen}
         onClose={() => setIsSchedulerOpen(false)}
+        onScheduled={() => {
+          setIsSelectionMode(false);
+          setSelectedMessages([]);
+          setSelectedToolIds([]);
+        }}
         selectedMessages={selectedMessages}
         selectedTools={selectedTools}
         chatId={activeThreadId}
@@ -3159,9 +3164,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                         <span className="hidden md:inline">
                           Configure Schedule{" "}
                         </span>
-                        <span>
-                          ({selectedMessages.length + selectedTools.length})
-                        </span>
+                        <span>({selectedMessages.length})</span>
                       </Button>
                     )}
 

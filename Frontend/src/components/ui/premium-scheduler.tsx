@@ -230,6 +230,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
       };
       await sciparserApi.createSchedule(data);
       setDraftSuccess(true);
+      onScheduled?.();
       setTimeout(() => onClose(), 1500);
     } catch (err: any) {
       console.error("Failed to save draft:", err);
