@@ -44,7 +44,7 @@ interface ScheduleRun {
   engine?: string;
   attempt?: number;
   output?: string;
-  error?: string;
+  error_log?: string;
 }
 
 interface SchedulesPageProps {
@@ -97,7 +97,8 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
   const [isEditing, setIsEditing] = React.useState(false);
   const [editData, setEditData] = React.useState({ title: "", type: "", email: "" });
   const [deleteConfirmId, setDeleteConfirmId] = React.useState<string | null>(null);
-  const [activeModal, setActiveModal] = React.useState<null | "script" | "aiplan" | "history" | "browser" | "result">(null);
+  const [activeModal, setActiveModal] = React.useState<null | "script" | "aiplan" | "history" | "browser" | "result" | "runDetail">(null);
+  const [selectedRun, setSelectedRun] = React.useState<ScheduleRun | null>(null);
   const [currentProgress, setCurrentProgress] = React.useState(0);
   const [liveLogs, setLiveLogs] = React.useState<any[]>([]);
   const [liveScreenshot, setLiveScreenshot] = React.useState<string | null>(null);
@@ -994,7 +995,11 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                         <td className="py-4 px-2 text-muted-foreground font-bold">{run.engine}</td>
                         <td className="py-4 px-2 text-muted-foreground font-bold">{run.duration_seconds}s</td>
                         <td className="py-4 px-2 text-right">
-                          <button className="p-2 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all">
+                          <button
+                            onClick={() => { setSelectedRun(run); setActiveModal('runDetail'); }}
+                            className="p-2 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all"
+                            title="View run details"
+                          >
                             <ExternalLink className="w-3.5 h-3.5" />
                           </button>
                         </td>
@@ -1009,6 +1014,59 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                 <p className="text-[10px] font-black text-muted-foreground/60 uppercase tracking-widest">No runs recorded yet.</p>
               </div>
             )}
+          </ModalShell>
+        )}
+      </AnimatePresence>
+
+      {/* Run Detail Modal */}
+      <AnimatePresence>
+        {activeModal === 'runDetail' && selectedRun && (
+          <ModalShell
+            title={`Run Details — ${selectedRun.run_id}`}
+            icon={ExternalLink}
+            onClose={() => { setActiveModal('history'); setSelectedRun(null); }}
+            maxWidth="max-w-3xl"
+          >
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-foreground/5 rounded-xl p-3">
+                  <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-1">Status</p>
+                  <span className={cn(
+                    "px-2 py-0.5 rounded-md text-[9px] font-black uppercase whitespace-nowrap",
+                    selectedRun.status === 'completed' ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-500"
+                  )}>{selectedRun.status}</span>
+                </div>
+                <div className="bg-foreground/5 rounded-xl p-3">
+                  <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-1">Engine</p>
+                  <p className="text-xs font-bold text-foreground">{selectedRun.engine || '—'}</p>
+                </div>
+                <div className="bg-foreground/5 rounded-xl p-3">
+                  <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-1">Duration</p>
+                  <p className="text-xs font-bold text-foreground">{selectedRun.duration_seconds != null ? `${selectedRun.duration_seconds}s` : '—'}</p>
+                </div>
+                <div className="bg-foreground/5 rounded-xl p-3">
+                  <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-1">Date</p>
+                  <p className="text-xs font-bold text-foreground">{formatDate(selectedRun.created_at)}</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2">Output (stdout)</p>
+                <pre className="bg-black/90 text-emerald-400 rounded-xl p-4 text-[11px] font-mono whitespace-pre-wrap break-words max-h-64 overflow-y-auto border border-border">
+                  {selectedRun.output && selectedRun.output.trim().length > 0 ? selectedRun.output : 'No output recorded for this run.'}
+                </pre>
+              </div>
+
+              <div>
+                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2">Error (stderr)</p>
+                <pre className={cn(
+                  "rounded-xl p-4 text-[11px] font-mono whitespace-pre-wrap break-words max-h-64 overflow-y-auto border border-border",
+                  selectedRun.error_log && selectedRun.error_log.trim().length > 0 ? "bg-black/90 text-red-400" : "bg-black/90 text-muted-foreground"
+                )}>
+                  {selectedRun.error_log && selectedRun.error_log.trim().length > 0 ? selectedRun.error_log : 'No errors recorded for this run.'}
+                </pre>
+              </div>
+            </div>
           </ModalShell>
         )}
       </AnimatePresence>
