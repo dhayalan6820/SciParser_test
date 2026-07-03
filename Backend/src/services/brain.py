@@ -52,6 +52,23 @@ from src.services.ATAG import (
 )
 from src.agents import spec_loader
 
+# --- Token/cost optimization knobs ---
+# Trigger history summarization much earlier than the model's context limit so
+# large tool observations (e.g. raw page content from "Navigate ..." steps)
+# get compressed away after a few turns instead of being carried forward in
+# every subsequent LLM call for the rest of the run. This was previously
+# 600,000 (near the whole context window), which meant bulky observations
+# lingered for a long time before ever being summarized, inflating per-run
+# token/cost totals on navigation-heavy tasks.
+SUMMARIZE_HISTORY_TOKEN_THRESHOLD = 60000
+
+# Maximum characters of a single tool observation kept verbatim in LLM
+# history. Large page dumps beyond this are truncated — the LLM only needs
+# enough of the page/DOM to decide its next action, not the entire raw
+# content repeated on every subsequent turn. Lowered from 30,000 (~7,500
+# tokens) to reduce the size of the heaviest "Navigate ..." steps.
+MAX_OBSERVATION_CHARS_FOR_LLM = 12000
+
 
 def _build_browser_static_prompt() -> str:
     """Builds the Browser agent's static system prompt from browser.agent.md.
@@ -910,11 +927,17 @@ class Brain:
                 )
             current_messages = [static_sys_msg] + raw_messages
 
-            # Token Management & Summarization (80% Rule)
+            # Token Management & Summarization.
+            # Previously this only triggered at 600k estimated tokens — close to the
+            # model's whole context window — so large tool observations (e.g. raw page
+            # content from "Navigate ..." steps) lingered across many turns before ever
+            # being compressed, driving up per-run token/cost totals. Trigger much
+            # earlier so bulky observations get summarized away quickly instead of
+            # being carried forward turn after turn.
             full_text = "".join([m.content for m in current_messages if isinstance(m.content, str)])
             estimated_tokens = self.atag_processor._estimate_tokens(full_text)
 
-            if estimated_tokens > 600000:
+            if estimated_tokens > SUMMARIZE_HISTORY_TOKEN_THRESHOLD:
                 logger.info(f"Token count ({estimated_tokens}) exceeded limit. Summarizing history...")
                 summary = await self.atag_processor.summarize_context(execution_history, "History summarized due to token limit.")
                 summary_msg = HumanMessage(content=f"SUMMARY OF PREVIOUS ACTIONS:\n{summary}")
@@ -1223,10 +1246,10 @@ class Brain:
                     tool_output=_safe_tool_output # Increased limit but kept clean
                 )
 
-                # --- NEW: Truncate observation for LLM history to prevent token overflow ---
+                # --- Truncate observation for LLM history to prevent token overflow ---
                 llm_observation = str(observation)
-                if len(llm_observation) > 30000:
-                    llm_observation = llm_observation[:30000] + "... [TRUNCATED DUE TO SIZE TO PREVENT CRASH]"
+                if len(llm_observation) > MAX_OBSERVATION_CHARS_FOR_LLM:
+                    llm_observation = llm_observation[:MAX_OBSERVATION_CHARS_FOR_LLM] + "... [TRUNCATED DUE TO SIZE TO PREVENT CRASH]"
 
                 # --- NEW: Explicit cleanup if browser was closed ---
                 if tool_call["name"] in ["browser_close_session", "browser_close_all"] and status == "SUCCESS":
