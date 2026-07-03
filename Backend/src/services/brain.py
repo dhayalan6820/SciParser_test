@@ -1234,16 +1234,31 @@ class Brain:
             # Check whether the bridge fell back from Camoufox to Chrome and notify the user
             _fallback_flag = Path(f"/tmp/camoufox_fallback_{user_port}.json")
             if _fallback_flag.exists():
+                _fallback_reason = None
+                try:
+                    _fallback_data = json.loads(_fallback_flag.read_text())
+                    _fallback_reason = (_fallback_data.get("reason") or "").strip() or None
+                except Exception:
+                    pass
                 try:
                     _fallback_flag.unlink()
                 except Exception:
                     pass
-                logger.warning(f"[brain] Camoufox → Chrome fallback detected for user {user_id}, notifying chat {chat_id}")
+                logger.warning(
+                    f"[brain] Camoufox → Chrome fallback detected for user {user_id}, "
+                    f"notifying chat {chat_id} (reason: {_fallback_reason or 'unknown'})"
+                )
                 if self.stream_manager:
+                    _reason_suffix = f" ({_fallback_reason})" if _fallback_reason else ""
                     await self.stream_manager.broadcast_notification(
                         chat_id,
                         "camoufox_fallback",
-                        "Camoufox failed to start — running on Chrome instead",
+                        (
+                            "Stealth browser (Camoufox) couldn't start"
+                            f"{_reason_suffix}, so this run automatically switched to "
+                            "regular headless Chrome instead. Bot-detection evasion may be "
+                            "reduced for this run — change the default engine anytime in Settings."
+                        ),
                     )
 
             # Start direct-CDP screenshot stream (no MCP tools needed)

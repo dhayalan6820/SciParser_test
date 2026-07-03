@@ -199,6 +199,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
   // Camoufox fallback warning banner
   const [camoufoxFallbackWarning, setCamoufoxFallbackWarning] = React.useState(false);
+  const [camoufoxFallbackMessage, setCamoufoxFallbackMessage] = React.useState<string | null>(null);
 
   // CDP (Connect Your Browser) state
   const [cdpConnected, setCdpConnected] = React.useState(false);
@@ -821,6 +822,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             if (stillRunning) setIsAiTyping(true);
           } else if (msg.type === "notification" && msg.notification_type === "camoufox_fallback") {
             setCamoufoxFallbackWarning(true);
+            setCamoufoxFallbackMessage(msg.message || null);
           } else if (msg.type === "thought_update") {
             setAiThinking(msg.data);
             // Associate thought with the currently running task
@@ -1649,27 +1651,49 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             </code>
           );
         }
-        const urlRegex = /(https?:\/\/[^\s)]+)|www\.[^\s)]+/g;
-        return iPart.split(urlRegex).map((segment, segIdx) => {
-          if (!segment) return null;
-          if (urlRegex.test(segment)) {
-            urlRegex.lastIndex = 0;
-            const href = segment.startsWith("http")
-              ? segment
-              : `https://${segment}`;
+        const mdLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+        const linkParts = iPart.split(mdLinkRegex);
+        return linkParts.map((lPart, lIdx) => {
+          // Every 3rd item starting at index 1 is a captured link label, index 2 is its URL
+          const groupPos = (lIdx - 1) % 3;
+          if (groupPos === 0 && lIdx + 1 < linkParts.length) {
+            const label = lPart;
+            const href = linkParts[lIdx + 1];
             return (
               <a
-                key={`${iIdx}-${segIdx}`}
+                key={`${iIdx}-md-${lIdx}`}
                 href={href}
                 target="_blank"
                 rel="noreferrer"
-                className="text-sky-400 underline underline-offset-2 decoration-sky-400/50 hover:text-sky-300"
+                className="inline-flex items-center gap-1 text-sky-400 underline underline-offset-2 decoration-sky-400/50 hover:text-sky-300 break-all"
               >
-                {segment}
+                {label}
               </a>
             );
           }
-          return segment;
+          if (groupPos === 1) return null; // consumed as the href above
+          const urlRegex = /(https?:\/\/[^\s)]+)|www\.[^\s)]+/g;
+          return lPart.split(urlRegex).map((segment, segIdx) => {
+            if (!segment) return null;
+            if (urlRegex.test(segment)) {
+              urlRegex.lastIndex = 0;
+              const href = segment.startsWith("http")
+                ? segment
+                : `https://${segment}`;
+              return (
+                <a
+                  key={`${iIdx}-${lIdx}-${segIdx}`}
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sky-400 underline underline-offset-2 decoration-sky-400/50 hover:text-sky-300 break-all"
+                >
+                  {segment}
+                </a>
+              );
+            }
+            return segment;
+          });
         });
       });
     });
@@ -1807,14 +1831,14 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     EXPORT CSV
                   </Button>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto overflow-y-auto scroll-x-smooth max-h-[420px]">
                   <table className="w-full text-left text-[13px] border-collapse">
-                    <thead>
+                    <thead className="sticky top-0 z-10">
                       <tr className="bg-muted">
                         {header.map((h, i) => (
                           <th
                             key={i}
-                            className="px-4 py-3 font-black text-foreground border-b border-border whitespace-nowrap"
+                            className="px-4 py-3 font-black text-foreground border-b border-border whitespace-nowrap bg-muted"
                           >
                             {parseTableCellContent(h, isUser)}
                           </th>
@@ -1833,7 +1857,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                           {row.map((cell, ci) => (
                             <td
                               key={ci}
-                              className="px-4 py-3 text-card-foreground align-top"
+                              className="px-4 py-3 text-card-foreground align-top max-w-[280px] break-words"
                             >
                               {parseTableCellContent(cell, isUser)}
                             </td>
@@ -3299,7 +3323,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 <div className="mx-3 mt-2 flex items-center gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300 shrink-0">
                   <span className="shrink-0">⚠</span>
                   <span className="flex-1">
-                    Camoufox failed to start — running on Chrome instead. Bot detection may be less effective.{" "}
+                    {camoufoxFallbackMessage ||
+                      "Stealth browser (Camoufox) couldn't start, so this run automatically switched to regular headless Chrome instead. Bot-detection evasion may be reduced for this run."}{" "}
                     <button
                       onClick={() => handleSwitchView("settings")}
                       className="underline underline-offset-2 hover:text-amber-200 transition-colors"
@@ -3308,7 +3333,10 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     </button>
                   </span>
                   <button
-                    onClick={() => setCamoufoxFallbackWarning(false)}
+                    onClick={() => {
+                      setCamoufoxFallbackWarning(false);
+                      setCamoufoxFallbackMessage(null);
+                    }}
                     className="shrink-0 text-amber-400 hover:text-amber-200 transition-colors"
                     aria-label="Dismiss"
                   >
