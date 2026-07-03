@@ -261,7 +261,8 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
   // Use the plan from the selected AI message
   const displayPlan = selectedAiMsg?.plan || [];
 
-  // Only the tools the user explicitly checked (selectedTools IDs)
+  // Tools auto-derived from the chat message(s) the user selected (see
+  // chat_page.tsx) — not a manual checkbox list.
   const selectedToolLogs = (toolLogs || []).filter(l => selectedTools.includes(l.id));
   const successSelectedTools = selectedToolLogs.filter(
     log => log.status === 'SUCCESS' || log.status === 'COMPLETED'
@@ -809,7 +810,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                         <div className="text-center px-6">
                           <p className="text-xs font-black text-indigo-400 uppercase tracking-widest mb-1">No Tools Selected</p>
                           <p className="text-[10px] text-indigo-400/60 font-bold uppercase tracking-wider leading-relaxed">
-                            Select tool runs from the chat to include them here.<br />Only success tools are used for script generation.
+                            Select the chat message(s) that used tools and they'll be included here automatically.<br />Only success tools are used for script generation.
                           </p>
                         </div>
                       </div>

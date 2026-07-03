@@ -1067,7 +1067,10 @@ class Brain:
                     )
                 
                 new_messages.append(ToolMessage(content=llm_observation, tool_call_id=tool_call["id"]))
-                execution_history.append({"tool": tool_call["name"], "status": status, "result": llm_observation[:500]})
+                # Carry the real ToolExecutionLog.id along so the graph-output
+                # handling below can persist genuine DB ids into Message.tool_calls
+                # instead of minting a disconnected uuid4() per entry.
+                execution_history.append({"tool": tool_call["name"], "status": status, "result": llm_observation[:500], "id": _db_log_id})
             
             return {"messages": new_messages, "execution_history": execution_history}
 
@@ -1724,8 +1727,12 @@ class Brain:
                         if _otp_answer_for_redaction:
                             _msg_secret_values.append(str(_otp_answer_for_redaction))
                         for entry in graph_output["execution_history"]:
+                            # Prefer the real ToolExecutionLog.id captured in _call_tool
+                            # so this links to an actual persisted row the scheduler can
+                            # look up. Only fall back to a fresh uuid4 if it's missing
+                            # (e.g. older code paths that don't set "id" on the entry).
                             all_tool_calls.append({
-                                "id": str(uuid.uuid4()),
+                                "id": entry.get("id") or str(uuid.uuid4()),
                                 "tool_name": entry["tool"],
                                 "tool_input": {}, # Input is not easily available here, but we have the result
                                 "tool_output": self._redact_secret_values_in_text(entry["result"][:1000], _msg_secret_values),
@@ -1935,6 +1942,7 @@ class Brain:
                     "log_id": str(uuid.uuid4()),
                     "role": "ai",
                     "content": final_response,
+                    "tool_calls": all_tool_calls,
                     "created_at": datetime.now(timezone.utc).isoformat()
                 }
             }

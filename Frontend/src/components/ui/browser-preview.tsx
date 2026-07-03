@@ -281,12 +281,11 @@ export function BrowserPreview({
                             key={log.id || idx}
                             initial={{ opacity: 0, y: 6 }}
                             animate={{ opacity: 1, y: 0 }}
-                            onClick={() => onToggleToolSelection?.(log.id || String(idx))}
                             className={cn(
-                              "group relative flex flex-col gap-2 p-3 rounded-xl border cursor-pointer transition-all",
+                              "group relative flex flex-col gap-2 p-3 rounded-xl border transition-all",
                               st === 'IN_PROGRESS' ? "border-sky-500/25 bg-sky-500/[0.04]" :
-                              st === 'SUCCESS'     ? "border-emerald-500/15 bg-emerald-500/[0.03] hover:border-emerald-500/30" :
-                                                     "border-red-500/15 bg-red-500/[0.03] hover:border-red-500/30",
+                              st === 'SUCCESS'     ? "border-emerald-500/15 bg-emerald-500/[0.03]" :
+                                                     "border-red-500/15 bg-red-500/[0.03]",
                               isSelectionMode && isSelected && "ring-1 ring-sky-500"
                             )}
                           >

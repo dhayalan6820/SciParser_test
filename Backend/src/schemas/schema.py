@@ -51,6 +51,7 @@ class BackendChatMessage(BaseModel):
     timestamp: str
     plan: Optional[List[Dict[str, Any]]] = None # Added to support saving the agent process
     form: Optional[Dict[str, Any]] = None # Added to support dynamic forms for NEEDS_INPUT status
+    tool_calls: Optional[List[Dict[str, Any]]] = None # Real ToolExecutionLog ids used to produce this AI message
 
 class ChatMessage(BaseModel):
     role: str

@@ -6,3 +6,4 @@
 - [Obstacle handler framework](obstacle-handler-framework.md) — generic detect/pause/resume/remember pattern for mid-run blockers (CAPTCHA, OTP); new blocker types plug in without new plumbing
 - [Chat-history precedence in LLM prompts](chat-history-prompt-precedence.md) — raw history fed to an LLM step needs an explicit "current message wins on conflict" rule or it silently reuses stale values
 - [Never persist credentials, keep in-memory only](never-persist-credentials.md) — redact secrets before any DB write; cache real values in a process-memory dict for mid-run resume, and re-ask if that cache is lost
+- [AI message to tool log linkage](message-tool-calls-linkage.md) — persisted tool-call summaries must reuse the real DB id from the original log write, never mint a fresh uuid per copy; tool selection for scheduling is fully automatic, no manual checkbox UI

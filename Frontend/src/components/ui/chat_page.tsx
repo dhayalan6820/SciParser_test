@@ -202,6 +202,26 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const [selectedMessages, setSelectedMessages] = React.useState<string[]>([]);
   const [selectedTools, setSelectedToolIds] = React.useState<string[]>([]);
   const [isSelectionMode, setIsSelectionMode] = React.useState(false);
+
+  // Automatically derive which tool runs to include from the chat message(s)
+  // the user selected — each AI message carries the real ToolExecutionLog ids
+  // of the tools used to produce it (Message.tool_calls). No manual tool
+  // checkbox UI; selecting a message is enough.
+  React.useEffect(() => {
+    if (selectedMessages.length === 0) {
+      setSelectedToolIds([]);
+      return;
+    }
+    const derivedIds = new Set<string>();
+    for (const msg of messages) {
+      if (msg.id && selectedMessages.includes(msg.id) && Array.isArray(msg.tool_calls)) {
+        for (const tc of msg.tool_calls) {
+          if (tc?.id) derivedIds.add(tc.id);
+        }
+      }
+    }
+    setSelectedToolIds(Array.from(derivedIds));
+  }, [selectedMessages, messages]);
   const [scheduleType, setScheduleType] = React.useState("daily");
   const [emailRecipient, setEmailRecipient] = React.useState("");
 

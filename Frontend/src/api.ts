@@ -601,6 +601,14 @@ export interface ChatMessage {
   timestamp: string;
   plan?: any[];
   screenshots?: string[];
+  tool_calls?: Array<{
+    id: string;
+    tool_name: string;
+    tool_input?: Record<string, any>;
+    tool_output?: string;
+    status?: string;
+    created_at?: string;
+  }>;
 }
 
 export interface UploadedFile {
