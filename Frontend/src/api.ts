@@ -687,6 +687,92 @@ export const sciparserApi = {
     if (!res.ok) throw new Error(await res.text());
     return res.json() as Promise<OperationsMetrics>;
   },
+
+  // Admin: Overview KPIs
+  adminGetOverviewMetrics: async (days: number = 30) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/metrics/overview?days=${days}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<AdminOverview>;
+  },
+
+  // Admin: Recent Activity
+  adminGetActivity: async (limit: number = 20) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/activity?limit=${limit}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<{ items: AdminActivityItem[] }>;
+  },
+
+  // Admin: Agent Monitoring
+  adminGetAgentRuns: async (page: number = 1, pageSize: number = 20, status?: string) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+    if (status) params.set("status", status);
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/agents?${params.toString()}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<AdminAgentRunsResponse>;
+  },
+
+  // Admin: Automation Monitoring
+  adminGetAutomations: async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/automations`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<{ automations: AdminAutomation[] }>;
+  },
+
+  // Admin: Browser Sessions
+  adminGetBrowserSessions: async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/browser-sessions`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<{ sessions: AdminBrowserSession[]; active_count: number }>;
+  },
+
+  // Admin: Usage Dashboard
+  adminGetUsage: async (days: number = 30) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/usage?days=${days}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<AdminUsage>;
+  },
+
+  // Admin: Security Overview
+  adminGetSecurity: async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/security`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<AdminSecurity>;
+  },
 };
 
 export interface ChatMessage {
@@ -742,6 +828,87 @@ export interface OperationsMetrics {
   }>;
   top_errors: Array<{ error: string; count: number }>;
   status_breakdown: Array<{ status: string; count: number }>;
+}
+
+export interface AdminOverview {
+  total_users: number;
+  active_users: number;
+  running_agents: number;
+  completed_automations: number;
+  success_rate: number;
+  success_rate_change: number;
+  total_tokens: number;
+  total_tokens_change: number;
+  total_cost: number;
+  total_cost_change: number;
+  total_runs: number;
+  total_runs_change: number;
+  runs_sparkline: number[];
+  tokens_sparkline: number[];
+}
+
+export interface AdminActivityItem {
+  type: string;
+  title: string;
+  detail?: string | null;
+  status?: string | null;
+  timestamp: string;
+}
+
+export interface AdminAgentRun {
+  id: string;
+  chat_id: string;
+  user_id: string;
+  stage_name: string;
+  status: string;
+  tokens: number;
+  cost: number;
+  error_message?: string | null;
+  created_at: string;
+}
+
+export interface AdminAgentRunsResponse {
+  runs: AdminAgentRun[];
+  total: number;
+  running_count: number;
+  queued_count: number;
+  failed_count: number;
+  completed_count: number;
+  avg_runtime_seconds: number;
+}
+
+export interface AdminAutomation {
+  schedule_id: string;
+  title?: string | null;
+  status: string;
+  schedule_type: string;
+  last_run?: string | null;
+  next_run?: string | null;
+  total_runs: number;
+  success_runs: number;
+  failed_runs: number;
+  success_rate: number;
+}
+
+export interface AdminBrowserSession {
+  user_id: string;
+  username?: string | null;
+  active_chat_count: number;
+  browser_active: boolean;
+  browser_engine?: string | null;
+  proxy_configured: boolean;
+}
+
+export interface AdminUsage {
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  daily_usage: Array<{ date: string; prompt_tokens: number; completion_tokens: number }>;
+  top_users: Array<{ user_id: string; username: string; tokens: number; cost: number; runs: number }>;
+}
+
+export interface AdminSecurity {
+  suspended_users: Array<{ user_id: string; username: string; email: string; updated_at: string | null }>;
+  recent_signups: Array<{ user_id: string; username: string; email: string; created_at: string | null; role: string; status: string }>;
 }
 
 export interface AgentStage {

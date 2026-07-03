@@ -32,7 +32,10 @@ from src.database.init_db import init_database
 from src.schemas.schema import (
     SignUp, SignIn, Token, UserResponse, ChatRequest, 
     ChatResponse, RenameChatRequest, ScheduleRequest, ScheduleResponse,
-    AdminUpdateUserRequest, AdminUserListResponse, OperationsMetricsResponse
+    AdminUpdateUserRequest, AdminUserListResponse, OperationsMetricsResponse,
+    AdminOverviewResponse, AdminActivityResponse, AdminAgentRunsResponse,
+    AdminAutomationsResponse, AdminBrowserSessionsResponse, AdminUsageResponse,
+    AdminSecurityResponse,
 )
 from src.utils.logger import logger
 from src.services.brain import brain
@@ -688,6 +691,84 @@ async def admin_operations_metrics(
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
     return await ChatService.admin_get_operations_metrics(db, days=days)
+
+@app.get("/sciparser/v1/admin/metrics/overview", response_model=AdminOverviewResponse)
+async def admin_metrics_overview(
+    days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_overview_metrics(db, days=days)
+
+@app.get("/sciparser/v1/admin/activity", response_model=AdminActivityResponse)
+async def admin_activity(
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_recent_activity(db, limit=limit)
+
+@app.get("/sciparser/v1/admin/agents", response_model=AdminAgentRunsResponse)
+async def admin_agents(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    status: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_list_agent_runs(db, page=page, page_size=page_size, status_filter=status)
+
+@app.get("/sciparser/v1/admin/automations", response_model=AdminAutomationsResponse)
+async def admin_automations(
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_list_automations(db)
+
+@app.get("/sciparser/v1/admin/browser-sessions", response_model=AdminBrowserSessionsResponse)
+async def admin_browser_sessions(
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    """Live in-memory browser session state (real, not persisted) from the process's session manager."""
+    sessions_data = brain.session_manager.sessions
+    user_ids = list(sessions_data.keys())
+    username_map: Dict[str, str] = {}
+    if user_ids:
+        result = await db.execute(select(User).where(User.user_id.in_(user_ids)))
+        username_map = {u.user_id: u.username for u in result.scalars().all()}
+
+    sessions = []
+    active_count = 0
+    for uid, s in sessions_data.items():
+        browser_active = s.get("mcp_manager") is not None
+        if browser_active:
+            active_count += 1
+        sessions.append({
+            "user_id": uid,
+            "username": username_map.get(uid, uid[:8]),
+            "active_chat_count": len(s.get("active_chat_ids", set())),
+            "browser_active": browser_active,
+            "browser_engine": s.get("browser_engine"),
+            "proxy_configured": bool(s.get("proxy_url")),
+        })
+
+    return {"sessions": sessions, "active_count": active_count}
+
+@app.get("/sciparser/v1/admin/usage", response_model=AdminUsageResponse)
+async def admin_usage(
+    days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_usage_breakdown(db, days=days)
+
+@app.get("/sciparser/v1/admin/security", response_model=AdminSecurityResponse)
+async def admin_security(
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_security_overview(db)
 
 # --- Upload Endpoints ---
 

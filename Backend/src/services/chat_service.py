@@ -291,6 +291,334 @@ class ChatService:
         }
 
     @staticmethod
+    def _parse_token_usage(raw: Optional[str]) -> dict:
+        """Best-effort parse of the JSON token_usage blob stored on AgentExecutionLog rows."""
+        if not raw:
+            return {}
+        try:
+            parsed = json.loads(raw)
+            return parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            return {}
+
+    @staticmethod
+    def _pct_change(current: float, previous: float) -> float:
+        if previous == 0:
+            return 100.0 if current > 0 else 0.0
+        return round(((current - previous) / previous) * 100, 2)
+
+    # ── Admin: overview KPIs ─────────────────────────────────────────────
+    @staticmethod
+    async def admin_get_overview_metrics(db: AsyncSession, days: int = 30) -> dict:
+        """KPI cards for the dashboard overview, computed entirely from real recorded data
+        (users table, agent_execution_logs, schedule_runs) — no fabricated metrics."""
+        from src.database.chat_db import AgentExecutionLog
+
+        now = datetime.now(timezone.utc)
+        current_start = now - timedelta(days=days)
+        previous_start = now - timedelta(days=days * 2)
+
+        total_users = (await db.execute(select(func.count()).select_from(User))).scalar() or 0
+        active_users = (
+            await db.execute(select(func.count()).select_from(User).where(User.status == "active"))
+        ).scalar() or 0
+
+        running_agents = (
+            await db.execute(
+                select(func.count()).select_from(AgentExecutionLog).where(
+                    AgentExecutionLog.status.in_(["PENDING", "IN_PROGRESS"])
+                )
+            )
+        ).scalar() or 0
+
+        completed_automations = (
+            await db.execute(
+                select(func.count()).select_from(ScheduleRun).where(
+                    ScheduleRun.status == "COMPLETED", ScheduleRun.created_at >= current_start
+                )
+            )
+        ).scalar() or 0
+
+        async def _period_metrics(start, end):
+            stmt = select(AgentExecutionLog).where(
+                AgentExecutionLog.created_at >= start, AgentExecutionLog.created_at < end
+            )
+            logs = (await db.execute(stmt)).scalars().all()
+            runs = len(logs)
+            success = sum(1 for l in logs if (l.status or "").upper() in ("SUCCESS", "COMPLETED", "DONE"))
+            tokens = 0
+            cost = 0.0
+            for l in logs:
+                usage = ChatService._parse_token_usage(l.token_usage)
+                tokens += int(usage.get("total") or usage.get("total_tokens") or 0)
+                try:
+                    cost += float(l.cost) if l.cost else 0.0
+                except Exception:
+                    pass
+            rate = round((success / runs) * 100, 2) if runs else 0.0
+            return runs, rate, tokens, round(cost, 4)
+
+        cur_runs, cur_rate, cur_tokens, cur_cost = await _period_metrics(current_start, now)
+        prev_runs, prev_rate, prev_tokens, prev_cost = await _period_metrics(previous_start, current_start)
+
+        # Daily sparkline data (last 14 days) for runs and tokens
+        sparkline_start = now - timedelta(days=14)
+        recent_logs = (
+            await db.execute(select(AgentExecutionLog).where(AgentExecutionLog.created_at >= sparkline_start))
+        ).scalars().all()
+        by_day: dict = {}
+        for l in recent_logs:
+            key = l.created_at.strftime("%Y-%m-%d") if l.created_at else "unknown"
+            entry = by_day.setdefault(key, {"runs": 0, "tokens": 0})
+            entry["runs"] += 1
+            usage = ChatService._parse_token_usage(l.token_usage)
+            entry["tokens"] += int(usage.get("total") or usage.get("total_tokens") or 0)
+        days_sorted = sorted(by_day.keys())
+        runs_sparkline = [by_day[d]["runs"] for d in days_sorted] or [0]
+        tokens_sparkline = [by_day[d]["tokens"] for d in days_sorted] or [0]
+
+        return {
+            "total_users": total_users,
+            "active_users": active_users,
+            "running_agents": running_agents,
+            "completed_automations": completed_automations,
+            "success_rate": cur_rate,
+            "success_rate_change": ChatService._pct_change(cur_rate, prev_rate),
+            "total_tokens": cur_tokens,
+            "total_tokens_change": ChatService._pct_change(cur_tokens, prev_tokens),
+            "total_cost": cur_cost,
+            "total_cost_change": ChatService._pct_change(cur_cost, prev_cost),
+            "total_runs": cur_runs,
+            "total_runs_change": ChatService._pct_change(cur_runs, prev_runs),
+            "runs_sparkline": runs_sparkline,
+            "tokens_sparkline": tokens_sparkline,
+        }
+
+    # ── Admin: recent activity timeline ─────────────────────────────────
+    @staticmethod
+    async def admin_get_recent_activity(db: AsyncSession, limit: int = 20) -> dict:
+        """Merge real signups, automation runs, and agent failures into one timeline."""
+        from src.database.chat_db import AgentExecutionLog
+
+        items = []
+
+        signups = (
+            await db.execute(select(User).order_by(User.created_at.desc()).limit(limit))
+        ).scalars().all()
+        for u in signups:
+            items.append({
+                "type": "user_signup",
+                "title": f"New user registered: {u.username}",
+                "detail": u.email,
+                "status": u.status,
+                "timestamp": u.created_at,
+            })
+
+        runs = (
+            await db.execute(
+                select(ScheduleRun, Schedule)
+                .join(Schedule, Schedule.schedule_id == ScheduleRun.schedule_id)
+                .order_by(ScheduleRun.created_at.desc())
+                .limit(limit)
+            )
+        ).all()
+        for run, schedule in runs:
+            items.append({
+                "type": "automation_run",
+                "title": f"Automation \"{schedule.title or schedule.schedule_id[:8]}\" {run.status.lower()}",
+                "detail": run.error_log[:200] if run.error_log else None,
+                "status": run.status,
+                "timestamp": run.created_at,
+            })
+
+        failed_logs = (
+            await db.execute(
+                select(AgentExecutionLog)
+                .where(AgentExecutionLog.status.in_(["FAILED", "ERROR"]))
+                .order_by(AgentExecutionLog.created_at.desc())
+                .limit(limit)
+            )
+        ).scalars().all()
+        for log in failed_logs:
+            items.append({
+                "type": "agent_failure",
+                "title": f"Agent stage \"{log.stage_name}\" failed",
+                "detail": (log.error_message or "")[:200] or None,
+                "status": log.status,
+                "timestamp": log.created_at,
+            })
+
+        items.sort(key=lambda i: i["timestamp"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+        return {"items": items[:limit]}
+
+    # ── Admin: agent monitoring ──────────────────────────────────────────
+    @staticmethod
+    async def admin_list_agent_runs(
+        db: AsyncSession, page: int = 1, page_size: int = 20, status_filter: Optional[str] = None
+    ) -> dict:
+        from src.database.chat_db import AgentExecutionLog
+
+        base_stmt = select(AgentExecutionLog)
+        if status_filter:
+            base_stmt = base_stmt.where(AgentExecutionLog.status == status_filter.upper())
+
+        total = (await db.execute(select(func.count()).select_from(base_stmt.subquery()))).scalar() or 0
+
+        stmt = base_stmt.order_by(AgentExecutionLog.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+        logs = (await db.execute(stmt)).scalars().all()
+
+        all_logs = (await db.execute(select(AgentExecutionLog))).scalars().all()
+        running_count = sum(1 for l in all_logs if l.status == "IN_PROGRESS")
+        queued_count = sum(1 for l in all_logs if l.status == "PENDING")
+        failed_count = sum(1 for l in all_logs if l.status in ("FAILED", "ERROR"))
+        completed_count = sum(1 for l in all_logs if l.status in ("COMPLETED", "SUCCESS", "DONE"))
+
+        runtimes = []
+        for l in all_logs:
+            if l.status in ("COMPLETED", "SUCCESS", "DONE") and l.created_at and l.updated_at:
+                delta = (l.updated_at - l.created_at).total_seconds()
+                if delta >= 0:
+                    runtimes.append(delta)
+        avg_runtime = round(sum(runtimes) / len(runtimes), 2) if runtimes else 0.0
+
+        runs = []
+        for l in logs:
+            usage = ChatService._parse_token_usage(l.token_usage)
+            tokens = int(usage.get("total") or usage.get("total_tokens") or 0)
+            try:
+                cost = float(l.cost) if l.cost else 0.0
+            except Exception:
+                cost = 0.0
+            runs.append({
+                "id": l.id,
+                "chat_id": l.chat_id,
+                "user_id": l.user_id,
+                "stage_name": l.stage_name,
+                "status": l.status,
+                "tokens": tokens,
+                "cost": cost,
+                "error_message": l.error_message,
+                "created_at": l.created_at,
+            })
+
+        return {
+            "runs": runs,
+            "total": total,
+            "running_count": running_count,
+            "queued_count": queued_count,
+            "failed_count": failed_count,
+            "completed_count": completed_count,
+            "avg_runtime_seconds": avg_runtime,
+        }
+
+    # ── Admin: automation monitoring ─────────────────────────────────────
+    @staticmethod
+    async def admin_list_automations(db: AsyncSession) -> dict:
+        schedules = (await db.execute(select(Schedule).order_by(Schedule.created_at.desc()))).scalars().all()
+        runs = (await db.execute(select(ScheduleRun))).scalars().all()
+
+        runs_by_schedule: dict = {}
+        for r in runs:
+            runs_by_schedule.setdefault(r.schedule_id, []).append(r)
+
+        automations = []
+        for s in schedules:
+            s_runs = runs_by_schedule.get(s.schedule_id, [])
+            total_runs = len(s_runs)
+            success_runs = sum(1 for r in s_runs if r.status == "COMPLETED")
+            failed_runs = sum(1 for r in s_runs if r.status == "FAILED")
+            success_rate = round((success_runs / total_runs) * 100, 2) if total_runs else 0.0
+            automations.append({
+                "schedule_id": s.schedule_id,
+                "title": s.title,
+                "status": s.status,
+                "schedule_type": s.schedule_type,
+                "last_run": s.last_run,
+                "next_run": s.next_run,
+                "total_runs": total_runs,
+                "success_runs": success_runs,
+                "failed_runs": failed_runs,
+                "success_rate": success_rate,
+            })
+
+        return {"automations": automations}
+
+    # ── Admin: usage dashboard ────────────────────────────────────────────
+    @staticmethod
+    async def admin_get_usage_breakdown(db: AsyncSession, days: int = 30) -> dict:
+        from src.database.chat_db import AgentExecutionLog
+
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+        logs = (
+            await db.execute(select(AgentExecutionLog).where(AgentExecutionLog.created_at >= since))
+        ).scalars().all()
+
+        total_prompt = 0
+        total_completion = 0
+        daily: dict = {}
+        by_user: dict = {}
+
+        for l in logs:
+            usage = ChatService._parse_token_usage(l.token_usage)
+            prompt = int(usage.get("input") or 0)
+            completion = int(usage.get("output") or 0)
+            total_prompt += prompt
+            total_completion += completion
+
+            day_key = l.created_at.strftime("%Y-%m-%d") if l.created_at else "unknown"
+            entry = daily.setdefault(day_key, {"date": day_key, "prompt_tokens": 0, "completion_tokens": 0})
+            entry["prompt_tokens"] += prompt
+            entry["completion_tokens"] += completion
+
+            try:
+                cost = float(l.cost) if l.cost else 0.0
+            except Exception:
+                cost = 0.0
+            u_entry = by_user.setdefault(l.user_id, {"user_id": l.user_id, "tokens": 0, "cost": 0.0, "runs": 0})
+            u_entry["tokens"] += prompt + completion
+            u_entry["cost"] += cost
+            u_entry["runs"] += 1
+
+        user_ids = list(by_user.keys())
+        if user_ids:
+            users = (await db.execute(select(User).where(User.user_id.in_(user_ids)))).scalars().all()
+            username_map = {u.user_id: u.username for u in users}
+            for uid, entry in by_user.items():
+                entry["username"] = username_map.get(uid, uid[:8])
+                entry["cost"] = round(entry["cost"], 4)
+
+        daily_usage = sorted(daily.values(), key=lambda d: d["date"])
+        top_users = sorted(by_user.values(), key=lambda u: u["tokens"], reverse=True)[:10]
+
+        return {
+            "total_prompt_tokens": total_prompt,
+            "total_completion_tokens": total_completion,
+            "daily_usage": daily_usage,
+            "top_users": top_users,
+        }
+
+    # ── Admin: security overview ──────────────────────────────────────────
+    @staticmethod
+    async def admin_get_security_overview(db: AsyncSession) -> dict:
+        suspended = (
+            await db.execute(select(User).where(User.status == "suspended").order_by(User.updated_at.desc()))
+        ).scalars().all()
+        recent = (
+            await db.execute(select(User).order_by(User.created_at.desc()).limit(10))
+        ).scalars().all()
+
+        return {
+            "suspended_users": [
+                {"user_id": u.user_id, "username": u.username, "email": u.email, "updated_at": u.updated_at.isoformat() if u.updated_at else None}
+                for u in suspended
+            ],
+            "recent_signups": [
+                {"user_id": u.user_id, "username": u.username, "email": u.email, "created_at": u.created_at.isoformat() if u.created_at else None, "role": u.role, "status": u.status}
+                for u in recent
+            ],
+        }
+
+    @staticmethod
     async def get_user_sessions(db: AsyncSession, user_id: str) -> List[ChatSession]:
         """Get all chat sessions for a user."""
         stmt = select(ChatSession).where(ChatSession.user_id == str(user_id)).order_by(ChatSession.created_at.desc())

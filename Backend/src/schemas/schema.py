@@ -71,6 +71,101 @@ class OperationsMetricsResponse(BaseModel):
     top_errors: List[Dict[str, Any]]
     status_breakdown: List[Dict[str, Any]]
 
+
+class AdminOverviewResponse(BaseModel):
+    """KPI cards for the Admin Dashboard overview, all from real recorded data."""
+    total_users: int
+    active_users: int
+    running_agents: int
+    completed_automations: int
+    success_rate: float
+    success_rate_change: float
+    total_tokens: int
+    total_tokens_change: float
+    total_cost: float
+    total_cost_change: float
+    total_runs: int
+    total_runs_change: float
+    runs_sparkline: List[int]
+    tokens_sparkline: List[int]
+
+
+class AdminActivityItem(BaseModel):
+    type: str
+    title: str
+    detail: Optional[str] = None
+    status: Optional[str] = None
+    timestamp: datetime
+
+
+class AdminActivityResponse(BaseModel):
+    items: List[AdminActivityItem]
+
+
+class AdminAgentRun(BaseModel):
+    id: str
+    chat_id: str
+    user_id: str
+    stage_name: str
+    status: str
+    tokens: int
+    cost: float
+    error_message: Optional[str] = None
+    created_at: datetime
+
+
+class AdminAgentRunsResponse(BaseModel):
+    runs: List[AdminAgentRun]
+    total: int
+    running_count: int
+    queued_count: int
+    failed_count: int
+    completed_count: int
+    avg_runtime_seconds: float
+
+
+class AdminAutomationSummary(BaseModel):
+    schedule_id: str
+    title: Optional[str] = None
+    status: str
+    schedule_type: str
+    last_run: Optional[datetime] = None
+    next_run: Optional[datetime] = None
+    total_runs: int
+    success_runs: int
+    failed_runs: int
+    success_rate: float
+
+
+class AdminAutomationsResponse(BaseModel):
+    automations: List[AdminAutomationSummary]
+
+
+class AdminBrowserSession(BaseModel):
+    user_id: str
+    username: Optional[str] = None
+    active_chat_count: int
+    browser_active: bool
+    browser_engine: Optional[str] = None
+    proxy_configured: bool
+
+
+class AdminBrowserSessionsResponse(BaseModel):
+    sessions: List[AdminBrowserSession]
+    active_count: int
+
+
+class AdminUsageResponse(BaseModel):
+    total_prompt_tokens: int
+    total_completion_tokens: int
+    daily_usage: List[Dict[str, Any]]
+    top_users: List[Dict[str, Any]]
+
+
+class AdminSecurityResponse(BaseModel):
+    suspended_users: List[Dict[str, Any]]
+    recent_signups: List[Dict[str, Any]]
+
 class BackendChatMessage(BaseModel):
     id: Optional[str] = None # Added to match frontend 'id'
     log_id: Optional[str] = None # Changed to Optional to prevent validation failure
