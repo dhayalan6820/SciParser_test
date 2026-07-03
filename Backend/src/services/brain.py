@@ -1013,7 +1013,17 @@ class Brain:
                 _safe_tool_output = self._redact_secret_values_in_text(clean_obs[:1000], _run_secret_values)
 
                 # 3. Log the REAL result to DB
-                await self.db_manager.log_tool_execution(
+                # NOTE: the DB row's primary key (`log.id`, a server-generated UUID)
+                # is NOT the same value as `tool_call["id"]` (the LLM-issued
+                # tool_call_id used to correlate the tool_start/tool_output stream
+                # events). The frontend's tool-selection UI keys entries by the
+                # streamed `tool_call_id` — if a schedule is created from tools
+                # selected via that live stream, the IDs sent to
+                # /scheduler/create won't match any `ToolExecutionLog.id`, and the
+                # selected tool data silently comes back empty. Capture the real
+                # DB id here and pass it back down in the tool_output event so the
+                # frontend can reconcile its selection state to the persisted id.
+                _db_log_id = await self.db_manager.log_tool_execution(
                     chat_id=chat_id,
                     agent_id="3",
                     tool_name=tool_call["name"],
@@ -1042,6 +1052,10 @@ class Brain:
                     "tool": tool_call["name"],
                     "output": clean_obs[:500],
                     "tool_call_id": tool_call["id"],
+                    # Real ToolExecutionLog.id — lets the frontend swap its
+                    # selection-state key from the stream-only tool_call_id to
+                    # the actual persisted row id (see note above).
+                    "db_id": _db_log_id,
                     "status": status,
                 }
                 self.buffer_tool_event(chat_id, _tool_out_event)

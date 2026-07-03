@@ -32,7 +32,6 @@ import {
   Menu,
   X,
   ChevronDown,
-  ChevronUp,
   Globe,
   Send,
   PanelLeftClose,
@@ -82,49 +81,6 @@ interface Thread {
   uploads: UploadedFile[];
   createdAt: string;
 }
-
-const SUCCESS_TOOL_STATUSES = new Set(["SUCCESS", "COMPLETED"]);
-
-// Tools have no direct message_id link in the schema, so we associate a
-// message with the tool calls executed while that response was produced —
-// i.e. tool logs whose created_at falls between the preceding message and
-// the AI response for that exchange. Only successful tool calls qualify.
-const getSuccessToolIdsForMessage = (
-  msg: ChatMessage,
-  allMessages: ChatMessage[],
-  allToolLogs: any[],
-): string[] => {
-  const idx = allMessages.findIndex((m) => m.id === msg.id);
-  if (idx === -1) return [];
-
-  const isUser = msg.role === "user" || msg.role === "human";
-  let startMsg: ChatMessage | undefined;
-  let endMsg: ChatMessage | undefined;
-
-  if (isUser) {
-    startMsg = msg;
-    endMsg = allMessages
-      .slice(idx + 1)
-      .find((m) => m.role === "ai" || m.role === "assistant");
-  } else {
-    endMsg = msg;
-    startMsg = allMessages[idx - 1];
-  }
-
-  if (!endMsg) return [];
-
-  const startTime = startMsg ? new Date(startMsg.timestamp).getTime() : 0;
-  const endTime = new Date(endMsg.timestamp).getTime();
-  if (Number.isNaN(endTime)) return [];
-
-  return (allToolLogs || [])
-    .filter((log) => {
-      if (!SUCCESS_TOOL_STATUSES.has(log.status)) return false;
-      const t = new Date(log.created_at || log.timestamp).getTime();
-      return !Number.isNaN(t) && t >= startTime && t <= endTime;
-    })
-    .map((log) => log.id);
-};
 
 const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const { theme, toggleTheme } = useTheme();
@@ -200,7 +156,6 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
   // Camoufox fallback warning banner
   const [camoufoxFallbackWarning, setCamoufoxFallbackWarning] = React.useState(false);
-  const [camoufoxFallbackMessage, setCamoufoxFallbackMessage] = React.useState<string | null>(null);
 
   // CDP (Connect Your Browser) state
   const [cdpConnected, setCdpConnected] = React.useState(false);
@@ -718,11 +673,21 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   ];
                 });
               } else if (toolMsg.type === "tool_output") {
+                // The entry was created on tool_start keyed by the LLM's
+                // stream-only tool_call_id, but the row that just got
+                // persisted to tool_execution_logs has its own separate
+                // server-generated id (toolMsg.db_id). Swap the entry's id
+                // to the real DB id now — otherwise any schedule created
+                // from a tool selected via this live stream sends an id
+                // that matches nothing in the DB, and the schedule silently
+                // ends up with no tool data.
+                const finalId = toolMsg.db_id || toolMsg.tool_call_id;
                 setToolLogs((prev) =>
                   prev.map((log) =>
                     log.id === toolMsg.tool_call_id
                       ? {
                           ...log,
+                          id: finalId,
                           status: toolMsg.status,
                           tool_output: toolMsg.output,
                           error_message: toolMsg.error,
@@ -730,6 +695,15 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                       : log,
                   ),
                 );
+                if (toolMsg.db_id && toolMsg.db_id !== toolMsg.tool_call_id) {
+                  setSelectedToolIds((prev) =>
+                    prev.includes(toolMsg.tool_call_id)
+                      ? prev.map((id) =>
+                          id === toolMsg.tool_call_id ? toolMsg.db_id : id,
+                        )
+                      : prev,
+                  );
+                }
               }
             } catch (e) {
               console.error("Failed to parse tool log data:", e);
@@ -823,7 +797,6 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             if (stillRunning) setIsAiTyping(true);
           } else if (msg.type === "notification" && msg.notification_type === "camoufox_fallback") {
             setCamoufoxFallbackWarning(true);
-            setCamoufoxFallbackMessage(msg.message || null);
           } else if (msg.type === "thought_update") {
             setAiThinking(msg.data);
             // Associate thought with the currently running task
@@ -1336,62 +1309,18 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         )}
         onClick={() => {
           if (isSelectionMode && msg.id) {
-            const willSelect = !selectedMessages.includes(msg.id);
-            const assocToolIds = getSuccessToolIdsForMessage(
-              msg,
-              messages,
-              toolLogs,
-            );
-
             setSelectedMessages((prev) =>
-              willSelect
-                ? [...prev, msg.id]
-                : prev.filter((id) => id !== msg.id),
+              prev.includes(msg.id)
+                ? prev.filter((id) => id !== msg.id)
+                : [...prev, msg.id],
             );
-
-            if (willSelect) {
-              if (assocToolIds.length > 0) {
-                setSelectedToolIds((prev) =>
-                  Array.from(new Set([...prev, ...assocToolIds])),
-                );
-              }
-            } else if (assocToolIds.length > 0) {
-              // Keep tools still needed by other selected messages
-              const otherSelectedIds = selectedMessages.filter(
-                (id) => id !== msg.id,
-              );
-              const stillNeeded = new Set<string>();
-              otherSelectedIds.forEach((id) => {
-                const otherMsg = messages.find((m) => m.id === id);
-                if (otherMsg) {
-                  getSuccessToolIdsForMessage(
-                    otherMsg,
-                    messages,
-                    toolLogs,
-                  ).forEach((tid) => stillNeeded.add(tid));
-                }
-              });
-              setSelectedToolIds((prev) =>
-                prev.filter(
-                  (tid) => !assocToolIds.includes(tid) || stillNeeded.has(tid),
-                ),
-              );
-            }
           }
         }}
       >
-        {/* Agent Plan Section (Above AI Response) — always available, never permanently hidden.
-            Visible by default; the user can collapse/re-expand it at any time via the toggle. */}
+        {/* Agent Plan Section (Above AI Response) */}
         {!isUser && msg.plan && msg.plan.length > 0 && (
           <div className="w-full max-w-2xl ml-12 mb-2">
-            <button
-              type="button"
-              onClick={() => {
-                const msgId = msg.id || "";
-                setVisiblePlans((prev) => ({ ...prev, [msgId]: !isPlanVisible }));
-              }}
-              className="w-full flex items-center gap-3 mb-3 px-1 group"
-            >
+            <div className="flex items-center gap-3 mb-3 px-1">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
                 <span className="text-[10px] font-black text-foreground uppercase tracking-[0.2em]">
@@ -1399,16 +1328,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 </span>
               </div>
               <div className="h-px flex-1 bg-border" />
-              <span className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground group-hover:text-foreground transition-colors">
-                {isPlanVisible ? "Hide" : "View"}
-                {isPlanVisible ? (
-                  <ChevronUp className="h-3 w-3" />
-                ) : (
-                  <ChevronDown className="h-3 w-3" />
-                )}
-              </span>
-            </button>
-            {isPlanVisible && <Plan tasks={msg.plan} />}
+            </div>
+            <Plan tasks={msg.plan} />
           </div>
         )}
 
@@ -1668,49 +1589,27 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             </code>
           );
         }
-        const mdLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
-        const linkParts = iPart.split(mdLinkRegex);
-        return linkParts.map((lPart, lIdx) => {
-          // Every 3rd item starting at index 1 is a captured link label, index 2 is its URL
-          const groupPos = (lIdx - 1) % 3;
-          if (groupPos === 0 && lIdx + 1 < linkParts.length) {
-            const label = lPart;
-            const href = linkParts[lIdx + 1];
+        const urlRegex = /(https?:\/\/[^\s)]+)|www\.[^\s)]+/g;
+        return iPart.split(urlRegex).map((segment, segIdx) => {
+          if (!segment) return null;
+          if (urlRegex.test(segment)) {
+            urlRegex.lastIndex = 0;
+            const href = segment.startsWith("http")
+              ? segment
+              : `https://${segment}`;
             return (
               <a
-                key={`${iIdx}-md-${lIdx}`}
+                key={`${iIdx}-${segIdx}`}
                 href={href}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 text-sky-400 underline underline-offset-2 decoration-sky-400/50 hover:text-sky-300 break-all"
+                className="text-sky-400 underline underline-offset-2 decoration-sky-400/50 hover:text-sky-300"
               >
-                {label}
+                {segment}
               </a>
             );
           }
-          if (groupPos === 1) return null; // consumed as the href above
-          const urlRegex = /(https?:\/\/[^\s)]+)|www\.[^\s)]+/g;
-          return lPart.split(urlRegex).map((segment, segIdx) => {
-            if (!segment) return null;
-            if (urlRegex.test(segment)) {
-              urlRegex.lastIndex = 0;
-              const href = segment.startsWith("http")
-                ? segment
-                : `https://${segment}`;
-              return (
-                <a
-                  key={`${iIdx}-${lIdx}-${segIdx}`}
-                  href={href}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-sky-400 underline underline-offset-2 decoration-sky-400/50 hover:text-sky-300 break-all"
-                >
-                  {segment}
-                </a>
-              );
-            }
-            return segment;
-          });
+          return segment;
         });
       });
     });
@@ -1848,14 +1747,14 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     EXPORT CSV
                   </Button>
                 </div>
-                <div className="overflow-x-auto overflow-y-auto scroll-x-smooth max-h-[420px]">
+                <div className="overflow-x-auto">
                   <table className="w-full text-left text-[13px] border-collapse">
-                    <thead className="sticky top-0 z-10">
+                    <thead>
                       <tr className="bg-muted">
                         {header.map((h, i) => (
                           <th
                             key={i}
-                            className="px-4 py-3 font-black text-foreground border-b border-border whitespace-nowrap bg-muted"
+                            className="px-4 py-3 font-black text-foreground border-b border-border whitespace-nowrap"
                           >
                             {parseTableCellContent(h, isUser)}
                           </th>
@@ -1874,7 +1773,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                           {row.map((cell, ci) => (
                             <td
                               key={ci}
-                              className="px-4 py-3 text-card-foreground align-top max-w-[280px] break-words"
+                              className="px-4 py-3 text-card-foreground align-top"
                             >
                               {parseTableCellContent(cell, isUser)}
                             </td>
@@ -2537,11 +2436,6 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       <PremiumScheduler
         isOpen={isSchedulerOpen}
         onClose={() => setIsSchedulerOpen(false)}
-        onScheduled={() => {
-          setIsSelectionMode(false);
-          setSelectedMessages([]);
-          setSelectedToolIds([]);
-        }}
         selectedMessages={selectedMessages}
         selectedTools={selectedTools}
         chatId={activeThreadId}
@@ -3173,7 +3067,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               }}
             >
               {/* Chat Header */}
-              <div className="h-14 border-b border-border bg-card px-4 flex items-center gap-2 shrink-0 min-w-0">
+              <div className="h-14 border-b border-border bg-card px-4 flex items-center gap-2 shrink-0 overflow-hidden">
                 <div className="flex items-center gap-2 shrink-0">
                   <Button
                     variant="ghost"
@@ -3200,9 +3094,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   </div>
                 </div>
 
-                <div className="flex-1 min-w-2" />
+                <div className="flex-1" />
 
-                <div className="flex items-center gap-1 sm:gap-1.5 flex-nowrap min-w-0 overflow-x-auto scroll-x-smooth">
+                <div className="flex items-center gap-1 sm:gap-1.5 flex-nowrap shrink-0">
 
                   <Button
                     variant={isSelectionMode ? "default" : "outline"}
@@ -3340,8 +3234,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 <div className="mx-3 mt-2 flex items-center gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300 shrink-0">
                   <span className="shrink-0">⚠</span>
                   <span className="flex-1">
-                    {camoufoxFallbackMessage ||
-                      "Stealth browser (Camoufox) couldn't start, so this run automatically switched to regular headless Chrome instead. Bot-detection evasion may be reduced for this run."}{" "}
+                    Camoufox failed to start — running on Chrome instead. Bot detection may be less effective.{" "}
                     <button
                       onClick={() => handleSwitchView("settings")}
                       className="underline underline-offset-2 hover:text-amber-200 transition-colors"
@@ -3350,10 +3243,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     </button>
                   </span>
                   <button
-                    onClick={() => {
-                      setCamoufoxFallbackWarning(false);
-                      setCamoufoxFallbackMessage(null);
-                    }}
+                    onClick={() => setCamoufoxFallbackWarning(false)}
                     className="shrink-0 text-amber-400 hover:text-amber-200 transition-colors"
                     aria-label="Dismiss"
                   >
