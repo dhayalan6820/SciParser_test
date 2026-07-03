@@ -294,6 +294,55 @@ async def test_agent_execution_log_retroactively_scrubbed_of_free_text_secret(sq
         assert "user@example.com" in row.input_data
 
 
+@pytest.mark.asyncio
+async def test_retroactively_redact_message_content_commits_the_redacted_row(
+    sqlite_session_factory, monkeypatch
+):
+    """Exercises Brain._retroactively_redact_message_content — the actual
+    method process_message calls, not a simulated manual DB update — against
+    a real sqlite session, and asserts the redacted content was COMMITTED.
+    A regression here (e.g. a missing `await db.commit()`) must fail this
+    test: reading the row back through a brand new session/transaction only
+    sees the redacted value if the write was actually committed."""
+    import src.services.brain as brain_module
+    from src.database.chat_db import Message
+    from sqlalchemy import select
+    from datetime import datetime, timezone
+    import uuid
+
+    monkeypatch.setattr(brain_module, "AsyncSessionLocal", sqlite_session_factory)
+
+    message_id = str(uuid.uuid4())
+    raw_message = "Log in with my email user@example.com, use hunter2 as my password"
+    stored_content = Brain._mask_labeled_secrets(raw_message)
+    assert "hunter2" in stored_content  # free-text form isn't caught pre-hoc
+
+    async with sqlite_session_factory() as db:
+        db.add(Message(
+            message_id=message_id,
+            chat_id="chat-commit-check",
+            user_id="user-1",
+            role="user",
+            content=stored_content,
+            created_at=datetime.now(timezone.utc),
+        ))
+        await db.commit()
+
+    brain = Brain.__new__(Brain)  # bypass __init__ (needs real sub-services)
+    confirmed_inputs = {"email": "user@example.com", "password": "hunter2"}
+    returned_secrets = await brain._retroactively_redact_message_content(
+        message_id, stored_content, confirmed_inputs
+    )
+    assert "hunter2" in returned_secrets
+
+    # A fresh session/transaction must see the committed redaction.
+    async with sqlite_session_factory() as db:
+        result = await db.execute(select(Message).where(Message.message_id == message_id))
+        row = result.scalar_one()
+        assert "hunter2" not in row.content
+        assert "user@example.com" in row.content
+
+
 def test_agent_execution_log_error_field_scrubbed_of_known_otp_value():
     """update_ui(..., error=...) must scrub against known secret values (e.g.
     the OTP code just supplied to resume an obstacle) before it reaches

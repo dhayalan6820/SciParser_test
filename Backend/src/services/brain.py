@@ -684,6 +684,28 @@ class Brain:
             return text
         return cls._LABELED_SECRET_PATTERN.sub(lambda m: f"{m.group(1)}: [REDACTED]", text)
 
+    async def _retroactively_redact_message_content(
+        self, message_id: str, stored_content: str, confirmed_inputs: Dict[str, Any]
+    ) -> List[str]:
+        """Once Agent-1 extracts confirmed_inputs (ground-truth sensitive
+        fields), re-check the Message row we already wrote for this turn and
+        scrub any secret value that slipped past the pre-hoc label:value mask
+        (e.g. free-text like "use hunter2 as my password"). Returns the
+        extracted secret values so callers can also seed AgentExecutionLog
+        scrubbing with the same list. Always commits when a row is changed —
+        a silent no-op commit here is exactly how a redaction fix regresses."""
+        secret_values = self._extract_sensitive_values(confirmed_inputs)
+        if secret_values and any(v in stored_content for v in secret_values if v):
+            redacted_content = self._redact_secret_values_in_text(stored_content, secret_values)
+            async with AsyncSessionLocal() as db:
+                upd_stmt = select(Message).where(Message.message_id == message_id)
+                upd_res = await db.execute(upd_stmt)
+                upd_row = upd_res.scalar_one_or_none()
+                if upd_row:
+                    upd_row.content = redacted_content
+                    await db.commit()
+        return secret_values
+
     def _extract_domain_from_task(self, user_message: str, confirmed_inputs: Dict[str, Any]) -> str:
         """Extract primary domain from confirmed inputs or raw message."""
         # Try confirmed inputs first
@@ -1384,15 +1406,9 @@ class Brain:
                 # text disclosures the label:value regex above can't reliably parse
                 # (e.g. "use hunter2 as the password") without guessing at secret
                 # detection ourselves — we trust Agent-1's own field extraction.
-                _post_understanding_secrets = self._extract_sensitive_values(confirmed_inputs)
-                if _post_understanding_secrets and any(v in _stored_content for v in _post_understanding_secrets if v):
-                    _redacted_stored_content = self._redact_secret_values_in_text(_stored_content, _post_understanding_secrets)
-                    async with AsyncSessionLocal() as db:
-                        upd_stmt = select(Message).where(Message.message_id == human_msg.message_id)
-                        upd_res = await db.execute(upd_stmt)
-                        upd_row = upd_res.scalar_one_or_none()
-                        if upd_row:
-                            upd_row.content = _redacted_stored_content
+                _post_understanding_secrets = await self._retroactively_redact_message_content(
+                    human_msg.message_id, _stored_content, confirmed_inputs
+                )
 
                 # Same ground-truth secret values also gate AgentExecutionLog: the
                 # stage-0 "in-progress" row above was logged before confirmed_inputs
