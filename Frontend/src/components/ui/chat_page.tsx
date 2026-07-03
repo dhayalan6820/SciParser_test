@@ -3132,7 +3132,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               }}
             >
               {/* Chat Header */}
-              <div className="h-14 border-b border-border bg-card px-4 flex items-center gap-2 shrink-0 overflow-hidden">
+              <div className="h-14 border-b border-border bg-card px-4 flex items-center gap-2 shrink-0 min-w-0">
                 <div className="flex items-center gap-2 shrink-0">
                   <Button
                     variant="ghost"
@@ -3159,9 +3159,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   </div>
                 </div>
 
-                <div className="flex-1" />
+                <div className="flex-1 min-w-2" />
 
-                <div className="flex items-center gap-1 sm:gap-1.5 flex-nowrap shrink-0">
+                <div className="flex items-center gap-1 sm:gap-1.5 flex-nowrap min-w-0 overflow-x-auto scroll-x-smooth">
 
                   <Button
                     variant={isSelectionMode ? "default" : "outline"}
