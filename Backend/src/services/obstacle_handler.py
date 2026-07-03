@@ -281,7 +281,127 @@ def build_input_form(match: ObstacleMatch, site_domain: str, is_retry: bool = Fa
             "obstacle_category": match.category,
         }
 
-    # Future human-input obstacle types (e.g. a forced re-login) plug in here.
+    if match.category == "calendar":
+        candidates = match.candidates or []
+        if candidates:
+            description = (
+                f"None of the calendar dates on {site_domain} confidently matched the date "
+                "you asked for. Please pick the correct one below (or note if none are right)."
+            )
+            options = [{"label": c, "value": c} for c in candidates]
+            options.append({"label": "None of these are correct", "value": "__none__"})
+            return {
+                "title": "Confirm Date",
+                "description": description,
+                "sections": [
+                    {
+                        "section_title": None,
+                        "fields": [
+                            {
+                                "id": "selected_date",
+                                "label": "Select the correct date",
+                                "type": "select",
+                                "placeholder": None,
+                                "required": True,
+                                "options": options,
+                                "note": "Used once to continue this task.",
+                            }
+                        ],
+                    }
+                ],
+                "security_note": None,
+                "obstacle_type": match.obstacle_type,
+                "obstacle_category": match.category,
+            }
+        description = (
+            f"The date you requested does not appear to be available on {site_domain}. "
+            "Please provide an alternate date to use instead."
+        )
+        return {
+            "title": "Date Unavailable",
+            "description": description,
+            "sections": [
+                {
+                    "section_title": None,
+                    "fields": [
+                        {
+                            "id": "alternate_date",
+                            "label": "Alternate date",
+                            "type": "text",
+                            "placeholder": "e.g. 2026-03-16",
+                            "required": True,
+                            "options": None,
+                            "note": "Used once to continue this task.",
+                        }
+                    ],
+                }
+            ],
+            "security_note": None,
+            "obstacle_type": match.obstacle_type,
+            "obstacle_category": match.category,
+        }
+
+    if match.category == "login":
+        description = (
+            f"{site_domain} rejected the login/signup details for this task "
+            f"({match.obstacle_type.replace('_', ' ')}). Please let us know how to proceed "
+            "— e.g. a corrected password, or confirmation to stop."
+        )
+        return {
+            "title": "Login Issue",
+            "description": description,
+            "sections": [
+                {
+                    "section_title": None,
+                    "fields": [
+                        {
+                            "id": "login_guidance",
+                            "label": "Corrected password or instructions",
+                            "type": "text",
+                            "placeholder": "e.g. the correct password, or 'stop'",
+                            "required": True,
+                            "options": None,
+                            "note": "Used once to continue this task and never stored.",
+                        }
+                    ],
+                }
+            ],
+            "security_note": "Your answer is used once to continue this task and is never saved.",
+            "obstacle_type": match.obstacle_type,
+            "obstacle_category": match.category,
+        }
+
+    if match.category == "booking":
+        description = (
+            f"The booking/checkout flow on {site_domain} does not seem to be progressing past the "
+            "same step. Please take a look and tell us how to proceed (e.g. a missing field to fill "
+            "in, or an option to pick)."
+        )
+        return {
+            "title": "Booking Flow Stuck",
+            "description": description,
+            "sections": [
+                {
+                    "section_title": None,
+                    "fields": [
+                        {
+                            "id": "booking_guidance",
+                            "label": "What should the agent do next?",
+                            "type": "text",
+                            "placeholder": "e.g. select the 2pm slot, or skip the insurance add-on",
+                            "required": True,
+                            "options": None,
+                            "note": "Used once to continue this task.",
+                        }
+                    ],
+                }
+            ],
+            "security_note": None,
+            "obstacle_type": match.obstacle_type,
+            "obstacle_category": match.category,
+        }
+
+    # Future human-input obstacle types plug in here.
     return {
         "title": "Input Required",
         "description": f"{site_domain} requires additional input to continue.",

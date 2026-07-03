@@ -8,3 +8,4 @@
 - [Never persist credentials, keep in-memory only](never-persist-credentials.md) — redact secrets before any DB write; cache real values in a process-memory dict for mid-run resume, and re-ask if that cache is lost
 - [AI message to tool log linkage](message-tool-calls-linkage.md) — persisted tool-call summaries must reuse the real DB id from the original log write, never mint a fresh uuid per copy; tool selection for scheduling is fully automatic, no manual checkbox UI
 - [Obstacle detection false positives](obstacle-detection-false-positives.md) — bare keyword regexes (e.g. "verification code") on raw page text false-trigger OTP/CAPTCHA prompts; require an imperative/blocking cue nearby plus an exclusion list
+- [Specialized-agent extension pattern](specialized-agent-pattern.md) — how to add a new per-flow deterministic agent (detector/scorer module + .agent.md spec) into Brain's tool loop without a new orchestration engine

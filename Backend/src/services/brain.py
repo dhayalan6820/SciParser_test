@@ -40,6 +40,9 @@ from src.services.obstacle_handler import (
     build_input_form,
 )
 from src.services import address_agent
+from src.services import calendar_agent
+from src.services import login_agent
+from src.services import booking_agent
 
 # ATAG Models
 from src.services.ATAG import (
@@ -788,6 +791,72 @@ class Brain:
             except Exception as _spec_exc:
                 logger.warning(f"Failed to load address agent spec (non-fatal): {_spec_exc}")
 
+        # Deterministic Calendar Agent context — same shape as the Address Agent
+        # above, tracking requested date(s) and the retry budget for a
+        # low-confidence calendar-day selection before escalating.
+        _calendar_state = calendar_agent.CalendarSelectionState()
+        _requested_dates = calendar_agent.extract_requested_dates(confirmed_inputs)
+        _calendar_spec_guidance: Optional[str] = None
+        if _requested_dates:
+            try:
+                _cal_spec = spec_loader.load_spec("calendar")
+                _cal_spec_parts: List[str] = []
+                if _cal_spec.sections.get("Decision Tree"):
+                    _cal_spec_parts.append(f"Decision Tree:\n{_cal_spec.sections['Decision Tree']}")
+                if _cal_spec.sections.get("Hard Rules"):
+                    _cal_spec_parts.append(f"Hard Rules:\n{_cal_spec.sections['Hard Rules']}")
+                if _cal_spec_parts:
+                    _calendar_spec_guidance = (
+                        "\n\n[CALENDAR_AGENT_SPEC — " + _cal_spec.role + "]\n"
+                        + "\n\n".join(_cal_spec_parts)
+                    )
+            except Exception as _spec_exc:
+                logger.warning(f"Failed to load calendar agent spec (non-fatal): {_spec_exc}")
+
+        # Deterministic Login Agent context — tracks the credential values
+        # supplied for this task and the retry budget before an explicit
+        # credential-rejection banner escalates to the user.
+        _login_state = login_agent.LoginFormState()
+        _requested_credentials = login_agent.extract_requested_credentials(confirmed_inputs)
+        _login_spec_guidance: Optional[str] = None
+        if _requested_credentials:
+            try:
+                _login_spec = spec_loader.load_spec("login")
+                _login_spec_parts: List[str] = []
+                if _login_spec.sections.get("Decision Tree"):
+                    _login_spec_parts.append(f"Decision Tree:\n{_login_spec.sections['Decision Tree']}")
+                if _login_spec.sections.get("Hard Rules"):
+                    _login_spec_parts.append(f"Hard Rules:\n{_login_spec.sections['Hard Rules']}")
+                if _login_spec_parts:
+                    _login_spec_guidance = (
+                        "\n\n[LOGIN_AGENT_SPEC — " + _login_spec.role + "]\n"
+                        + "\n\n".join(_login_spec_parts)
+                    )
+            except Exception as _spec_exc:
+                logger.warning(f"Failed to load login agent spec (non-fatal): {_spec_exc}")
+
+        # Deterministic Booking/Pagination Agent context — tracks step/page
+        # progress across turns so a stalled multi-step flow (Next/Continue
+        # clicked without the step number actually advancing) escalates
+        # instead of looping indefinitely. Not gated on confirmed_inputs —
+        # applies to any task that hits a multi-step flow.
+        _booking_state = booking_agent.BookingProgressState()
+        _booking_spec_guidance: Optional[str] = None
+        try:
+            _booking_spec = spec_loader.load_spec("booking")
+            _booking_spec_parts: List[str] = []
+            if _booking_spec.sections.get("Decision Tree"):
+                _booking_spec_parts.append(f"Decision Tree:\n{_booking_spec.sections['Decision Tree']}")
+            if _booking_spec.sections.get("Hard Rules"):
+                _booking_spec_parts.append(f"Hard Rules:\n{_booking_spec.sections['Hard Rules']}")
+            if _booking_spec_parts:
+                _booking_spec_guidance = (
+                    "\n\n[BOOKING_AGENT_SPEC — " + _booking_spec.role + "]\n"
+                    + "\n\n".join(_booking_spec_parts)
+                )
+        except Exception as _spec_exc:
+            logger.warning(f"Failed to load booking agent spec (non-fatal): {_spec_exc}")
+
         # Known secret values for THIS run (sensitive confirmed_inputs fields +
         # any obstacle answer, e.g. an OTP code, just submitted) — scrubbed out
         # of ToolExecutionLog rows before they're persisted. The LLM still sees
@@ -1024,6 +1093,70 @@ class Brain:
                     raise
                 except Exception as _ae:
                     logger.warning(f"Address agent detection error (non-fatal): {_ae}")
+
+                # ── Calendar Agent: deterministic date-picker handling ──────────────────
+                # Only runs when the task actually supplied a date to select and no
+                # CAPTCHA is blocking the page. See src/services/calendar_agent.py for the
+                # scoring/verification logic and calendar.agent.md for the agent's rules.
+                try:
+                    if not _captcha_type and _requested_dates:
+                        _calendar_open = calendar_agent.detect_calendar_widget_context(str(observation))
+
+                        if _calendar_open:
+                            observation = calendar_agent.handle_calendar_widget_observation(
+                                str(observation),
+                                _requested_dates,
+                                _calendar_state,
+                                _task_domain,
+                                spec_guidance=_calendar_spec_guidance,
+                            )
+                        elif _calendar_state.pending_selection:
+                            # Calendar just closed after an auto-selected day —
+                            # verify the field's own value now reflects it.
+                            observation = calendar_agent.handle_calendar_verification_observation(
+                                str(observation), _calendar_state, _task_domain
+                            )
+                except ObstacleInputNeeded:
+                    raise
+                except Exception as _cale:
+                    logger.warning(f"Calendar agent detection error (non-fatal): {_cale}")
+
+                # ── Login Agent: deterministic credential-field disambiguation ──────────
+                # Only runs when the task actually supplied credentials to enter and no
+                # CAPTCHA is blocking the page. See src/services/login_agent.py for the
+                # field-mapping/failure logic and login.agent.md for the agent's rules.
+                try:
+                    if not _captcha_type and _requested_credentials:
+                        _login_form_open = login_agent.detect_login_form_context(str(observation))
+                        if _login_form_open:
+                            observation = login_agent.handle_login_form_observation(
+                                str(observation),
+                                _requested_credentials,
+                                _login_state,
+                                _task_domain,
+                                spec_guidance=_login_spec_guidance,
+                            )
+                except ObstacleInputNeeded:
+                    raise
+                except Exception as _loe:
+                    logger.warning(f"Login agent detection error (non-fatal): {_loe}")
+
+                # ── Booking/Pagination Agent: deterministic step-progress tracking ──────
+                # Runs on any multi-step flow (not gated on confirmed_inputs) so a
+                # stalled checkout/booking wizard escalates instead of looping. See
+                # src/services/booking_agent.py and booking.agent.md for the rules.
+                try:
+                    if not _captcha_type and booking_agent.detect_multistep_context(str(observation)):
+                        observation = booking_agent.handle_booking_progress_observation(
+                            str(observation),
+                            _booking_state,
+                            _task_domain,
+                            spec_guidance=_booking_spec_guidance,
+                        )
+                except ObstacleInputNeeded:
+                    raise
+                except Exception as _boe:
+                    logger.warning(f"Booking agent detection error (non-fatal): {_boe}")
 
                 # ── Obstacle detection (generic framework) — human-input types like OTP ──
                 # CAPTCHA is handled above (agent attempts to self-solve). Obstacles that
