@@ -99,7 +99,7 @@ class Message(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     message_id = Column(String(36), unique=True, default=lambda: str(uuid.uuid4()))
     chat_id = Column(String(100), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(String(36), ForeignKey("users.user_id"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
     role = Column(String(20), nullable=False)
     content = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
@@ -115,7 +115,7 @@ class ChatSession(Base):
     __tablename__ = "chat_sessions"
 
     id = Column(String(100), primary_key=True, default=lambda: f"thread-{uuid.uuid4()}")
-    user_id = Column(String(36), ForeignKey("users.user_id"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
     title = Column(String(255), nullable=False)
     status = Column(String(20), default="active")
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

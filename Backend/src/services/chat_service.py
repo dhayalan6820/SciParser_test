@@ -197,7 +197,12 @@ class ChatService:
         if user_id == acting_admin.user_id:
             raise HTTPException(status_code=400, detail="You cannot delete your own account")
         user = await ChatService.admin_get_user(db, user_id)
-        await db.execute(delete(User).where(User.user_id == user_id))
+        # Use an ORM-level delete (not a raw Core `delete(User)` statement) so the
+        # `cascade="all, delete-orphan"` relationships declared on User (messages,
+        # chat_sessions, chat_logs) actually fire. A raw DELETE bypasses the ORM
+        # unit-of-work and can either orphan rows or fail on FK constraints for
+        # users who already have chat history.
+        await db.delete(user)
         await db.commit()
         return {"status": "success"}
 

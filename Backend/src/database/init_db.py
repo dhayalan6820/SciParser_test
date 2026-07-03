@@ -61,6 +61,51 @@ async def init_database():
             await conn.execute(text(
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active'"
             ))
+            # Task #127 (post-review fix): admin user deletion must cascade to a
+            # user's owned rows instead of failing on FK constraints. messages.user_id
+            # and chat_sessions.user_id were created without ON DELETE CASCADE;
+            # re-create those constraints with CASCADE so admin_delete_user works for
+            # users who already have chat history.
+            await conn.execute(text("""
+                DO $$
+                DECLARE
+                    fk_name TEXT;
+                BEGIN
+                    SELECT tc.constraint_name INTO fk_name
+                    FROM information_schema.table_constraints tc
+                    JOIN information_schema.key_column_usage kcu
+                        ON tc.constraint_name = kcu.constraint_name
+                    WHERE tc.table_name = 'messages'
+                        AND tc.constraint_type = 'FOREIGN KEY'
+                        AND kcu.column_name = 'user_id';
+                    IF fk_name IS NOT NULL THEN
+                        EXECUTE format('ALTER TABLE messages DROP CONSTRAINT %I', fk_name);
+                    END IF;
+                    ALTER TABLE messages
+                        ADD CONSTRAINT messages_user_id_fkey
+                        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE;
+                END $$;
+            """))
+            await conn.execute(text("""
+                DO $$
+                DECLARE
+                    fk_name TEXT;
+                BEGIN
+                    SELECT tc.constraint_name INTO fk_name
+                    FROM information_schema.table_constraints tc
+                    JOIN information_schema.key_column_usage kcu
+                        ON tc.constraint_name = kcu.constraint_name
+                    WHERE tc.table_name = 'chat_sessions'
+                        AND tc.constraint_type = 'FOREIGN KEY'
+                        AND kcu.column_name = 'user_id';
+                    IF fk_name IS NOT NULL THEN
+                        EXECUTE format('ALTER TABLE chat_sessions DROP CONSTRAINT %I', fk_name);
+                    END IF;
+                    ALTER TABLE chat_sessions
+                        ADD CONSTRAINT chat_sessions_user_id_fkey
+                        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE;
+                END $$;
+            """))
             logger.info("Database tables checked/created successfully.")
 
         # Bootstrap: if no admin exists yet, promote the earliest-created user
