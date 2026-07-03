@@ -613,6 +613,77 @@ class Brain:
             return {}
         return {k: "[REDACTED]" for k in confirmed_inputs.keys()}
 
+    # ── Generic secret-value redaction (Task #118) ──────────────────────────
+    # Sensitive values (passwords, OTP/verification codes, card/CVV numbers,
+    # PINs, etc.) must never reach ANY durable table — not just the
+    # confirmed_inputs blanket redaction above, but also free-text fields
+    # like Message.content and ToolExecutionLog.tool_input/tool_output. The
+    # helpers below detect likely-sensitive field names generically (rather
+    # than hardcoding one field) and scrub known secret values out of
+    # arbitrary text before it is persisted.
+
+    _SENSITIVE_KEY_PATTERN = re.compile(
+        r"password|passwd|pwd|(?:^|[-_ ])otp(?:[-_ ]|$)|one[-_ ]?time[-_ ]?(?:code|pin|password)"
+        r"|verification[-_ ]?code|security[-_ ]?code|auth(?:entication)?[-_ ]?code"
+        r"|(?:^|[-_ ])cvv(?:[-_ ]|$)|(?:^|[-_ ])cvc(?:[-_ ]|$)|card[-_ ]?(?:number|num)"
+        r"|(?:^|[-_ ])pin(?:[-_ ]|$)|(?:^|[-_ ])ssn(?:[-_ ]|$)|\bsecret\b|\btoken\b",
+        re.IGNORECASE,
+    )
+
+    _LABELED_SECRET_PATTERN = re.compile(
+        r"(password|passwd|pwd|otp|one[-_ ]?time[-_ ]?(?:code|pin|password)|"
+        r"verification[-_ ]?code|security[-_ ]?code|auth(?:entication)?[-_ ]?code|"
+        r"cvv|cvc|card[-_ ]?(?:number|num)|pin|ssn)\s*[:=]\s*(\S+)",
+        re.IGNORECASE,
+    )
+
+    OBSTACLE_ANSWER_PLACEHOLDER_TEMPLATE = "[REDACTED — {label} value provided, not stored]"
+
+    @classmethod
+    def _is_sensitive_key(cls, key: str) -> bool:
+        """Return True if a confirmed_input field name looks like it holds a
+        password/OTP/card-style secret rather than an ordinary task detail."""
+        return bool(key) and bool(cls._SENSITIVE_KEY_PATTERN.search(str(key)))
+
+    @classmethod
+    def _extract_sensitive_values(cls, confirmed_inputs: Optional[Dict[str, Any]]) -> List[str]:
+        """Pull out the literal values of any sensitive-looking fields from a
+        confirmed_inputs dict, so they can be scrubbed out of free-text logs
+        wherever they appear (not just the field they were originally
+        collected under)."""
+        if not confirmed_inputs:
+            return []
+        values = []
+        for k, v in confirmed_inputs.items():
+            if v and cls._is_sensitive_key(k):
+                values.append(str(v))
+        return values
+
+    @staticmethod
+    def _redact_secret_values_in_text(text: Any, secret_values: List[str]) -> Any:
+        """Replace every literal occurrence of a known secret value inside
+        text with a redaction marker. Non-string input is returned as-is.
+        Values shorter than 3 chars are skipped to avoid mass-redacting
+        common short substrings by accident."""
+        if not isinstance(text, str) or not secret_values:
+            return text
+        scrubbed = text
+        for val in sorted({v for v in secret_values if v and len(v) >= 3}, key=len, reverse=True):
+            if val in scrubbed:
+                scrubbed = scrubbed.replace(val, "[REDACTED]")
+        return scrubbed
+
+    @classmethod
+    def _mask_labeled_secrets(cls, text: str) -> str:
+        """Best-effort scrub of free-text chat messages for the common
+        'Label: value' disclosure pattern (e.g. 'password: hunter2',
+        'CVV: 123'), used as defense-in-depth before ANY user message is
+        persisted — independent of whether we already know this turn is
+        answering an obstacle/credential form."""
+        if not text:
+            return text
+        return cls._LABELED_SECRET_PATTERN.sub(lambda m: f"{m.group(1)}: [REDACTED]", text)
+
     def _extract_domain_from_task(self, user_message: str, confirmed_inputs: Dict[str, Any]) -> str:
         """Extract primary domain from confirmed inputs or raw message."""
         # Try confirmed inputs first
@@ -636,7 +707,7 @@ class Brain:
         cost = (input_tokens / 1_000_000 * p["input"]) + (output_tokens / 1_000_000 * p["output"])
         return round(cost, 6)
 
-    async def _execute_tool_graph(self, graph_input: Dict[str, Any], tools: List[BaseTool], user_id: str, chat_id: str, task_summary: str, confirmed_inputs: Dict[str, Any], update_ui_func=None, memory_block: str = "") -> Dict[str, Any]:
+    async def _execute_tool_graph(self, graph_input: Dict[str, Any], tools: List[BaseTool], user_id: str, chat_id: str, task_summary: str, confirmed_inputs: Dict[str, Any], update_ui_func=None, memory_block: str = "", obstacle_answer: Optional[str] = None) -> Dict[str, Any]:
         """Executes a LangGraph tool-calling graph for the given input and tools."""
 
         # `tools` is the LIVE, MCP-discovered tool list for this session (see
@@ -663,6 +734,15 @@ class Brain:
         # CAPTCHA so we can evaluate whether it was bypassed on the next observation.
         # Shape when set: {"captcha_type": str, "skill_name": str}
         _captcha_state: Dict[str, Any] = {}
+
+        # Known secret values for THIS run (sensitive confirmed_inputs fields +
+        # any obstacle answer, e.g. an OTP code, just submitted) — scrubbed out
+        # of ToolExecutionLog rows before they're persisted. The LLM still sees
+        # the real values in `observation`/`llm_observation` below; only the
+        # durable-storage copy is redacted.
+        _run_secret_values: List[str] = self._extract_sensitive_values(confirmed_inputs)
+        if obstacle_answer:
+            _run_secret_values.append(str(obstacle_answer))
 
         # Define the logic for the agent node
         async def call_model(state: AgentState):
@@ -895,14 +975,29 @@ class Brain:
                 # Clean observation for logs (remove large base64 data)
                 clean_obs = re.sub(r'\[SCREENSHOT\].*?\[/SCREENSHOT\]', '[Image Data]', str(observation), flags=re.DOTALL)
 
+                # Scrub any known secret values (passwords, OTP codes, card/CVV, etc.)
+                # out of BOTH the tool args and the observation text before they are
+                # persisted to ToolExecutionLog. Tool args can be a dict of typed
+                # field->value pairs (e.g. {"selector": ..., "text": "123456"}) — scrub
+                # every string value, not just ones under a "sensitive-looking" key,
+                # since a generic "text"/"value" arg is exactly how a password or OTP
+                # gets typed into a form field.
+                _safe_tool_input = tool_call["args"]
+                if _run_secret_values and isinstance(_safe_tool_input, dict):
+                    _safe_tool_input = {
+                        k: self._redact_secret_values_in_text(v, _run_secret_values)
+                        for k, v in _safe_tool_input.items()
+                    }
+                _safe_tool_output = self._redact_secret_values_in_text(clean_obs[:1000], _run_secret_values)
+
                 # 3. Log the REAL result to DB
                 await self.db_manager.log_tool_execution(
                     chat_id=chat_id,
                     agent_id="3",
                     tool_name=tool_call["name"],
                     status=status,
-                    tool_input=tool_call["args"],
-                    tool_output=clean_obs[:1000] # Increased limit but kept clean
+                    tool_input=_safe_tool_input,
+                    tool_output=_safe_tool_output # Increased limit but kept clean
                 )
 
                 # --- NEW: Truncate observation for LLM history to prevent token overflow ---
@@ -1121,13 +1216,26 @@ class Brain:
                 pending_obstacle = prior_session_state.pop("pending_obstacle", None) if prior_session_state else None
                 _obstacle_attempt_count = (pending_obstacle or {}).get("attempt", 0)
 
-                # Add current message to DB
+                # Add current message to DB — but never persist the raw value if this
+                # message is directly answering an obstacle form (OTP/verification
+                # code, etc.): those values are single-use/expire and must never be
+                # readable from chat history, or a later turn's Agent-1 pass can
+                # mistake a stale code sitting in history_context for a still-valid
+                # credential and try to reuse it instead of asking for a fresh one.
+                if pending_obstacle:
+                    _obstacle_label = pending_obstacle.get("obstacle_type", "verification")
+                    _stored_content = self.OBSTACLE_ANSWER_PLACEHOLDER_TEMPLATE.format(label=_obstacle_label)
+                else:
+                    # Defense-in-depth: scrub any explicit "label: value" secret
+                    # disclosures (password/OTP/card/etc.) even outside the obstacle
+                    # flow, e.g. when a credential-input form answer is typed back.
+                    _stored_content = self._mask_labeled_secrets(user_message)
                 human_msg = Message(
                     message_id=str(uuid.uuid4()),
                     chat_id=chat_id,
                     user_id=user_id,
                     role="user",
-                    content=user_message,
+                    content=_stored_content,
                     created_at=datetime.now(timezone.utc)
                 )
                 db.add(human_msg)
@@ -1170,7 +1278,10 @@ class Brain:
                         logger.warning(f"[Memory] retrieve error (non-fatal): {_me}")
             else:
                 # --- Agent 1: Analysis (Now with history context) ---
-                await update_ui(0, "in-progress", input_data={"message": user_message})
+                # Mask any explicit "label: value" secret disclosures before this
+                # goes into AgentExecutionLog — same defense-in-depth as the
+                # Message.content scrub above.
+                await update_ui(0, "in-progress", input_data={"message": self._mask_labeled_secrets(user_message)})
 
                 # Construct a context string from history for Agent 1
                 history_context = "\n".join([f"{'User' if isinstance(m, HumanMessage) else 'AI'}: {m.content}" for m in chat_history[-5:]])
@@ -1397,6 +1508,13 @@ class Brain:
             stop_stream = asyncio.Event()
             stream_task = asyncio.create_task(self._stream_browser_frames(user_id, chat_id, stop_stream))
 
+            # Set on the first retry-loop iteration if this run is resuming from an
+            # obstacle answer (e.g. an OTP code) — threaded into _execute_tool_graph
+            # so it can scrub the raw value out of ToolExecutionLog rows. Initialized
+            # here so it's always defined at the _execute_tool_graph call site below,
+            # regardless of which branch (resume vs. fresh) executes on a given retry.
+            _otp_answer_for_redaction: Optional[str] = None
+
             while retry_count < max_retries:
                 # --- Cooperative cancellation: exit cleanly if user pressed Stop ---
                 if chat_id in self.cancelled_chats:
@@ -1429,6 +1547,7 @@ class Brain:
                         # OTP code) — feed their answer straight into the graph instead
                         # of re-planning from scratch.
                         _otp_answer = _extract_form_answer(user_message)
+                        _otp_answer_for_redaction = _otp_answer
                         mission_objective = (
                             f"The user was asked for a '{pending_obstacle.get('obstacle_type', 'verification')}' "
                             f"and responded: '{_otp_answer}'. Enter this into the corresponding field on the "
@@ -1470,7 +1589,8 @@ class Brain:
                     # 2. Execute via MCP Tool Graph
                     graph_input = {"messages": [HumanMessage(content=mission_objective)]}
                     graph_output = await self._execute_tool_graph(
-                        graph_input, all_tools, user_id, chat_id, task_summary, confirmed_inputs, update_ui_func=update_ui, memory_block=memory_block
+                        graph_input, all_tools, user_id, chat_id, task_summary, confirmed_inputs, update_ui_func=update_ui, memory_block=memory_block,
+                        obstacle_answer=_otp_answer_for_redaction
                     )
                     
                     # Capture tool calls from the graph execution

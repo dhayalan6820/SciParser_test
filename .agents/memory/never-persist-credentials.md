@@ -30,3 +30,13 @@ it's a side effect of generic execution/audit logging.
   back to whatever redacted placeholder is in the DB — treat it as missing
   and re-prompt the user. Silently using a redacted marker as if it were a
   real value is worse than asking again.
+- Chat message bodies are a redaction blind spot too: if a "history context"
+  feature re-feeds recent `Message.content` rows back into an LLM step, a
+  secret-answer message stored verbatim can resurface as if it were still a
+  valid confirmed input on a later turn (e.g. a stale/expired OTP code looking
+  reusable). Replace secret-answer messages with a fixed placeholder rather
+  than storing/pattern-matching the real text.
+- For tool-call logs, redact by *value* (any known secret value from
+  confirmed_inputs/current answer), not just by key name — a generic
+  `text`/`value` form-fill arg is exactly how a password or OTP ends up typed
+  into a page, so scrub tool_input/tool_output by matching the literal value.

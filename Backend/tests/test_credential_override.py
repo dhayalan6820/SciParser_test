@@ -149,3 +149,48 @@ def test_pending_confirmed_inputs_cache_is_in_memory_only():
     # Cache is now empty — a second resume attempt (e.g. after a restart)
     # must not find stale credentials sitting around.
     assert brain.pending_confirmed_inputs.pop(chat_id, None) is None
+
+
+# ── Task #118: never persist secrets into ToolExecutionLog ──────────────────
+#
+# Beyond confirmed_inputs (redacted above), the tool-execution graph itself
+# must scrub any known secret value (a sensitive confirmed_inputs value, or
+# the OTP code just supplied to resume an obstacle) out of tool_input/
+# tool_output before they reach ToolExecutionLog — a generic "text"/"value"
+# form-fill arg is exactly how a password or OTP gets typed into a page.
+
+def test_tool_input_dict_scrubbed_of_known_secret_values():
+    tool_args = {"selector": "#otp-field", "text": "123456"}
+    secret_values = ["123456"]
+    scrubbed = {
+        k: Brain._redact_secret_values_in_text(v, secret_values)
+        for k, v in tool_args.items()
+    }
+    assert scrubbed["selector"] == "#otp-field"
+    assert scrubbed["text"] == "[REDACTED]"
+
+
+def test_tool_output_text_scrubbed_of_known_secret_values():
+    observation = "Filled field with 123456 and clicked Submit. Success."
+    scrubbed = Brain._redact_secret_values_in_text(observation, ["123456"])
+    assert "123456" not in scrubbed
+    assert "Success" in scrubbed
+
+
+def test_run_secret_values_combines_confirmed_inputs_and_obstacle_answer():
+    confirmed_inputs = {"email": "user@example.com", "password": "hunter2"}
+    secret_values = Brain._extract_sensitive_values(confirmed_inputs)
+    otp_answer = "998877"
+    secret_values.append(otp_answer)
+
+    tool_args = {"text": "hunter2"}
+    scrubbed_args = {
+        k: Brain._redact_secret_values_in_text(v, secret_values)
+        for k, v in tool_args.items()
+    }
+    observation = "Entered 998877 into verification field."
+    scrubbed_observation = Brain._redact_secret_values_in_text(observation, secret_values)
+
+    assert scrubbed_args["text"] == "[REDACTED]"
+    assert "998877" not in scrubbed_observation
+    assert "user@example.com" not in secret_values

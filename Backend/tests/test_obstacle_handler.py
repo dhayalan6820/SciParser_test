@@ -152,3 +152,120 @@ async def test_pending_obstacle_persists_and_pops_from_session_state(sqlite_sess
 
     assert popped == pending_obstacle_state
     assert "pending_obstacle" not in prior_session_state
+
+
+# ── Task #118: never persist raw obstacle-answer values (e.g. OTP codes) ────
+#
+# Root cause of "agent reuses an expired OTP": Message.content stored the raw
+# answer, and history_context (built from the last 5 Message rows) fed it
+# back into Agent 1 on a later turn, so a stale/expired code could look like
+# a still-valid "confirmed input". The fix stores a fixed placeholder for any
+# message answering a pending obstacle, so a code can never resurface via
+# chat history.
+
+from src.services.brain import Brain
+
+
+def test_obstacle_answer_message_content_never_contains_raw_value():
+    otp_code = "483920"
+    placeholder = Brain.OBSTACLE_ANSWER_PLACEHOLDER_TEMPLATE.format(label="email_or_sms_code")
+    assert otp_code not in placeholder
+    assert "email_or_sms_code" in placeholder
+
+
+@pytest.mark.asyncio
+async def test_obstacle_answer_never_written_to_message_content_in_db(sqlite_session_factory):
+    """End-to-end version of the placeholder check: simulate the exact
+    Message-insert Brain.process_message performs when resuming a paused
+    obstacle run, and confirm the OTP code never lands in the DB row."""
+    from src.database.chat_db import Message
+    from sqlalchemy import select
+    from datetime import datetime, timezone
+    import uuid
+
+    otp_code = "998877"
+    pending_obstacle = {"obstacle_type": "email_or_sms_code"}
+    stored_content = Brain.OBSTACLE_ANSWER_PLACEHOLDER_TEMPLATE.format(
+        label=pending_obstacle.get("obstacle_type", "verification")
+    )
+
+    async with sqlite_session_factory() as db:
+        msg = Message(
+            message_id=str(uuid.uuid4()),
+            chat_id="chat-otp",
+            user_id="user-1",
+            role="user",
+            content=stored_content,
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(msg)
+        await db.commit()
+
+    async with sqlite_session_factory() as db:
+        result = await db.execute(select(Message).where(Message.chat_id == "chat-otp"))
+        row = result.scalar_one()
+        assert otp_code not in row.content
+        assert row.content == stored_content
+
+
+# ── Task #118: never persist secrets (password/OTP/card) into free text ─────
+
+def test_is_sensitive_key_matches_common_secret_field_names():
+    for key in ["password", "Password", "otp", "otp_code", "verification_code", "cvv", "card_number", "pin"]:
+        assert Brain._is_sensitive_key(key) is True
+    for key in ["email", "website", "origin_city", "task_summary"]:
+        assert Brain._is_sensitive_key(key) is False
+
+
+def test_extract_sensitive_values_pulls_only_sensitive_fields():
+    confirmed_inputs = {
+        "email": "user@example.com",
+        "password": "hunter2",
+        "otp_code": "123456",
+        "destination": "Paris",
+    }
+    values = Brain._extract_sensitive_values(confirmed_inputs)
+    assert "hunter2" in values
+    assert "123456" in values
+    assert "user@example.com" not in values
+    assert "Paris" not in values
+
+
+def test_extract_sensitive_values_handles_empty():
+    assert Brain._extract_sensitive_values(None) == []
+    assert Brain._extract_sensitive_values({}) == []
+
+
+def test_redact_secret_values_in_text_scrubs_known_values():
+    text = "Typed password hunter2 into the field and submitted OTP 123456."
+    scrubbed = Brain._redact_secret_values_in_text(text, ["hunter2", "123456"])
+    assert "hunter2" not in scrubbed
+    assert "123456" not in scrubbed
+    assert "[REDACTED]" in scrubbed
+
+
+def test_redact_secret_values_in_text_ignores_short_values_and_non_strings():
+    # Values under 3 chars are skipped to avoid mass-redacting common substrings.
+    assert Brain._redact_secret_values_in_text("ab cd", ["ab"]) == "ab cd"
+    # Non-string input passed through untouched.
+    assert Brain._redact_secret_values_in_text({"a": 1}, ["secret"]) == {"a": 1}
+    assert Brain._redact_secret_values_in_text(None, ["secret"]) is None
+
+
+def test_mask_labeled_secrets_scrubs_label_value_pairs():
+    text = "Here you go — password: hunter2 and CVV: 123"
+    masked = Brain._mask_labeled_secrets(text)
+    assert "hunter2" not in masked
+    assert "123" not in masked
+    assert "password: [REDACTED]" in masked
+    assert "CVV: [REDACTED]" in masked
+
+
+def test_mask_labeled_secrets_leaves_normal_text_untouched():
+    text = "Book me a flight to Paris next Tuesday."
+    assert Brain._mask_labeled_secrets(text) == text
+
+
+def test_mask_labeled_secrets_handles_empty():
+    assert Brain._mask_labeled_secrets("") == ""
+    assert Brain._mask_labeled_secrets(None) is None
