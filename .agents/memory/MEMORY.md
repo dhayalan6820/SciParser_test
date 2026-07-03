@@ -2,3 +2,4 @@
 - [Chrome LD_LIBRARY_PATH in Replit](chrome-nix-ldpath.md) — Chrome needs 19 Nix store lib paths; start.sh sets them before exec; do NOT use `source start.sh` (hits exec, LD_LIBRARY_PATH captured empty)
 - [CrewAI in server processes](crewai-server-processes.md) — must disable telemetry env vars or CrewAI can prompt on stdin ("view traces? y/N") and hang non-interactive server startups
 - [JWT_SECRET_KEY persistence in dev](jwt-secret-persistence.md) — unset secret auto-regenerates on every backend restart, invalidating sessions; masquerades as unrelated 401s (e.g. proxy test failures)
+- [Blocking subprocess read stalls asyncio](blocking-subprocess-read-stalls-asyncio.md) — a blocking `for line in process.stdout` in an async coroutine freezes the whole event loop, making live WS updates arrive all at once at the end

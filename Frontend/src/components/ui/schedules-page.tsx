@@ -14,7 +14,7 @@ import {
   ArrowRight, Loader2, Sparkles, User as UserIcon,
   Check, X, MoreVertical, Maximize2, ZoomIn,
   History, Timer, Gauge, Network,
-  Brain
+  Brain, HardDrive
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -102,6 +102,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
   const [currentProgress, setCurrentProgress] = React.useState(0);
   const [liveLogs, setLiveLogs] = React.useState<any[]>([]);
   const [liveScreenshot, setLiveScreenshot] = React.useState<string | null>(null);
+  const [resourceUsage, setResourceUsage] = React.useState<{ cpu_percent: number; memory_mb: number } | null>(null);
   const [runStartedAt, setRunStartedAt] = React.useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
   const [pipelineSteps, setPipelineSteps] = React.useState([
@@ -201,10 +202,13 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
             // Mark done when final step completes or any step fails
             if ((msg.step_id === 6 && msg.status === 'completed') || msg.status === 'failed') {
               setIsRunning(false);
+              setResourceUsage(null);
               setTimeout(fetchSchedules, 1500);
             }
           } else if (msg.type === 'screenshot') {
             setLiveScreenshot(msg.frame);
+          } else if (msg.type === 'resource_usage') {
+            setResourceUsage({ cpu_percent: msg.cpu_percent, memory_mb: msg.memory_mb });
           }
         } catch (err) {
           console.error("Schedule WS error:", err);
@@ -283,6 +287,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
       setCurrentProgress(0);
       setLiveLogs([]);
       setLiveScreenshot(null);
+      setResourceUsage(null);
       setRunStartedAt(Date.now());
       setElapsedSeconds(0);
       setPipelineSteps(prev => prev.map(s => ({ ...s, status: 'pending', time: '--' })));
@@ -741,6 +746,16 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                           label: 'Progress',
                           val: isRunning || currentProgress > 0 ? `${currentProgress}%` : '--',
                           icon: Activity, color: 'text-emerald-500'
+                        },
+                        {
+                          label: 'CPU',
+                          val: resourceUsage ? `${resourceUsage.cpu_percent}%` : isRunning ? '...' : '--',
+                          icon: Gauge, color: 'text-orange-500'
+                        },
+                        {
+                          label: 'Memory',
+                          val: resourceUsage ? `${resourceUsage.memory_mb.toFixed(0)} MB` : isRunning ? '...' : '--',
+                          icon: HardDrive, color: 'text-pink-500'
                         },
                         {
                           label: 'Log Lines',

@@ -6,9 +6,11 @@ import json
 import asyncio
 import smtplib
 import tempfile
+import threading
 import subprocess
 import traceback
 import httpx as _httpx
+import psutil
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, timedelta
 from email.mime.multipart import MIMEMultipart
@@ -331,6 +333,71 @@ async def _send_result_email(recipient: str, schedule_title: str, output: str) -
         logger.warning(f"Failed to send result email to {recipient}: {e}")
 
 
+def _start_resource_sampler(
+    loop: asyncio.AbstractEventLoop,
+    schedule_id: str,
+    pid: int,
+    stop_event: threading.Event,
+    interval_seconds: float = 2.0,
+) -> threading.Thread:
+    """
+    Samples real CPU/memory usage for the running automation process (and any
+    child processes it spawns, e.g. browser drivers) on a background thread and
+    broadcasts it over the schedule WebSocket as a 'resource_usage' message.
+    Runs on a dedicated OS thread (not an asyncio task) so sampling keeps
+    happening even while the main coroutine is blocked reading subprocess stdout.
+    """
+    def _sample_loop() -> None:
+        try:
+            proc = psutil.Process(pid)
+        except psutil.NoSuchProcess:
+            return
+        # Prime cpu_percent() for both the process and its children — the first
+        # call always returns 0.0 since there's no prior interval to compare to.
+        try:
+            proc.cpu_percent(interval=None)
+            for child in proc.children(recursive=True):
+                try:
+                    child.cpu_percent(interval=None)
+                except psutil.NoSuchProcess:
+                    pass
+        except psutil.NoSuchProcess:
+            return
+
+        while not stop_event.wait(interval_seconds):
+            try:
+                if not proc.is_running() or proc.status() == psutil.STATUS_ZOMBIE:
+                    break
+                cpu_percent = proc.cpu_percent(interval=None)
+                memory_bytes = proc.memory_info().rss
+                for child in proc.children(recursive=True):
+                    try:
+                        cpu_percent += child.cpu_percent(interval=None)
+                        memory_bytes += child.memory_info().rss
+                    except psutil.NoSuchProcess:
+                        continue
+            except psutil.NoSuchProcess:
+                break
+
+            try:
+                asyncio.run_coroutine_threadsafe(
+                    plan_stream_manager.broadcast_schedule_update(schedule_id, {
+                        "type": "resource_usage",
+                        "time": datetime.now(timezone.utc).strftime("%H:%M:%S"),
+                        "cpu_percent": round(cpu_percent, 1),
+                        "memory_mb": round(memory_bytes / (1024 * 1024), 1),
+                    }),
+                    loop,
+                )
+            except RuntimeError:
+                # Event loop already closed (e.g. server shutting down mid-run).
+                break
+
+    thread = threading.Thread(target=_sample_loop, daemon=True, name=f"resource-sampler-{schedule_id}")
+    thread.start()
+    return thread
+
+
 async def _run_schedule_task(schedule_id: str, run_id: str) -> None:
     """
     Core execution coroutine shared by manual runs and APScheduler auto-runs.
@@ -389,29 +456,45 @@ async def _run_schedule_task(schedule_id: str, run_id: str) -> None:
                 env=run_env,
             )
 
-            full_output: List[str] = []
-            if process.stdout:
-                for line in process.stdout:
-                    clean_line = line.strip()
-                    if clean_line:
-                        full_output.append(clean_line)
-                        await plan_stream_manager.broadcast_schedule_update(schedule_id, {
-                            "type": "log",
-                            "time": datetime.now(timezone.utc).strftime("%H:%M:%S"),
-                            "engine": current_framework,
-                            "message": clean_line,
-                        })
-                        if "[SCREENSHOT]" in clean_line:
-                            match = re.search(r'\[SCREENSHOT\](.*?)\[/SCREENSHOT\]', clean_line, re.DOTALL)
-                            if match:
-                                await plan_stream_manager.broadcast_schedule_update(schedule_id, {
-                                    "type": "screenshot",
-                                    "frame": match.group(1).strip(),
-                                })
+            resource_stop_event = threading.Event()
+            _start_resource_sampler(
+                asyncio.get_running_loop(), schedule_id, process.pid, resource_stop_event,
+            )
 
-            process.wait(timeout=300)
-            if os.path.exists(temp_path):
-                os.unlink(temp_path)
+            try:
+                full_output: List[str] = []
+                if process.stdout:
+                    loop = asyncio.get_running_loop()
+                    while True:
+                        # Read each line in a worker thread so this blocking pipe
+                        # read never stalls the asyncio event loop — otherwise no
+                        # broadcasts (log/resource_usage/pipeline_update) could be
+                        # sent to connected WebSockets until the subprocess exits.
+                        line = await loop.run_in_executor(None, process.stdout.readline)
+                        if line == "":
+                            break
+                        clean_line = line.strip()
+                        if clean_line:
+                            full_output.append(clean_line)
+                            await plan_stream_manager.broadcast_schedule_update(schedule_id, {
+                                "type": "log",
+                                "time": datetime.now(timezone.utc).strftime("%H:%M:%S"),
+                                "engine": current_framework,
+                                "message": clean_line,
+                            })
+                            if "[SCREENSHOT]" in clean_line:
+                                match = re.search(r'\[SCREENSHOT\](.*?)\[/SCREENSHOT\]', clean_line, re.DOTALL)
+                                if match:
+                                    await plan_stream_manager.broadcast_schedule_update(schedule_id, {
+                                        "type": "screenshot",
+                                        "frame": match.group(1).strip(),
+                                    })
+
+                await loop.run_in_executor(None, lambda: process.wait(timeout=300))
+            finally:
+                resource_stop_event.set()
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
 
             if process.returncode == 0:
                 # ── Success ──────────────────────────────────────────────
