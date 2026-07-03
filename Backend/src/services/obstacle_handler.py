@@ -52,9 +52,7 @@ def detect_captcha_type(observation_text: str) -> Optional[str]:
         return 'cloudflare_turnstile'
     if 'slider' in t and ('captcha' in t or 'drag' in t or 'verify' in t):
         return 'slider'
-    if ('captcha' in t or 'verification code' in t) and (
-        'type' in t or 'enter' in t or 'characters' in t
-    ):
+    if 'captcha' in t and ('type' in t or 'enter' in t or 'characters' in t):
         return 'image_text'
     return None
 
@@ -64,15 +62,37 @@ def detect_captcha_type(observation_text: str) -> Optional[str]:
 _OTP_PATTERNS = [
     r"enter the (?:code|verification code|otp)\b",
     r"one[- ]time (?:password|code|pin)\b",
-    r"\bverification code\b",
     r"\bone-time code\b",
-    r"\botp\b",
     r"enter the \d{4,8}[- ]?digit code",
     r"check your (?:email|phone|inbox) for a (?:code|pin)",
-    r"we(?:'ve| have)? (?:sent|texted|emailed) you a code",
+    r"we(?:'ve| have)? (?:sent|texted|emailed) you a (?:code|pin)",
     r"\bcode sent to\b",
-    r"\bauthentication code\b",
-    r"\bsecurity code\b.*(?:sent|emailed|texted)",
+    r"\bauthentication code\b.{0,40}(?:enter|required|below|to continue|to proceed)",
+    # These three are the "weak" signals below — a bare mention of
+    # "verification code" / "otp" / "security code" anywhere on a page (a
+    # help article, footer disclaimer, or an unrelated newsletter/SMS-signup
+    # banner) is NOT evidence the current step is actually blocked. Only
+    # treat them as a real obstacle when they appear alongside an imperative
+    # cue (enter/type/confirm/provide) or an explicit "required to continue"
+    # framing, i.e. the page is actually asking THIS action for THIS step.
+    r"(?:enter|type|input|confirm|provide).{0,30}\bverification code\b",
+    r"\bverification code\b.{0,40}(?:required|below|to continue|to proceed|has been sent|is required)",
+    r"(?:enter|type|input|confirm|provide).{0,30}\botp\b",
+    r"\botp\b.{0,40}(?:required|below|to continue|to proceed|has been sent)",
+    r"\bsecurity code\b.{0,40}(?:sent|emailed|texted)",
+]
+
+# Mentions of "code"/"verification" that are almost never an actual
+# login/identity blocker — checkout discounts, generic zip/area codes, or
+# marketing opt-ins that just describe a future/optional text message. If any
+# of these appear, treat the page as NOT presenting a real OTP obstacle even
+# if one of the (weaker) patterns above also matched nearby text.
+_OTP_FALSE_POSITIVE_CONTEXT = [
+    r"promo code", r"discount code", r"coupon code", r"referral code", r"gift code",
+    r"\bzip code\b", r"\bpostal code\b", r"\barea code\b", r"\bsource code\b", r"\bqr code\b",
+    r"sign up for texts?", r"text alerts", r"sms alerts", r"\bsubscribe\b",
+    r"\bnewsletter\b", r"join our (?:list|texting|sms)", r"opt[- ]?in",
+    r"marketing (?:texts|messages|emails)",
 ]
 
 
@@ -83,10 +103,19 @@ def detect_otp(observation_text: str) -> Optional[str]:
     Callers should check `detect_captcha_type` first — some CAPTCHA copy also
     contains the phrase "verification code", and CAPTCHA takes priority since
     the agent can attempt to self-solve it instead of asking the user.
+
+    Only trigger when the page text actually indicates THIS step is blocked
+    right now (an imperative "enter/type the code", "code sent to you", or an
+    explicit "required to continue") — a bare mention of the words
+    "verification code"/"otp" elsewhere on the page (help text, footer,
+    unrelated newsletter/SMS opt-in banner) must never pause the run and ask
+    the user for something that was never actually required.
     """
     if detect_captcha_type(observation_text):
         return None
     t = observation_text.lower()
+    if any(re.search(p, t) for p in _OTP_FALSE_POSITIVE_CONTEXT):
+        return None
     for pattern in _OTP_PATTERNS:
         if re.search(pattern, t):
             return "email_or_sms_code"

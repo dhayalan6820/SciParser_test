@@ -53,6 +53,46 @@ def test_no_obstacle_on_clean_observation():
     assert detect_otp(CLEAN_OBS) is None
 
 
+# ── Regression: bare mentions of "verification code"/"otp" elsewhere on a
+# page (help text, footer, unrelated marketing/SMS-signup banner) must never
+# pause the run and ask the user for a code that was never actually
+# required — only an imperative "enter/type/confirm the code" or an explicit
+# "code sent to you"/"required to continue" framing counts as a real block.
+
+@pytest.mark.parametrize(
+    "observation",
+    [
+        "Sign up for texts to receive exclusive deals. We'll send you a verification code to confirm your number.",
+        "FAQ: What is a verification code? It's a temporary code used to confirm your identity.",
+        "Enter your promo code at checkout to save 10%.",
+        "Need help? Chat with us. Standard SMS/OTP rates may apply for text alerts.",
+        "Your security code (CVV) is the 3-digit number on the back of your card.",
+        "Join our newsletter — verification code required to unsubscribe at any time.",
+    ],
+)
+def test_detect_otp_ignores_unrelated_page_mentions(observation):
+    assert detect_otp(observation) is None
+    assert detect_obstacle(observation) is None
+
+
+@pytest.mark.parametrize(
+    "observation",
+    [
+        "Please enter the verification code we just sent to your email to continue.",
+        "A verification code is required to continue. Enter it below.",
+        "Please enter your OTP below to proceed.",
+        "Your one-time password has been sent to your registered phone number.",
+        "We've texted you a code. Enter the 6-digit code to verify your account.",
+    ],
+)
+def test_detect_otp_still_matches_genuine_blocking_prompts(observation):
+    assert detect_otp(observation) == "email_or_sms_code"
+    match = detect_obstacle(observation)
+    assert match is not None
+    assert match.category == "otp"
+    assert match.requires_human_input is True
+
+
 def test_detect_obstacle_handles_empty_and_none():
     assert detect_obstacle("") is None
     assert detect_obstacle(None) is None
