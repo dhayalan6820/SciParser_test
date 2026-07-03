@@ -375,47 +375,47 @@ export function BrowserPreview({
             </AnimatePresence>
           </div>
 
-          <div className="h-5 w-px bg-border shrink-0" />
-
-          {/* Full Size button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsFullSize(!isFullSize)}
-            className="h-8 px-3 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent gap-1.5 shrink-0"
-          >
-            {isFullSize ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-            <span className="text-[10px] font-bold uppercase tracking-wider hidden lg:inline">
-              {isFullSize ? 'Exit' : 'Full Size'}
-            </span>
-          </Button>
-
-          {/* Close Browser — ends the live browser session entirely */}
-          {onCloseBrowser && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onCloseBrowser}
-              className="h-8 px-3 rounded-lg gap-1.5 shrink-0 text-red-500 border-red-200 hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-900/10"
-            >
-              <PowerOff className="h-3.5 w-3.5" />
-              <span className="text-[10px] font-bold uppercase tracking-wider hidden lg:inline">Close Browser</span>
-            </Button>
-          )}
-
-          {/* Close — hides the preview panel */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            className="h-8 w-8 rounded-lg text-destructive/70 hover:text-destructive hover:bg-destructive/10 shrink-0"
-          >
-            <X className="h-4 w-4" />
-          </Button>
         </div>
 
         {/* ── Browser viewport — takes all remaining height ─────────────── */}
         <div className="flex-1 relative flex flex-col overflow-hidden bg-background">
+
+          {/* Floating control bar — overlays the top of the live preview itself */}
+          <div className="absolute top-3 right-3 z-40 flex items-center gap-1.5 px-1.5 py-1.5 rounded-xl bg-background/85 backdrop-blur-md border border-border shadow-lg">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsFullSize(!isFullSize)}
+              className="h-7 px-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent gap-1.5 shrink-0"
+            >
+              {isFullSize ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+              <span className="text-[10px] font-bold uppercase tracking-wider">
+                {isFullSize ? 'Exit' : 'Full Size'}
+              </span>
+            </Button>
+
+            {onCloseBrowser && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onCloseBrowser}
+                className="h-7 px-2.5 rounded-lg gap-1.5 shrink-0 text-red-500 border-red-200 hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-900/10"
+              >
+                <PowerOff className="h-3.5 w-3.5" />
+                <span className="text-[10px] font-bold uppercase tracking-wider">Close Browser</span>
+              </Button>
+            )}
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              className="h-7 w-7 rounded-lg text-destructive/70 hover:text-destructive hover:bg-destructive/10 shrink-0"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+
           {frame ? (
             <div
               ref={viewportRef}
