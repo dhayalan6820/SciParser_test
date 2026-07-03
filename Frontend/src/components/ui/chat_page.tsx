@@ -3258,18 +3258,6 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     <span className="hidden md:inline">{proxyActive ? "Proxy On" : "Proxy"}</span>
                   </Button>
 
-                  {browserActive && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleCloseBrowser}
-                      className="gap-1.5 text-xs font-semibold shrink-0 text-red-500 border-red-200 hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-900/10"
-                    >
-                      <XIcon className="w-4 h-4" />
-                      <span className="hidden md:inline">Close Browser</span>
-                    </Button>
-                  )}
-
                   {activeThreadId && !isAiTyping && (
                     <Button
                       variant="outline"
@@ -3479,6 +3467,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     frame={browserFrame}
                     isActive={browserActive}
                     onClose={() => setBrowserActive(false)}
+                    onCloseBrowser={handleCloseBrowser}
                     toolLogs={toolLogs}
                     isAiTyping={isAiTyping}
                     activeThreadId={activeThreadId}

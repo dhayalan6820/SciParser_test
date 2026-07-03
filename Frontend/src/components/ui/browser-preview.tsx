@@ -4,7 +4,7 @@ import {
   Maximize2, Minimize2, X, Terminal, Code, Check,
   Search, Trash2, ZoomIn, ZoomOut, Grid3X3,
   Loader2, AlertCircle, ShieldCheck, Wifi, WifiOff, CheckCircle2,
-  ChevronUp, ChevronDown
+  ChevronUp, ChevronDown, PowerOff
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../../../lib/utils';
@@ -31,6 +31,7 @@ interface BrowserPreviewProps {
   onToggleToolSelection?: (id: string) => void;
   onClearLogs?: () => void;
   browserEngine?: "camoufox" | "chrome" | null;
+  onCloseBrowser?: () => void;
 }
 
 export function BrowserPreview({ 
@@ -46,6 +47,7 @@ export function BrowserPreview({
   onToggleToolSelection,
   onClearLogs,
   browserEngine,
+  onCloseBrowser,
 }: BrowserPreviewProps) {
   const [isFullSize, setIsFullSize]       = useState(false);
   const [zoom, setZoom]                   = useState(100);
@@ -388,7 +390,20 @@ export function BrowserPreview({
             </span>
           </Button>
 
-          {/* Close */}
+          {/* Close Browser — ends the live browser session entirely */}
+          {onCloseBrowser && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onCloseBrowser}
+              className="h-8 px-3 rounded-lg gap-1.5 shrink-0 text-red-500 border-red-200 hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-900/10"
+            >
+              <PowerOff className="h-3.5 w-3.5" />
+              <span className="text-[10px] font-bold uppercase tracking-wider hidden lg:inline">Close Browser</span>
+            </Button>
+          )}
+
+          {/* Close — hides the preview panel */}
           <Button
             variant="ghost"
             size="icon"
