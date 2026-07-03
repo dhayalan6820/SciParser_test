@@ -1,3 +1,7 @@
 2026-07-01 19:35:17 | INFO     | sciparser | [Memory] Seeded 6 CAPTCHA skills.
 2026-07-02 04:45:07 | INFO     | sciparser | [Memory] Seeded 6 CAPTCHA skills.
 2026-07-03 10:05:16 | INFO     | sciparser | broadcast_frame: user=user-1 connections=0 frame_len=26
+2026-07-03 21:03:09 | INFO     | sciparser | Creating/verifying database tables...
+2026-07-03 21:03:09 | INFO     | sciparser | Creating/verifying database tables...
+2026-07-03 21:03:09 | INFO     | sciparser | Database tables checked/created successfully.
+2026-07-03 21:03:09 | INFO     | sciparser | Database tables checked/created successfully.

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { sciparserApi, AdminAgentRun, AdminAgentRunTimeline } from "../../../api";
-import { KPICard, Panel, EmptyState, LoadingState, StatusBadge, formatRelativeTime } from "./shared";
+import { KPICard, Panel, EmptyState, LoadingState, StatusBadge, formatRelativeTime, useAutoRefresh, RefreshButton } from "./shared";
 import {
   Bot,
   Loader2,
@@ -73,6 +73,14 @@ export const AgentMonitoringTab: React.FC = () => {
   React.useEffect(() => {
     load(page, statusFilter, search, sortBy, sortDir);
   }, [page, statusFilter, search, sortBy, sortDir, load]);
+
+  const isLiveFilter = statusFilter === "" || statusFilter === "IN_PROGRESS" || statusFilter === "PENDING";
+
+  useAutoRefresh(
+    () => load(page, statusFilter, search, sortBy, sortDir),
+    15000,
+    isLiveFilter
+  );
 
   React.useEffect(() => {
     const handle = setTimeout(() => {
@@ -171,10 +179,15 @@ export const AgentMonitoringTab: React.FC = () => {
                 </option>
               ))}
             </select>
+            <RefreshButton
+              onClick={() => load(page, statusFilter, search, sortBy, sortDir)}
+              loading={loading}
+              live={isLiveFilter}
+            />
           </div>
         }
       >
-        {loading ? (
+        {loading && runs.length === 0 ? (
           <LoadingState />
         ) : error ? (
           <div className="text-sm text-red-500 py-6 text-center">{error}</div>

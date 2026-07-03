@@ -1,6 +1,6 @@
 import * as React from "react";
 import { sciparserApi, AdminAutomation } from "../../../api";
-import { KPICard, Panel, EmptyState, LoadingState, StatusBadge, formatRelativeTime } from "./shared";
+import { KPICard, Panel, EmptyState, LoadingState, StatusBadge, formatRelativeTime, useAutoRefresh, RefreshButton } from "./shared";
 import { Calendar, CheckCircle2, XCircle, Repeat, Search, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
 
 const PAGE_SIZE = 15;
@@ -54,22 +54,31 @@ export const AutomationMonitoringTab: React.FC = () => {
     return () => clearTimeout(handle);
   }, [searchInput]);
 
-  React.useEffect(() => {
-    (async () => {
-      try {
-        const res = await sciparserApi.adminGetAutomations(1, 100);
-        const all = res.automations;
-        setSummary({
-          totalRuns: all.reduce((sum, a) => sum + a.total_runs, 0),
-          totalSuccess: all.reduce((sum, a) => sum + a.success_runs, 0),
-          totalFailed: all.reduce((sum, a) => sum + a.failed_runs, 0),
-          active: all.filter((a) => a.status === "active").length,
-        });
-      } catch {
-        // summary is best-effort; ignore failures
-      }
-    })();
+  const loadSummary = React.useCallback(async () => {
+    try {
+      const res = await sciparserApi.adminGetAutomations(1, 100);
+      const all = res.automations;
+      setSummary({
+        totalRuns: all.reduce((sum, a) => sum + a.total_runs, 0),
+        totalSuccess: all.reduce((sum, a) => sum + a.success_runs, 0),
+        totalFailed: all.reduce((sum, a) => sum + a.failed_runs, 0),
+        active: all.filter((a) => a.status === "active").length,
+      });
+    } catch {
+      // summary is best-effort; ignore failures
+    }
   }, []);
+
+  React.useEffect(() => {
+    loadSummary();
+  }, [loadSummary]);
+
+  const refreshAll = React.useCallback(() => {
+    load(page, search, sortBy, sortDir);
+    loadSummary();
+  }, [load, loadSummary, page, search, sortBy, sortDir]);
+
+  useAutoRefresh(refreshAll, 20000, true);
 
   const toggleSort = (value: string) => {
     if (sortBy === value) {
@@ -121,10 +130,11 @@ export const AutomationMonitoringTab: React.FC = () => {
             >
               <ArrowUpDown className="h-3.5 w-3.5" />
             </button>
+            <RefreshButton onClick={refreshAll} loading={loading} live />
           </div>
         }
       >
-        {loading ? (
+        {loading && automations.length === 0 ? (
           <LoadingState />
         ) : error ? (
           <div className="text-sm text-red-500 py-6 text-center">{error}</div>

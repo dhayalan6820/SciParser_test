@@ -1,8 +1,50 @@
 import * as React from "react";
 import { motion } from "framer-motion";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, RefreshCw } from "lucide-react";
 import { cn } from "../../../../lib/utils";
+
+export function useDocumentVisible(): boolean {
+  const [visible, setVisible] = React.useState(() => typeof document === "undefined" || document.visibilityState === "visible");
+
+  React.useEffect(() => {
+    const handler = () => setVisible(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", handler);
+    return () => document.removeEventListener("visibilitychange", handler);
+  }, []);
+
+  return visible;
+}
+
+export function useAutoRefresh(callback: () => void, intervalMs: number, enabled: boolean = true) {
+  const savedCallback = React.useRef(callback);
+  const isVisible = useDocumentVisible();
+
+  React.useEffect(() => {
+    savedCallback.current = callback;
+  }, [callback]);
+
+  React.useEffect(() => {
+    if (!enabled || !isVisible) return;
+    const interval = setInterval(() => savedCallback.current(), intervalMs);
+    return () => clearInterval(interval);
+  }, [enabled, isVisible, intervalMs]);
+}
+
+export const RefreshButton: React.FC<{ onClick: () => void; loading?: boolean; live?: boolean }> = ({ onClick, loading, live }) => (
+  <button
+    onClick={onClick}
+    disabled={loading}
+    title={live ? "Auto-refreshing — click to refresh now" : "Refresh now"}
+    className="inline-flex items-center gap-1.5 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 disabled:opacity-50"
+  >
+    <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+    {live && <span className="relative flex h-1.5 w-1.5">
+      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+    </span>}
+  </button>
+);
 
 export const fadeIn = {
   initial: { opacity: 0, y: 8 },
