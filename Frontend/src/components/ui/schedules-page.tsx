@@ -8,7 +8,7 @@ import {
   Calendar, Clock, Code, Play, Pencil, Trash, 
   ChevronLeft, Mail, CheckCircle2, AlertCircle,
   ExternalLink, Copy, Download, RefreshCw, Pause,
-  ChevronRight, Activity, Cpu, Database, Globe,
+  ChevronRight, Activity, Cpu, Globe,
   Layout, Layers, Zap, Shield, Info, Search,
   Terminal, Workflow, Target, MessageSquare,
   ArrowRight, Loader2, Sparkles, User as UserIcon,
@@ -101,6 +101,8 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
   const [currentProgress, setCurrentProgress] = React.useState(0);
   const [liveLogs, setLiveLogs] = React.useState<any[]>([]);
   const [liveScreenshot, setLiveScreenshot] = React.useState<string | null>(null);
+  const [runStartedAt, setRunStartedAt] = React.useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
   const [pipelineSteps, setPipelineSteps] = React.useState([
     { id: 1, name: "Initialize", status: "pending", duration: "--", time: "--" },
     { id: 2, name: "Generate Plan", status: "pending", duration: "--", time: "--" },
@@ -161,6 +163,15 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
       console.error("Failed to fetch runs:", err);
     }
   };
+
+  // Live elapsed-time ticker while a run is in progress
+  React.useEffect(() => {
+    if (!isRunning || !runStartedAt) return;
+    const tick = () => setElapsedSeconds(Math.floor((Date.now() - runStartedAt) / 1000));
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [isRunning, runStartedAt]);
 
   // WebSocket for real-time monitoring — reconnects if dropped while running
   React.useEffect(() => {
@@ -271,6 +282,8 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
       setCurrentProgress(0);
       setLiveLogs([]);
       setLiveScreenshot(null);
+      setRunStartedAt(Date.now());
+      setElapsedSeconds(0);
       setPipelineSteps(prev => prev.map(s => ({ ...s, status: 'pending', time: '--' })));
       
       await sciparserApi.runSchedule(selectedSchedule.schedule_id);
@@ -712,14 +725,32 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                 {/* Right Column - Summary & Browser */}
                 <div className="col-span-1 xl:col-span-4 space-y-6 min-w-0">
 
-                  {/* Execution Summary - compact strip */}
+                  {/* Execution Summary - compact strip, backed by real run data */}
                   <div className="bg-card/40 rounded-[32px] border border-border p-4 sm:p-5">
                     <div className="grid grid-cols-2 gap-3">
                       {[
-                        { label: 'Memory', val: '245 MB', icon: Database, color: 'text-indigo-500' },
-                        { label: 'CPU', val: '12%', icon: Activity, color: 'text-emerald-500' },
-                        { label: 'Network', val: 'Stable', icon: Network, color: 'text-blue-500' },
-                        { label: 'Browser', val: 'Active', icon: Globe, color: 'text-purple-500' }
+                        {
+                          label: 'Elapsed',
+                          val: isRunning || elapsedSeconds > 0
+                            ? `${Math.floor(elapsedSeconds / 60)}:${String(elapsedSeconds % 60).padStart(2, '0')}`
+                            : '--',
+                          icon: Timer, color: 'text-indigo-500'
+                        },
+                        {
+                          label: 'Progress',
+                          val: isRunning || currentProgress > 0 ? `${currentProgress}%` : '--',
+                          icon: Activity, color: 'text-emerald-500'
+                        },
+                        {
+                          label: 'Log Lines',
+                          val: String(liveLogs.length),
+                          icon: Network, color: 'text-blue-500'
+                        },
+                        {
+                          label: 'Browser',
+                          val: liveScreenshot ? 'Streaming' : isRunning ? 'Connecting' : 'Idle',
+                          icon: Globe, color: 'text-purple-500'
+                        }
                       ].map((item, i) => (
                         <div key={i} className="flex items-center gap-2 p-2.5 rounded-xl bg-background border border-border min-w-0">
                           <item.icon className={cn("w-3.5 h-3.5 shrink-0", item.color)} />
