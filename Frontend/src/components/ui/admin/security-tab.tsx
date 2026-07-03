@@ -12,6 +12,7 @@ export const SecurityTab: React.FC = () => {
   const [endDate, setEndDate] = React.useState("");
   const [userInput, setUserInput] = React.useState("");
   const [userFilter, setUserFilter] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState("");
 
   React.useEffect(() => {
     const handle = setTimeout(() => setUserFilter(userInput.trim()), 350);
@@ -28,6 +29,7 @@ export const SecurityTab: React.FC = () => {
           startDate: startDate || undefined,
           endDate: endDate || undefined,
           user: userFilter || undefined,
+          status: statusFilter || undefined,
         });
         if (!cancelled) setSecurity(res);
       } catch (err) {
@@ -39,14 +41,15 @@ export const SecurityTab: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [startDate, endDate, userFilter]);
+  }, [startDate, endDate, userFilter, statusFilter]);
 
-  const hasActiveFilters = !!(startDate || endDate || userFilter);
+  const hasActiveFilters = !!(startDate || endDate || userFilter || statusFilter);
   const clearFilters = () => {
     setStartDate("");
     setEndDate("");
     setUserInput("");
     setUserFilter("");
+    setStatusFilter("");
   };
 
   if (loading) return <LoadingState />;
@@ -80,6 +83,18 @@ export const SecurityTab: React.FC = () => {
           className="text-sm rounded-md border border-slate-200 dark:border-slate-800 bg-transparent px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           aria-label="End date"
         />
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="text-sm rounded-md border border-slate-200 dark:border-slate-800 bg-transparent px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          aria-label="Section filter"
+        >
+          <option value="">All sections</option>
+          <option value="suspended">Suspended accounts</option>
+          <option value="signup">Recent signups</option>
+          <option value="login">Recent logins</option>
+          <option value="login_failed">Failed logins</option>
+        </select>
         {hasActiveFilters && (
           <button
             onClick={clearFilters}

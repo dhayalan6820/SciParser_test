@@ -826,7 +826,7 @@ export const sciparserApi = {
   },
 
   // Admin: Security Overview
-  adminGetSecurity: async (filters?: { startDate?: string; endDate?: string; user?: string }) => {
+  adminGetSecurity: async (filters?: { startDate?: string; endDate?: string; user?: string; status?: string }) => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
@@ -834,6 +834,7 @@ export const sciparserApi = {
     if (filters?.startDate) params.set("start_date", filters.startDate);
     if (filters?.endDate) params.set("end_date", filters.endDate);
     if (filters?.user) params.set("user", filters.user);
+    if (filters?.status) params.set("status", filters.status);
     const qs = params.toString();
     const res = await fetch(`${BASE_URL}/sciparser/v1/admin/security${qs ? `?${qs}` : ""}`, {
       headers: { Authorization: formattedToken },

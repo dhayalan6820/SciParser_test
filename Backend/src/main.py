@@ -873,10 +873,13 @@ async def admin_security(
     start_date: Optional[str] = Query(None, description="Inclusive start date, YYYY-MM-DD"),
     end_date: Optional[str] = Query(None, description="Inclusive end date, YYYY-MM-DD"),
     user: Optional[str] = Query(None, description="Fuzzy match against username/email"),
+    status: Optional[str] = Query(None, description="Filter to one section: suspended/signup/login/login_failed"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    return await ChatService.admin_get_security_overview(db, start_date=start_date, end_date=end_date, user=user)
+    return await ChatService.admin_get_security_overview(
+        db, start_date=start_date, end_date=end_date, user=user, status=status,
+    )
 # --- Upload Endpoints ---
 
 @app.post("/sciparser/v1/upload/metadata")

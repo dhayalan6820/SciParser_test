@@ -706,7 +706,22 @@ class ChatService:
             agent_logs = (await db.execute(stmt)).scalars().all()
         for log in agent_logs:
             status_upper = (log.status or "").upper()
+            derived_type = None
             if status_upper in ("FAILED", "ERROR"):
+                derived_type = "agent_failure"
+            elif status_upper in ("PENDING", "IN_PROGRESS"):
+                derived_type = "agent_run_started"
+            elif status_upper in ("COMPLETED", "SUCCESS", "DONE"):
+                derived_type = "agent_run_completed"
+
+            if derived_type is None:
+                continue
+            # type_filter narrows agent logs to one derived type; skip the rest so e.g.
+            # "Agent failures" never surfaces started/completed items alongside it.
+            if type_filter is not None and type_filter != derived_type:
+                continue
+
+            if derived_type == "agent_failure":
                 items.append({
                     "type": "agent_failure",
                     "title": f"Agent stage \"{log.stage_name}\" failed",
@@ -714,7 +729,7 @@ class ChatService:
                     "status": log.status,
                     "timestamp": log.created_at,
                 })
-            elif status_upper in ("PENDING", "IN_PROGRESS"):
+            elif derived_type == "agent_run_started":
                 items.append({
                     "type": "agent_run_started",
                     "title": f"Agent stage \"{log.stage_name}\" started",
@@ -722,7 +737,7 @@ class ChatService:
                     "status": log.status,
                     "timestamp": log.created_at,
                 })
-            elif status_upper in ("COMPLETED", "SUCCESS", "DONE"):
+            elif derived_type == "agent_run_completed":
                 items.append({
                     "type": "agent_run_completed",
                     "title": f"Agent stage \"{log.stage_name}\" completed",
@@ -996,13 +1011,16 @@ class ChatService:
     async def admin_get_security_overview(
         db: AsyncSession,
         start_date: Optional[str] = None, end_date: Optional[str] = None, user: Optional[str] = None,
+        status: Optional[str] = None,
     ) -> dict:
         """Suspended accounts, recent signups, and recent login events.
 
         Supports an optional inclusive date range (start_date/end_date, YYYY-MM-DD) applied to each
         list's own date column (suspended_users: updated_at, recent_signups: created_at, logins:
-        created_at), plus a fuzzy `user` match against username/email (or username_attempted for
-        login events).
+        created_at), a fuzzy `user` match against username/email (or username_attempted for login
+        events), and an optional `status` filter (one of suspended/signup/login/login_failed) that
+        restricts the response to just that one section — the other lists are returned empty rather
+        than omitted, so the response shape stays stable for the frontend.
         """
         from src.database.chat_db import LoginEvent
         from sqlalchemy import or_
@@ -1010,39 +1028,63 @@ class ChatService:
         start_dt, end_dt = ChatService._parse_admin_date_range(start_date, end_date)
         user_pattern = f"%{user.strip()}%" if user and user.strip() else None
 
-        suspended_stmt = select(User).where(User.status == "suspended").order_by(User.updated_at.desc())
-        if start_dt:
-            suspended_stmt = suspended_stmt.where(User.updated_at >= start_dt)
-        if end_dt:
-            suspended_stmt = suspended_stmt.where(User.updated_at <= end_dt)
-        if user_pattern:
-            suspended_stmt = suspended_stmt.where(or_(User.username.ilike(user_pattern), User.email.ilike(user_pattern)))
-        suspended = (await db.execute(suspended_stmt)).scalars().all()
+        valid_statuses = {"suspended", "signup", "login", "login_failed"}
+        status_filter = status.strip().lower() if status and status.strip() else None
+        if status_filter is not None and status_filter not in valid_statuses:
+            raise HTTPException(
+                status_code=422,
+                detail=f"status must be one of {sorted(valid_statuses)}",
+            )
 
-        recent_stmt = select(User).order_by(User.created_at.desc())
-        if start_dt:
-            recent_stmt = recent_stmt.where(User.created_at >= start_dt)
-        if end_dt:
-            recent_stmt = recent_stmt.where(User.created_at <= end_dt)
-        if user_pattern:
-            recent_stmt = recent_stmt.where(or_(User.username.ilike(user_pattern), User.email.ilike(user_pattern)))
-        recent_stmt = recent_stmt.limit(50 if (start_dt or end_dt or user_pattern) else 10)
-        recent = (await db.execute(recent_stmt)).scalars().all()
+        include_suspended = status_filter is None or status_filter == "suspended"
+        include_signups = status_filter is None or status_filter == "signup"
+        include_logins = status_filter is None or status_filter == "login"
+        include_failed_logins = status_filter is None or status_filter == "login_failed"
 
-        recent_logins_stmt = select(LoginEvent).where(LoginEvent.success == True).order_by(LoginEvent.created_at.desc())
-        failed_logins_stmt = select(LoginEvent).where(LoginEvent.success == False).order_by(LoginEvent.created_at.desc())
-        if start_dt:
-            recent_logins_stmt = recent_logins_stmt.where(LoginEvent.created_at >= start_dt)
-            failed_logins_stmt = failed_logins_stmt.where(LoginEvent.created_at >= start_dt)
-        if end_dt:
-            recent_logins_stmt = recent_logins_stmt.where(LoginEvent.created_at <= end_dt)
-            failed_logins_stmt = failed_logins_stmt.where(LoginEvent.created_at <= end_dt)
-        if user_pattern:
-            recent_logins_stmt = recent_logins_stmt.where(LoginEvent.username_attempted.ilike(user_pattern))
-            failed_logins_stmt = failed_logins_stmt.where(LoginEvent.username_attempted.ilike(user_pattern))
-        limit_n = 50 if (start_dt or end_dt or user_pattern) else 20
-        recent_logins = (await db.execute(recent_logins_stmt.limit(limit_n))).scalars().all()
-        failed_logins = (await db.execute(failed_logins_stmt.limit(limit_n))).scalars().all()
+        suspended = []
+        if include_suspended:
+            suspended_stmt = select(User).where(User.status == "suspended").order_by(User.updated_at.desc())
+            if start_dt:
+                suspended_stmt = suspended_stmt.where(User.updated_at >= start_dt)
+            if end_dt:
+                suspended_stmt = suspended_stmt.where(User.updated_at <= end_dt)
+            if user_pattern:
+                suspended_stmt = suspended_stmt.where(or_(User.username.ilike(user_pattern), User.email.ilike(user_pattern)))
+            suspended = (await db.execute(suspended_stmt)).scalars().all()
+
+        recent = []
+        if include_signups:
+            recent_stmt = select(User).order_by(User.created_at.desc())
+            if start_dt:
+                recent_stmt = recent_stmt.where(User.created_at >= start_dt)
+            if end_dt:
+                recent_stmt = recent_stmt.where(User.created_at <= end_dt)
+            if user_pattern:
+                recent_stmt = recent_stmt.where(or_(User.username.ilike(user_pattern), User.email.ilike(user_pattern)))
+            recent_stmt = recent_stmt.limit(50 if (start_dt or end_dt or user_pattern or status_filter) else 10)
+            recent = (await db.execute(recent_stmt)).scalars().all()
+
+        recent_logins = []
+        failed_logins = []
+        limit_n = 50 if (start_dt or end_dt or user_pattern or status_filter) else 20
+        if include_logins:
+            recent_logins_stmt = select(LoginEvent).where(LoginEvent.success == True).order_by(LoginEvent.created_at.desc())
+            if start_dt:
+                recent_logins_stmt = recent_logins_stmt.where(LoginEvent.created_at >= start_dt)
+            if end_dt:
+                recent_logins_stmt = recent_logins_stmt.where(LoginEvent.created_at <= end_dt)
+            if user_pattern:
+                recent_logins_stmt = recent_logins_stmt.where(LoginEvent.username_attempted.ilike(user_pattern))
+            recent_logins = (await db.execute(recent_logins_stmt.limit(limit_n))).scalars().all()
+        if include_failed_logins:
+            failed_logins_stmt = select(LoginEvent).where(LoginEvent.success == False).order_by(LoginEvent.created_at.desc())
+            if start_dt:
+                failed_logins_stmt = failed_logins_stmt.where(LoginEvent.created_at >= start_dt)
+            if end_dt:
+                failed_logins_stmt = failed_logins_stmt.where(LoginEvent.created_at <= end_dt)
+            if user_pattern:
+                failed_logins_stmt = failed_logins_stmt.where(LoginEvent.username_attempted.ilike(user_pattern))
+            failed_logins = (await db.execute(failed_logins_stmt.limit(limit_n))).scalars().all()
 
         return {
             "suspended_users": [
