@@ -93,7 +93,7 @@ const Signup1 = ({
                 src={resolvedLogo.src}
                 alt={resolvedLogo.alt}
                 title={resolvedLogo.title}
-                className="h-20 w-auto object-contain hover:scale-105 transition-transform"
+                className="h-50 w-auto  hover:scale-105 transition-transform"
               />
             </a>
           </div>
