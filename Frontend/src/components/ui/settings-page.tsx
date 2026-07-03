@@ -21,12 +21,15 @@ import {
   WifiOff,
   Server,
   Zap,
+  RefreshCw,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface SettingsPageProps {
   onBack: () => void;
   userProfile: { username: string; email: string } | null;
+  activeThreadId?: string | null;
+  onResetSession?: () => Promise<void> | void;
 }
 
 const PROXY_PROVIDERS = [
@@ -36,8 +39,11 @@ const PROXY_PROVIDERS = [
   { name: "IPRoyal", example: "http://user:pass@geo.iproyal.com:12321" },
 ];
 
-export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile }) => {
+export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile, activeThreadId, onResetSession }) => {
   const { theme } = useTheme();
+
+  const [resettingSession, setResettingSession] = React.useState(false);
+  const [sessionReset, setSessionReset] = React.useState(false);
 
   const [proxyActive, setProxyActive] = React.useState(false);
   const [proxyUrlMasked, setProxyUrlMasked] = React.useState<string | null>(null);
@@ -149,6 +155,19 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile 
     });
   };
 
+  const handleResetSession = async () => {
+    if (!onResetSession || resettingSession) return;
+    setResettingSession(true);
+    setSessionReset(false);
+    try {
+      await onResetSession();
+      setSessionReset(true);
+      setTimeout(() => setSessionReset(false), 3000);
+    } finally {
+      setResettingSession(false);
+    }
+  };
+
   return (
     <div className="flex h-full flex-col bg-background overflow-hidden">
       {/* Page header */}
@@ -167,6 +186,52 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile 
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+
+        {/* ── Session Section ───────────────────────────────────── */}
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <RefreshCw className="h-4 w-4 text-amber-400" />
+            <h2 className="text-sm font-bold text-foreground uppercase tracking-widest">Session</h2>
+          </div>
+          <div className="rounded-2xl border border-border bg-card px-5 py-4">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/20">
+                <Info className="h-3.5 w-3.5 text-amber-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-foreground mb-1">Reset Session</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Clears the saved browser state (cookies, login, current page) for your open chat, so the
+                  next message starts from a completely fresh browser instead of continuing where the last
+                  run left off. Use this if a chat gets stuck on a broken page or logged-in state.
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 flex items-center gap-3">
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 text-xs font-semibold text-amber-500 border-amber-200 hover:bg-amber-50 dark:border-amber-900/30 dark:hover:bg-amber-900/10 disabled:opacity-40"
+                onClick={handleResetSession}
+                disabled={!activeThreadId || resettingSession}
+                title={!activeThreadId ? "Open a chat first to reset its session" : "Clear the saved browser session so the next message starts from scratch"}
+              >
+                {resettingSession
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <RefreshCw className="h-3.5 w-3.5" />}
+                {resettingSession ? "Resetting…" : "Reset Session"}
+              </Button>
+              {!activeThreadId && (
+                <span className="text-[11px] text-muted-foreground/70">Open a chat to enable this.</span>
+              )}
+              {sessionReset && (
+                <span className="flex items-center gap-1.5 text-xs text-emerald-400">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Session reset
+                </span>
+              )}
+            </div>
+          </div>
+        </section>
 
         {/* ── Proxy Section ─────────────────────────────────────── */}
         <section>
