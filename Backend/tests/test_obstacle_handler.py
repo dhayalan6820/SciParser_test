@@ -79,6 +79,25 @@ def test_build_input_form_for_otp_matches_needs_input_schema():
     assert "security_note" in form
 
 
+def test_build_input_form_otp_retry_requests_new_code_never_implies_reuse():
+    """When the SAME obstacle recurs after the user already answered once
+    (is_retry=True), the prompt must explicitly say the previous code didn't
+    work and ask for a NEW one — it must never silently resubmit the stale
+    value or word the prompt as if this were the first ask."""
+    match = ObstacleMatch(category="otp", obstacle_type="email_or_sms_code", requires_human_input=True)
+
+    first_form = build_input_form(match, "example.com", is_retry=False)
+    retry_form = build_input_form(match, "example.com", is_retry=True)
+
+    assert retry_form["description"] != first_form["description"]
+    retry_desc_lower = retry_form["description"].lower()
+    assert "new" in retry_desc_lower
+    assert any(word in retry_desc_lower for word in ("didn't work", "expired", "already been used"))
+    # Still the same well-formed OTP form schema, just different copy.
+    assert retry_form["obstacle_category"] == "otp"
+    assert len(retry_form["sections"]) == 1
+
+
 def test_build_input_form_unknown_category_falls_back_gracefully():
     match = ObstacleMatch(category="future_type", obstacle_type="x", requires_human_input=True)
     form = build_input_form(match, "example.com")

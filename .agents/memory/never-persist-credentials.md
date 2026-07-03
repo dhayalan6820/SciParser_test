@@ -40,3 +40,20 @@ it's a side effect of generic execution/audit logging.
   confirmed_inputs/current answer), not just by key name — a generic
   `text`/`value` form-fill arg is exactly how a password or OTP ends up typed
   into a page, so scrub tool_input/tool_output by matching the literal value.
+- A single logical "execution history" can have more than one durable write
+  site (e.g. a step-execution log table AND a chat message's history column
+  built from the same in-memory list). Value-based scrubbing must be applied
+  at *every* site independently — fixing one and assuming the other inherits
+  it is the most common way this kind of leak survives a first fix attempt.
+- Some execution-audit rows are written *before* the secret value is even
+  known (e.g. a "stage started" log fired on the raw user message, before an
+  extraction step parses out which fields are sensitive). A pre-hoc label-based
+  mask can't catch free-text disclosures at that point. Fix: log first, then
+  once the sensitive fields are known, retroactively re-read and rewrite the
+  already-persisted row(s) by primary key — track written row IDs in the same
+  scope so the retroactive pass has something to target.
+- When a "resubmit last value" bug is fixed by re-prompting instead, also
+  update the re-prompt's copy to explicitly say the previous value didn't
+  work / has expired and a new one is needed — silently re-asking with the
+  exact same wording as the first prompt reads as if nothing happened and
+  invites the user to resend the same stale value.

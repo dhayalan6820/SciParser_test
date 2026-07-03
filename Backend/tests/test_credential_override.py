@@ -235,6 +235,74 @@ async def test_free_text_secret_disclosure_redacted_using_confirmed_inputs(sqlit
         assert "user@example.com" in row.content
 
 
+# ── Task #118: never persist secrets into AgentExecutionLog ─────────────────
+#
+# The stage-0 "in-progress" AgentExecutionLog row is written before Agent-1
+# has extracted confirmed_inputs, so a free-text secret disclosure in the raw
+# user_message (not caught by the label:value regex) can only be caught
+# retroactively — the same pattern already used for Message.content above,
+# applied to AgentExecutionLog.input_data/output_data/error_message instead.
+
+@pytest.mark.asyncio
+async def test_agent_execution_log_retroactively_scrubbed_of_free_text_secret(sqlite_session_factory):
+    """Simulates Brain.process_message's update_ui()+_rescrub_agent_execution_logs
+    flow end-to-end against a real AgentExecutionLog row: log a stage-0 row with
+    a free-text secret the label:value regex misses, then once confirmed_inputs
+    is known (post Agent-1), retroactively scrub it — the row must never keep
+    the raw value."""
+    from src.database.chat_db import AgentExecutionLog
+    from sqlalchemy import select
+    import json
+
+    raw_message = "Log in with my email user@example.com, use hunter2 as my password"
+    confirmed_inputs = {"email": "user@example.com", "password": "hunter2"}
+
+    # Step 1: stage-0 logging, same as update_ui(0, "in-progress", input_data=...)
+    # BEFORE confirmed_inputs is known — only the label:value mask applies.
+    stage0_input = {"message": Brain._mask_labeled_secrets(raw_message)}
+    assert "hunter2" in stage0_input["message"]
+
+    async with sqlite_session_factory() as db:
+        log = AgentExecutionLog(
+            user_id="user-1",
+            chat_id="chat-agentlog",
+            agent_stage="1",
+            stage_name="Task 1: Analysis",
+            status="IN-PROGRESS",
+            input_data=json.dumps(stage0_input),
+        )
+        db.add(log)
+        await db.commit()
+        log_id = log.id
+
+    # Step 2: Agent-1 extracts confirmed_inputs — same ground-truth secret
+    # values used to retroactively scrub Message.content also drive
+    # _rescrub_agent_execution_logs() for AgentExecutionLog rows.
+    post_understanding_secrets = Brain._extract_sensitive_values(confirmed_inputs)
+    assert "hunter2" in post_understanding_secrets
+
+    async with sqlite_session_factory() as db:
+        result = await db.execute(select(AgentExecutionLog).where(AgentExecutionLog.id == log_id))
+        row = result.scalar_one()
+        row.input_data = Brain._redact_secret_values_in_text(row.input_data, post_understanding_secrets)
+        await db.commit()
+
+    async with sqlite_session_factory() as db:
+        result = await db.execute(select(AgentExecutionLog).where(AgentExecutionLog.id == log_id))
+        row = result.scalar_one()
+        assert "hunter2" not in row.input_data
+        assert "user@example.com" in row.input_data
+
+
+def test_agent_execution_log_error_field_scrubbed_of_known_otp_value():
+    """update_ui(..., error=...) must scrub against known secret values (e.g.
+    the OTP code just supplied to resume an obstacle) before it reaches
+    AgentExecutionLog.error_message, same bar as input_data/output_data."""
+    error_text = "Failed to submit OTP 445566: field not found"
+    scrubbed = Brain._redact_secret_values_in_text(error_text, ["445566"])
+    assert "445566" not in scrubbed
+
+
 def test_run_secret_values_combines_confirmed_inputs_and_obstacle_answer():
     confirmed_inputs = {"email": "user@example.com", "password": "hunter2"}
     secret_values = Brain._extract_sensitive_values(confirmed_inputs)

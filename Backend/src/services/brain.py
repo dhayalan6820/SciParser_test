@@ -1134,6 +1134,29 @@ class Brain:
             {"id": "2", "title": "Task 2: Execution", "description": "Running browser tools", "status": "pending", "priority": "high", "level": 0, "dependencies": ["1"], "subtasks": [], "details": None}
         ]
 
+        # Known secret values for THIS run, accumulated as they become known
+        # (obstacle answer, confirmed_inputs) — every update_ui() call below
+        # scrubs input_data/output_data/error against whatever is in this list
+        # at call time, and rows logged BEFORE a value became known are
+        # retroactively scrubbed the moment we learn it (see
+        # _rescrub_agent_execution_logs below). AgentExecutionLog must never
+        # carry a raw password/OTP/card value, same bar as Message/ToolExecutionLog.
+        _agent_log_secret_values: List[str] = []
+        _agent_log_ids: List[int] = []
+
+        def _scrub_agent_log_payload(data):
+            if data is None:
+                return None
+            if isinstance(data, dict):
+                scrubbed = {
+                    k: self._redact_secret_values_in_text(v, _agent_log_secret_values)
+                    for k, v in data.items()
+                }
+                return {k: self._mask_labeled_secrets(v) if isinstance(v, str) else v for k, v in scrubbed.items()}
+            if isinstance(data, str):
+                return self._mask_labeled_secrets(self._redact_secret_values_in_text(data, _agent_log_secret_values))
+            return data
+
         async def update_ui(idx, status, input_data=None, output_data=None, error=None, details=None, token_usage=None, cost=None):
             # Ensure idx is within bounds of current_plan
             if idx < len(current_plan):
@@ -1148,23 +1171,49 @@ class Brain:
             else:
                 stage_name = f"Stage {idx + 1}"
             
-            await self.db_manager.log_agent_execution(
+            _log_id = await self.db_manager.log_agent_execution(
                 user_id=user_id,
                 chat_id=chat_id,
                 stage=str(idx + 1),
                 name=stage_name,
                 status=status.upper(),
-                input_data=input_data,
-                output_data=output_data,
-                error=error,
+                input_data=_scrub_agent_log_payload(input_data),
+                output_data=_scrub_agent_log_payload(output_data),
+                error=self._mask_labeled_secrets(self._redact_secret_values_in_text(error, _agent_log_secret_values)) if error else error,
                 token_usage=token_usage,
                 cost=cost
             )
+            if _log_id:
+                _agent_log_ids.append(_log_id)
             if self.stream_manager:
                 await self.stream_manager.broadcast_plan(chat_id, current_plan)
             
             # Store for rehydration
             self.active_plans[chat_id] = current_plan
+
+        async def _rescrub_agent_execution_logs(new_secret_values: List[str]):
+            """Once a new secret value becomes known (e.g. Agent-1 just extracted
+            confirmed_inputs, or an obstacle answer was captured), retroactively
+            scrub every AgentExecutionLog row already written for this run — those
+            were logged before the value was known, so the proactive scrub in
+            update_ui() couldn't catch them at the time."""
+            if not new_secret_values or not _agent_log_ids:
+                return
+            async with AsyncSessionLocal() as db:
+                stmt = select(AgentExecutionLog).where(AgentExecutionLog.id.in_(_agent_log_ids))
+                res = await db.execute(stmt)
+                rows = res.scalars().all()
+                changed = False
+                for row in rows:
+                    for col in ("input_data", "output_data", "error_message"):
+                        val = getattr(row, col)
+                        if val and isinstance(val, str):
+                            new_val = self._redact_secret_values_in_text(val, new_secret_values)
+                            if new_val != val:
+                                setattr(row, col, new_val)
+                                changed = True
+                if changed:
+                    await db.commit()
 
         try:
             if not self.initialized: await self.initialize()
@@ -1269,6 +1318,12 @@ class Brain:
                 confirmed_inputs = _cached_inputs
                 discovery_strategy = pending_obstacle.get("discovery_strategy", "direct_execution")
                 domain = pending_obstacle.get("site_domain") or self._extract_domain_from_task(task_summary, confirmed_inputs)
+                # Register the resumed credential values so any AgentExecutionLog
+                # rows logged in this resumed run (proactively, via update_ui) never
+                # carry the raw password/OTP — same guarantee as a fresh run.
+                _resumed_secrets = self._extract_sensitive_values(confirmed_inputs)
+                if _resumed_secrets:
+                    _agent_log_secret_values.extend(v for v in _resumed_secrets if v)
                 await update_ui(0, "completed", details="Resuming after obstacle input was provided.")
                 if self.memory_service:
                     try:
@@ -1338,7 +1393,14 @@ class Brain:
                         upd_row = upd_res.scalar_one_or_none()
                         if upd_row:
                             upd_row.content = _redacted_stored_content
-                            await db.commit()
+
+                # Same ground-truth secret values also gate AgentExecutionLog: the
+                # stage-0 "in-progress" row above was logged before confirmed_inputs
+                # was known, so retroactively scrub it too (and remember these
+                # values so any later update_ui() calls in this run scrub proactively).
+                if _post_understanding_secrets:
+                    _agent_log_secret_values.extend(v for v in _post_understanding_secrets if v)
+                    await _rescrub_agent_execution_logs(_post_understanding_secrets)
 
                 # ── Memory routing: extract domain + retrieve relevant memories ──
                 domain = self._extract_domain_from_task(user_message, confirmed_inputs)
@@ -1565,6 +1627,8 @@ class Brain:
                         # of re-planning from scratch.
                         _otp_answer = _extract_form_answer(user_message)
                         _otp_answer_for_redaction = _otp_answer
+                        if _otp_answer_for_redaction:
+                            _agent_log_secret_values.append(str(_otp_answer_for_redaction))
                         mission_objective = (
                             f"The user was asked for a '{pending_obstacle.get('obstacle_type', 'verification')}' "
                             f"and responded: '{_otp_answer}'. Enter this into the corresponding field on the "
@@ -1715,7 +1779,12 @@ class Brain:
                         await update_ui(1, "failed", details=final_response)
                         break
 
-                    form_data = build_input_form(obstacle_exc.match, obstacle_exc.site_domain)
+                    # _obstacle_attempt_count > 1 means the user already answered once
+                    # for this exact obstacle and we hit it again — their prior code
+                    # didn't work. Never resubmit it; explicitly ask for a fresh one.
+                    form_data = build_input_form(
+                        obstacle_exc.match, obstacle_exc.site_domain, is_retry=_obstacle_attempt_count > 1
+                    )
                     await update_ui(1, "completed", details=f"Paused — needs {obstacle_exc.match.category} input from the user.")
 
                     # Keep the real account/credential values in memory ONLY for

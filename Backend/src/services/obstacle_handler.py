@@ -138,18 +138,31 @@ class ObstacleInputNeeded(Exception):
         super().__init__(f"Obstacle '{match.skill_name}' on {site_domain} requires human input")
 
 
-def build_input_form(match: ObstacleMatch, site_domain: str) -> Dict[str, Any]:
+def build_input_form(match: ObstacleMatch, site_domain: str, is_retry: bool = False) -> Dict[str, Any]:
     """Build a NEEDS_INPUT-compatible form for an obstacle that requires a
     human to resolve. Reuses the exact same form schema the existing
     Input-Understanding NEEDS_INPUT flow already renders in-chat, so no
-    frontend changes are needed to surface a new obstacle type here."""
+    frontend changes are needed to surface a new obstacle type here.
+
+    `is_retry=True` means we hit the SAME obstacle again after the user
+    already answered once — the previous code didn't work (wrong, expired, or
+    single-use and already consumed). We must never resubmit that stale value
+    ourselves; instead we say so explicitly and ask for a brand new one."""
     if match.category == "otp":
-        return {
-            "title": "Verification Code Required",
-            "description": (
+        description = (
+            (
+                f"That verification code didn't work — it may have expired or already been used. "
+                f"{site_domain} needs a **new** code. Please request/check for a fresh one and enter it below."
+            )
+            if is_retry
+            else (
                 f"{site_domain} is asking for a verification code sent to your email or "
                 "phone to continue. Please check your inbox/messages and enter the code below."
-            ),
+            )
+        )
+        return {
+            "title": "Verification Code Required",
+            "description": description,
             "sections": [
                 {
                     "section_title": None,
