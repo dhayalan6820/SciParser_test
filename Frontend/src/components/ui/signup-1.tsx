@@ -86,8 +86,8 @@ const Signup1 = ({
       <div className="w-full max-w-[400px] space-y-6">
         
         {/* Logo and Greeting Section */}
-        <div className="space-y-2 text-center mb-6">
-          <div className="flex justify-center mb-3">
+        <div className="space-y-1 text-center mb-1">
+          <div className="flex justify-center mb-1">
             <a href={resolvedLogo.url} className="inline-flex items-center">
               <img
                 src={resolvedLogo.src}
