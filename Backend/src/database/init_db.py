@@ -2,7 +2,7 @@ import os
 import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import text
-from src.database.chat_db import Base, engine as app_engine
+from src.database.chat_db import Base, engine as app_engine, AsyncSessionLocal
 from src.utils.logger import logger
 
 async def init_database():
@@ -54,7 +54,38 @@ async def init_database():
             await conn.execute(text(
                 "ALTER TABLE tool_execution_logs DROP COLUMN IF EXISTS screenshot_url"
             ))
+            # Task #127: role-based access control + account status.
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user'"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active'"
+            ))
             logger.info("Database tables checked/created successfully.")
+
+        # Bootstrap: if no admin exists yet, promote the earliest-created user
+        # to admin so there's always a way into the Admin Dashboard. Runs in
+        # its own transaction after table/column creation above is committed.
+        try:
+            async with AsyncSessionLocal() as session:
+                admin_count_result = await session.execute(
+                    text("SELECT COUNT(*) FROM users WHERE role = 'admin'")
+                )
+                admin_count = admin_count_result.scalar_one()
+                if admin_count == 0:
+                    first_user_result = await session.execute(
+                        text("SELECT user_id FROM users ORDER BY created_at ASC LIMIT 1")
+                    )
+                    row = first_user_result.first()
+                    if row:
+                        await session.execute(
+                            text("UPDATE users SET role = 'admin' WHERE user_id = :uid"),
+                            {"uid": row[0]},
+                        )
+                        await session.commit()
+                        logger.info(f"Bootstrapped admin role for earliest user (user_id={row[0]}).")
+        except Exception as e:
+            logger.warning(f"Admin bootstrap check failed (non-fatal): {e}")
     except Exception as e:
         logger.error(f"Error creating tables: {e}")
         raise

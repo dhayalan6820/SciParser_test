@@ -10,3 +10,4 @@
 - [Obstacle detection false positives](obstacle-detection-false-positives.md) — bare keyword regexes (e.g. "verification code") on raw page text false-trigger OTP/CAPTCHA prompts; require an imperative/blocking cue nearby plus an exclusion list
 - [Specialized-agent extension pattern](specialized-agent-pattern.md) — how to add a new per-flow deterministic agent (detector/scorer module + .agent.md spec) into Brain's tool loop without a new orchestration engine
 - [Browser-engine observation text shapes](browser-engine-observation-shapes.md) — camoufox and browser_use/Chrome render interactive-element text totally differently; regexes must be verified against each, not assumed
+- [Admin role bootstrap & routing](admin-role-bootstrap-routing.md) — first user auto-promoted to admin on migration; frontend routes by role fetched from /me post-login, no separate admin app/router needed

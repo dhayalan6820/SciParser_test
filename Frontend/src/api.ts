@@ -591,6 +591,66 @@ export const sciparserApi = {
   logout: () => {
     localStorage.removeItem("access_token");
   },
+
+  // Admin: User Management
+  adminListUsers: async (page: number = 1, pageSize: number = 20, search?: string) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+    if (search) params.set("search", search);
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/users?${params.toString()}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<{ users: User[]; total: number; page: number; page_size: number }>;
+  },
+
+  adminUpdateUser: async (
+    userId: string,
+    data: Partial<{ role: "admin" | "user"; status: "active" | "suspended"; username: string; email: string }>
+  ) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/users/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: formattedToken },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as any).detail || "Failed to update user");
+    }
+    return res.json() as Promise<User>;
+  },
+
+  adminDeleteUser: async (userId: string) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/users/${userId}`, {
+      method: "DELETE",
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as any).detail || "Failed to delete user");
+    }
+    return res.json();
+  },
+
+  // Admin: Operations Metrics
+  adminGetOperationsMetrics: async (days: number = 30) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/metrics/operations?days=${days}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<OperationsMetrics>;
+  },
 };
 
 export interface ChatMessage {
@@ -623,8 +683,29 @@ export interface User {
   user_id: string;
   username: string;
   email: string;
+  role: "admin" | "user";
+  status: "active" | "suspended";
   created_at: string;
   updated_at: string;
+}
+
+export interface OperationsMetrics {
+  total_runs: number;
+  success_count: number;
+  failure_count: number;
+  success_rate: number;
+  total_tokens: number;
+  total_cost: number;
+  daily_trends: Array<{
+    date: string;
+    runs: number;
+    success: number;
+    failure: number;
+    tokens: number;
+    cost: number;
+  }>;
+  top_errors: Array<{ error: string; count: number }>;
+  status_breakdown: Array<{ status: string; count: number }>;
 }
 
 export interface AgentStage {

@@ -72,6 +72,8 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     proxy_url = Column(Text, nullable=True)
     browser_engine = Column(String(50), nullable=True, default=None)
+    role = Column(String(20), nullable=False, default="user", server_default="user")
+    status = Column(String(20), nullable=False, default="active", server_default="active")
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 

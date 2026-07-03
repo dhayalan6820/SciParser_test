@@ -53,6 +53,12 @@ class ChatService:
         if not user or not validator.verify_password(password, user.hashed_password):
             raise HTTPException(status_code=401, detail="Invalid username or password")
 
+        if user.status == "suspended":
+            raise HTTPException(
+                status_code=403,
+                detail="Your account has been suspended. Please contact an administrator.",
+            )
+
         access_token = ChatService.create_access_token(data={"sub": user.user_id})
         return {"access_token": access_token, "token_type": "bearer"}
 
@@ -85,10 +91,189 @@ class ChatService:
             user = result.scalar_one_or_none()
             if not user:
                 raise HTTPException(status_code=401, detail="User not found")
+            if user.status == "suspended":
+                raise HTTPException(
+                    status_code=403,
+                    detail="Your account has been suspended. Please contact an administrator.",
+                )
             return user
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"Auth validation error: {e}")
             raise HTTPException(status_code=401, detail="Could not validate credentials")
+
+    @staticmethod
+    async def get_current_admin_user(
+        current_user: User = Depends(get_current_user),
+    ) -> User:
+        """Dependency that additionally requires the authenticated user to hold the 'admin' role."""
+        if current_user.role != "admin":
+            raise HTTPException(status_code=403, detail="Admin privileges required")
+        return current_user
+
+    # ── Admin: user management ──────────────────────────────────────────
+    @staticmethod
+    async def admin_list_users(
+        db: AsyncSession, page: int = 1, page_size: int = 20, search: Optional[str] = None
+    ) -> dict:
+        """List users with pagination and optional username/email search."""
+        from sqlalchemy import func, or_
+
+        stmt = select(User)
+        count_stmt = select(func.count()).select_from(User)
+        if search:
+            like = f"%{search}%"
+            filter_clause = or_(User.username.ilike(like), User.email.ilike(like))
+            stmt = stmt.where(filter_clause)
+            count_stmt = count_stmt.where(filter_clause)
+
+        total = (await db.execute(count_stmt)).scalar_one()
+        stmt = stmt.order_by(User.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+        result = await db.execute(stmt)
+        users = result.scalars().all()
+        return {"users": users, "total": total, "page": page, "page_size": page_size}
+
+    @staticmethod
+    async def admin_get_user(db: AsyncSession, user_id: str) -> User:
+        stmt = select(User).where(User.user_id == user_id)
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return user
+
+    @staticmethod
+    async def admin_update_user(
+        db: AsyncSession,
+        user_id: str,
+        acting_admin: User,
+        role: Optional[str] = None,
+        status_value: Optional[str] = None,
+        username: Optional[str] = None,
+        email: Optional[str] = None,
+    ) -> User:
+        """Update a user's role/status/profile fields. Prevents an admin from locking themselves out."""
+        user = await ChatService.admin_get_user(db, user_id)
+
+        if user.user_id == acting_admin.user_id:
+            if role is not None and role != "admin":
+                raise HTTPException(status_code=400, detail="You cannot remove your own admin role")
+            if status_value is not None and status_value != "active":
+                raise HTTPException(status_code=400, detail="You cannot suspend your own account")
+
+        if username is not None:
+            dup_stmt = select(User).where(User.username == username, User.user_id != user_id)
+            if (await db.execute(dup_stmt)).scalar_one_or_none():
+                raise HTTPException(status_code=400, detail="Username already in use")
+            user.username = username
+        if email is not None:
+            dup_stmt = select(User).where(User.email == email, User.user_id != user_id)
+            if (await db.execute(dup_stmt)).scalar_one_or_none():
+                raise HTTPException(status_code=400, detail="Email already in use")
+            user.email = email
+        if role is not None:
+            user.role = role
+        if status_value is not None:
+            user.status = status_value
+
+        user.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(user)
+        return user
+
+    @staticmethod
+    async def admin_delete_user(db: AsyncSession, user_id: str, acting_admin: User) -> dict:
+        if user_id == acting_admin.user_id:
+            raise HTTPException(status_code=400, detail="You cannot delete your own account")
+        user = await ChatService.admin_get_user(db, user_id)
+        await db.execute(delete(User).where(User.user_id == user_id))
+        await db.commit()
+        return {"status": "success"}
+
+    # ── Admin: operations metrics ───────────────────────────────────────
+    @staticmethod
+    async def admin_get_operations_metrics(db: AsyncSession, days: int = 30) -> dict:
+        """Aggregate real AgentExecutionLog data into token/cost/success-failure metrics."""
+        from src.database.chat_db import AgentExecutionLog
+        from sqlalchemy import func
+
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+        stmt = select(AgentExecutionLog).where(AgentExecutionLog.created_at >= since)
+        result = await db.execute(stmt)
+        logs = result.scalars().all()
+
+        total_runs = len(logs)
+        success_count = 0
+        failure_count = 0
+        total_tokens = 0
+        total_cost = 0.0
+        daily: dict = {}
+        error_counts: dict = {}
+        status_counts: dict = {}
+
+        for log in logs:
+            status_norm = (log.status or "UNKNOWN").upper()
+            status_counts[status_norm] = status_counts.get(status_norm, 0) + 1
+            if status_norm in ("SUCCESS", "COMPLETED", "DONE"):
+                success_count += 1
+            elif status_norm in ("FAILED", "ERROR", "FAILURE"):
+                failure_count += 1
+
+            tokens = 0
+            if log.token_usage:
+                try:
+                    parsed = json.loads(log.token_usage)
+                    if isinstance(parsed, dict):
+                        tokens = int(parsed.get("total_tokens") or parsed.get("total") or 0)
+                    elif isinstance(parsed, (int, float)):
+                        tokens = int(parsed)
+                except Exception:
+                    pass
+            total_tokens += tokens
+
+            cost = 0.0
+            if log.cost:
+                try:
+                    cost = float(log.cost)
+                except Exception:
+                    pass
+            total_cost += cost
+
+            day_key = log.created_at.strftime("%Y-%m-%d") if log.created_at else "unknown"
+            day_entry = daily.setdefault(day_key, {"date": day_key, "runs": 0, "success": 0, "failure": 0, "tokens": 0, "cost": 0.0})
+            day_entry["runs"] += 1
+            day_entry["tokens"] += tokens
+            day_entry["cost"] += cost
+            if status_norm in ("SUCCESS", "COMPLETED", "DONE"):
+                day_entry["success"] += 1
+            elif status_norm in ("FAILED", "ERROR", "FAILURE"):
+                day_entry["failure"] += 1
+
+            if log.error_message:
+                key = log.error_message.strip()[:200]
+                error_counts[key] = error_counts.get(key, 0) + 1
+
+        daily_trends = sorted(daily.values(), key=lambda d: d["date"])
+        top_errors = sorted(
+            [{"error": k, "count": v} for k, v in error_counts.items()],
+            key=lambda e: e["count"], reverse=True,
+        )[:10]
+        status_breakdown = [{"status": k, "count": v} for k, v in status_counts.items()]
+
+        success_rate = round((success_count / total_runs) * 100, 2) if total_runs else 0.0
+
+        return {
+            "total_runs": total_runs,
+            "success_count": success_count,
+            "failure_count": failure_count,
+            "success_rate": success_rate,
+            "total_tokens": total_tokens,
+            "total_cost": round(total_cost, 4),
+            "daily_trends": daily_trends,
+            "top_errors": top_errors,
+            "status_breakdown": status_breakdown,
+        }
 
     @staticmethod
     async def get_user_sessions(db: AsyncSession, user_id: str) -> List[ChatSession]:

@@ -31,7 +31,8 @@ from src.database.chat_db import AsyncSessionLocal, User, Message, get_db
 from src.database.init_db import init_database
 from src.schemas.schema import (
     SignUp, SignIn, Token, UserResponse, ChatRequest, 
-    ChatResponse, RenameChatRequest, ScheduleRequest, ScheduleResponse
+    ChatResponse, RenameChatRequest, ScheduleRequest, ScheduleResponse,
+    AdminUpdateUserRequest, AdminUserListResponse, OperationsMetricsResponse
 )
 from src.utils.logger import logger
 from src.services.brain import brain
@@ -639,6 +640,54 @@ async def signin(req: SignIn, db: AsyncSession = Depends(get_db)):
 @app.get("/sciparser/v1/me", response_model=UserResponse)
 async def get_me(current_user: User = Depends(ChatService.get_current_user)):
     return current_user
+
+# --- Admin Endpoints ---
+
+@app.get("/sciparser/v1/admin/users", response_model=AdminUserListResponse)
+async def admin_list_users(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_list_users(db, page=page, page_size=page_size, search=search)
+
+@app.get("/sciparser/v1/admin/users/{user_id}", response_model=UserResponse)
+async def admin_get_user(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_user(db, user_id)
+
+@app.patch("/sciparser/v1/admin/users/{user_id}", response_model=UserResponse)
+async def admin_update_user(
+    user_id: str,
+    req: AdminUpdateUserRequest,
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_update_user(
+        db, user_id, admin_user,
+        role=req.role, status_value=req.status, username=req.username, email=req.email,
+    )
+
+@app.delete("/sciparser/v1/admin/users/{user_id}")
+async def admin_delete_user(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_delete_user(db, user_id, admin_user)
+
+@app.get("/sciparser/v1/admin/metrics/operations", response_model=OperationsMetricsResponse)
+async def admin_operations_metrics(
+    days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_operations_metrics(db, days=days)
 
 # --- Upload Endpoints ---
 

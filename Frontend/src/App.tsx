@@ -1,9 +1,10 @@
 import * as React from "react";
 import ChatPage from './components/ui/chat_page';
+import { AdminDashboard } from './components/ui/admin-dashboard';
 import { NotFound } from "./components/ui/ghost-404-page";
 import { Signup1 } from "./components/ui/signup-1";
 import { motion } from "framer-motion";
-import { sciparserApi } from "./api";
+import { sciparserApi, User } from "./api";
 import { apiUrl } from "./config";
 import { useTheme } from "./contexts/ThemeContext";
 
@@ -30,6 +31,8 @@ export default function App() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [serverStatus, setServerStatus] = React.useState<"online" | "offline" | "checking">("checking");
   const [isLoginMode, setIsLoginMode] = React.useState(true);  // ← Add this line
+  const [currentUser, setCurrentUser] = React.useState<User | null>(null);
+  const [isCheckingRole, setIsCheckingRole] = React.useState(false);
 
   // Check server health
   React.useEffect(() => {
@@ -67,6 +70,36 @@ export default function App() {
     return () => window.removeEventListener("storage", checkAuth);
   }, []);
 
+  // Once logged in, fetch the user's profile to determine role-based routing
+  // (Admin Dashboard vs the regular chat experience). Regular users still
+  // land on the exact same ChatPage they always have.
+  React.useEffect(() => {
+    if (!isLoggedIn) {
+      setCurrentUser(null);
+      return;
+    }
+    let cancelled = false;
+    setIsCheckingRole(true);
+    sciparserApi
+      .getMe()
+      .then((user) => {
+        if (!cancelled) setCurrentUser(user);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          localStorage.removeItem("access_token");
+          setIsLoggedIn(false);
+          setCurrentUser(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsCheckingRole(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn]);
+
   // Sync theme with root HTML element data-theme and classList attributes
   React.useEffect(() => {
     const root = window.document.documentElement;
@@ -97,6 +130,19 @@ export default function App() {
             setHasError("");  // ← Clear the error message
             window.location.reload();
           }} />
+        ) : isLoggedIn && isCheckingRole ? (
+          <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+          </div>
+        ) : isLoggedIn && currentUser?.role === "admin" ? (
+          <AdminDashboard
+            currentUser={currentUser}
+            onLogout={() => {
+              sciparserApi.logout();
+              setIsLoggedIn(false);
+              setCurrentUser(null);
+            }}
+          />
         ) : isLoggedIn ? (
           <div className="w-screen h-screen flex flex-col font-sans selection:bg-indigo-500 selection:text-white overflow-hidden bg-background text-foreground transition-colors duration-300">
             <ChatPage onLoginStateChange={(status) => setIsLoggedIn(!!status)} />

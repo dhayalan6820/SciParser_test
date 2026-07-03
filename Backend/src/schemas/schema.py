@@ -38,10 +38,38 @@ class UserResponse(BaseModel):
     user_id: str
     username: str
     email: str
+    role: str = "user"
+    status: str = "active"
     created_at: datetime 
     updated_at: datetime 
 
     model_config = ConfigDict(from_attributes=True) # Pydantic V2 style
+
+
+class AdminUpdateUserRequest(BaseModel):
+    role: Optional[Literal["admin", "user"]] = None
+    status: Optional[Literal["active", "suspended"]] = None
+    username: Optional[str] = None
+    email: Optional[EmailStr] = None
+
+
+class AdminUserListResponse(BaseModel):
+    users: List[UserResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class OperationsMetricsResponse(BaseModel):
+    total_runs: int
+    success_count: int
+    failure_count: int
+    success_rate: float
+    total_tokens: int
+    total_cost: float
+    daily_trends: List[Dict[str, Any]]
+    top_errors: List[Dict[str, Any]]
+    status_breakdown: List[Dict[str, Any]]
 
 class BackendChatMessage(BaseModel):
     id: Optional[str] = None # Added to match frontend 'id'
