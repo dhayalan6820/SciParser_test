@@ -228,6 +228,13 @@ class Brain:
         self.checkpointer = MemorySaver()
         self.active_tasks: Dict[str, asyncio.Task] = {}
         self.active_plans: Dict[str, List[Dict]] = {}
+        # Real (unredacted) confirmed_inputs for a paused obstacle run, kept
+        # ONLY in memory for the lifetime of this process — never written to
+        # the database. Personal/account data must never be persisted; if the
+        # process restarts before the run resumes, we deliberately fall back
+        # to asking the user again rather than reading a stale value back
+        # from disk. Keyed by chat_id, popped (single-use) on resume.
+        self.pending_confirmed_inputs: Dict[str, Dict[str, Any]] = {}
         # Cooperative cancellation: chat_ids explicitly stopped by the user
         self.cancelled_chats: set = set()
         # In-memory tool log buffer: chat_id → list of tool events (capped at 200)
@@ -564,6 +571,47 @@ class Brain:
             "discard what you did", "begin again", "wipe the slate",
         ]
         return any(pat in lower for pat in _RESET_PATTERNS)
+
+    @staticmethod
+    def _is_credential_override_intent(message: str) -> bool:
+        """Return True if the message signals the user wants to swap the
+        account/credential being used, rather than continue with whatever was
+        confirmed earlier in the conversation.
+
+        This is a best-effort heuristic used to add a stronger directive to
+        Agent 1 (Input Understanding) so it does not silently reuse stale
+        credentials from `history_context` — the model is always told the
+        current message wins on conflicts, but this flag makes that explicit
+        for the common "switch account" phrasing so it isn't left to chance.
+        """
+        lower = message.lower().strip()
+        _OVERRIDE_PATTERNS = [
+            "different account", "another account", "other account",
+            "new account", "switch account", "switch accounts",
+            "different email", "another email", "different username",
+            "another username", "different login", "another login",
+            "different credentials", "new credentials", "not that account",
+            "wrong account", "use this account instead", "use this email instead",
+            "instead use", "actually use", "actually, use", "try a different",
+            "try another account", "not that email", "wrong email",
+        ]
+        return any(pat in lower for pat in _OVERRIDE_PATTERNS)
+
+    @staticmethod
+    def _redact_confirmed_inputs(confirmed_inputs: Dict[str, Any]) -> Dict[str, str]:
+        """Return a version of confirmed_inputs safe to write to durable
+        storage (AgentExecutionLog, ChatSession.session_state).
+
+        User-provided account/credential data must never be persisted to
+        disk — only kept in memory for as long as the current run needs it.
+        Every value is replaced with a redaction marker; only the field
+        names are kept so logs/audits can still show *what kind* of input
+        was used (e.g. "email", "password") without ever storing the value
+        itself.
+        """
+        if not confirmed_inputs:
+            return {}
+        return {k: "[REDACTED]" for k in confirmed_inputs.keys()}
 
     def _extract_domain_from_task(self, user_message: str, confirmed_inputs: Dict[str, Any]) -> str:
         """Extract primary domain from confirmed inputs or raw message."""
@@ -1092,8 +1140,25 @@ class Brain:
                 # Resuming a run that paused for human input (e.g. an OTP code) —
                 # skip Agent 1 entirely and reuse the task context captured when
                 # the run paused, so the user's answer isn't misread as a new task.
+                #
+                # The real confirmed_inputs (account/credential values) were never
+                # written to the database — only an in-memory cache and a redacted
+                # placeholder in session_state. If the cache is gone (e.g. the
+                # process restarted while paused), we deliberately do NOT fall back
+                # to the redacted placeholder; instead we drop out of the resume
+                # path and let the normal Agent-1 flow ask the user again.
+                _cached_inputs = self.pending_confirmed_inputs.pop(chat_id, None)
+                if _cached_inputs is None:
+                    logger.info(
+                        f"[brain] No in-memory credential cache for chat {chat_id} on resume "
+                        f"(process likely restarted) — asking the user again instead of using "
+                        f"the redacted placeholder."
+                    )
+                    pending_obstacle = None
+
+            if pending_obstacle:
                 task_summary = pending_obstacle["task_summary"]
-                confirmed_inputs = pending_obstacle.get("confirmed_inputs", {})
+                confirmed_inputs = _cached_inputs
                 discovery_strategy = pending_obstacle.get("discovery_strategy", "direct_execution")
                 domain = pending_obstacle.get("site_domain") or self._extract_domain_from_task(task_summary, confirmed_inputs)
                 await update_ui(0, "completed", details="Resuming after obstacle input was provided.")
@@ -1116,7 +1181,12 @@ class Brain:
                         f"{prior_session_state.get('accomplishment_summary', '')} "
                         f"The browser is currently on: {prior_session_state.get('last_url', 'unknown page')}."
                     )
-                understanding = await self.atag_processor.run_input_understanding(user_message, history_context=history_context)
+                override_intent = self._is_credential_override_intent(user_message)
+                if override_intent:
+                    logger.info(f"[brain] Credential override intent detected for chat {chat_id} — instructing Agent 1 to ignore stale history values.")
+                understanding = await self.atag_processor.run_input_understanding(
+                    user_message, history_context=history_context, override_intent=override_intent
+                )
 
                 if understanding.get("status") == "NEEDS_INPUT":
                     form_data = understanding.get("form")
@@ -1153,7 +1223,12 @@ class Brain:
                     except Exception as _me:
                         logger.warning(f"[Memory] retrieve error (non-fatal): {_me}")
 
-                await update_ui(0, "completed", output_data=understanding, details=f"Task Summary: {task_summary}")
+                await update_ui(
+                    0,
+                    "completed",
+                    output_data={**understanding, "confirmed_inputs": self._redact_confirmed_inputs(confirmed_inputs)},
+                    details=f"Task Summary: {task_summary}",
+                )
                 # --- NEW: Update Session Title based on Task Summary ---
                 async with AsyncSessionLocal() as db:
                     stmt = select(ChatSession).where(ChatSession.id == chat_id)
@@ -1330,7 +1405,7 @@ class Brain:
                     raise asyncio.CancelledError("Stopped by user")
 
                 try:
-                    await update_ui(1, "in-progress", input_data={"task_summary": task_summary, "confirmed_inputs": confirmed_inputs, "retry": retry_count})
+                    await update_ui(1, "in-progress", input_data={"task_summary": task_summary, "confirmed_inputs": self._redact_confirmed_inputs(confirmed_inputs), "retry": retry_count})
                     
                     # --- Execution via MCP Tool Graph (Standardized) ---
                     logger.info(f"Executing via MCP Tool Graph (Attempt {retry_count + 1})...")
@@ -1489,19 +1564,28 @@ class Brain:
                                 )
                             except Exception:
                                 pass
+                        # No further resume will happen for this run — drop any
+                        # cached credentials so they don't linger in memory.
+                        self.pending_confirmed_inputs.pop(chat_id, None)
                         await update_ui(1, "failed", details=final_response)
                         break
 
                     form_data = build_input_form(obstacle_exc.match, obstacle_exc.site_domain)
                     await update_ui(1, "completed", details=f"Paused — needs {obstacle_exc.match.category} input from the user.")
 
+                    # Keep the real account/credential values in memory ONLY for
+                    # the resume step — they must never be written to the
+                    # database. Only a redacted placeholder goes into
+                    # session_state so a reader of the DB can see the run is
+                    # paused without ever seeing the personal data involved.
+                    self.pending_confirmed_inputs[chat_id] = confirmed_inputs
                     _pending_obstacle_state = {
                         "obstacle_type": obstacle_exc.match.obstacle_type,
                         "obstacle_category": obstacle_exc.match.category,
                         "skill_name": obstacle_exc.match.skill_name,
                         "site_domain": obstacle_exc.site_domain,
                         "task_summary": task_summary,
-                        "confirmed_inputs": confirmed_inputs,
+                        "confirmed_inputs": self._redact_confirmed_inputs(confirmed_inputs),
                         "discovery_strategy": discovery_strategy,
                         "attempt": _obstacle_attempt_count,
                         "created_at": datetime.now(timezone.utc).isoformat(),

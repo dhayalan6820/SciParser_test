@@ -4,3 +4,5 @@
 - [JWT_SECRET_KEY persistence in dev](jwt-secret-persistence.md) — unset secret auto-regenerates on every backend restart, invalidating sessions; masquerades as unrelated 401s (e.g. proxy test failures)
 - [Blocking subprocess read stalls asyncio](blocking-subprocess-read-stalls-asyncio.md) — a blocking `for line in process.stdout` in an async coroutine freezes the whole event loop, making live WS updates arrive all at once at the end
 - [Obstacle handler framework](obstacle-handler-framework.md) — generic detect/pause/resume/remember pattern for mid-run blockers (CAPTCHA, OTP); new blocker types plug in without new plumbing
+- [Chat-history precedence in LLM prompts](chat-history-prompt-precedence.md) — raw history fed to an LLM step needs an explicit "current message wins on conflict" rule or it silently reuses stale values
+- [Never persist credentials, keep in-memory only](never-persist-credentials.md) — redact secrets before any DB write; cache real values in a process-memory dict for mid-run resume, and re-ask if that cache is lost

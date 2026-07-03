@@ -177,17 +177,49 @@ class ATAGProcessor:
             logger.error(f"Failed to parse JSON response: {e}")
             return {"status": "ERROR", "message": "Invalid JSON format"}
 
-    async def run_input_understanding(self, original_request: str, history_context: str = "") -> Dict[str, Any]:
+    async def run_input_understanding(
+        self,
+        original_request: str,
+        history_context: str = "",
+        override_intent: bool = False,
+    ) -> Dict[str, Any]:
         """Runs the CrewAI Planner agent (planner.agent.md) to check completeness
         and generate a form schema if needed. No prompt text is hardcoded here —
-        the decision logic and output format come entirely from the spec file."""
+        the decision logic and output format come entirely from the spec file.
+
+        ``override_intent`` is set by the caller when the current message looks
+        like the user is deliberately swapping an account/credential (e.g. "use
+        a different account", "try another email"). When True, a stronger
+        directive is added telling the model to disregard any credential-like
+        values found only in history and prefer/ask-for values from the current
+        message instead — this prevents stale saved credentials from silently
+        overriding a user's explicit new instruction.
+        """
         spec = spec_loader.load_spec("planner")
         decision_logic = spec.sections.get("Input Understanding — Decision Logic", "")
         output_format = spec.sections.get("Output Format — Input Understanding", "")
 
         context_prompt = ""
         if history_context:
-            context_prompt = f"\n\nRECENT CHAT HISTORY:\n{history_context}\n\nUse this history to understand the user's current request."
+            context_prompt = (
+                f"\n\nRECENT CHAT HISTORY:\n{history_context}\n\n"
+                "Use this history only to fill in details the CURRENT USER REQUEST "
+                "does not mention. PRECEDENCE RULE: if the current request supplies "
+                "a value (account, email, username, password, or any other input) "
+                "that conflicts with a value found in the history, the current "
+                "request's value ALWAYS wins for this turn — never silently reuse "
+                "an older value the user has just replaced or moved away from."
+            )
+            if override_intent:
+                context_prompt += (
+                    "\n\nIMPORTANT: The current request indicates the user wants to "
+                    "switch to a different account/credential than what was used "
+                    "before. Do NOT reuse any account/email/username/password found "
+                    "in the chat history above for this turn. Use only what the "
+                    "current request explicitly provides; if it is missing a "
+                    "required credential, output NEEDS_INPUT and ask for it rather "
+                    "than falling back to the old value."
+                )
 
         description = (
             "You are a JSON output engine. Your ENTIRE response must be a single valid JSON "

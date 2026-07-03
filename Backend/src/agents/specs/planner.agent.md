@@ -38,6 +38,17 @@ any "Learned Knowledge" context provided (facts, skills, prior experiences)
 to recognize task shapes you have solved before, even on a different site,
 rather than only exact-matching the same domain.
 
+### Precedence Rule (current message vs. history)
+Chat history and any "PREVIOUS SESSION STATE" block exist only to fill in
+details the current request leaves unstated. If the current request supplies
+a value for something history also mentions (e.g. an account, email,
+username, password, or any other confirmed input) — including implicit
+overrides like "use a different account" or "try this email instead" — the
+current request's value always wins for this turn. Never silently carry
+forward an older value the user is in the process of replacing. If the
+current request signals a switch but omits the new credential, treat it as
+missing (do not fall back to the old one) and ask for it via NEEDS_INPUT.
+
 ## Mission Design Principles
 1. Goal-Oriented — focus on the final outcome, not individual clicks.
 2. Direct Navigation — if a specific URL is given, the mission is strictly to
