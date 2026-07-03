@@ -5,8 +5,10 @@ extraction, suggestion extraction/scoring, and post-selection verification.
 import os
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://fake:fake@localhost/fake")
 
+import pytest
+
 from src.services import address_agent
-from src.services.obstacle_handler import ObstacleMatch, build_input_form
+from src.services.obstacle_handler import ObstacleInputNeeded, ObstacleMatch, build_input_form
 
 
 # ── has_requested_address / extract_requested_address_components ───────────
@@ -152,6 +154,170 @@ def test_verify_selected_value_false_for_mismatched_field():
 def test_verify_selected_value_false_for_empty_inputs():
     assert address_agent.verify_selected_value("", "123 Main St") is False
     assert address_agent.verify_selected_value("123 Main St", "") is False
+
+
+def test_verify_selected_value_false_when_field_value_is_none():
+    # extract_address_field_value returns None when it can't confidently
+    # locate the field's own value — verification must fail closed, not
+    # fall back to scanning the whole page for a coincidental match.
+    assert address_agent.verify_selected_value(None, "123 Main St") is False
+
+
+# ── extract_address_field_value ─────────────────────────────────────────────
+
+def test_extract_address_field_value_from_quoted_value_attribute():
+    text = 'textbox "Address" value="123 Main St, Springfield, IL 62704"'
+    assert address_agent.extract_address_field_value(text) == "123 Main St, Springfield, IL 62704"
+
+
+def test_extract_address_field_value_from_label_colon_format():
+    text = "Page loaded.\nAddress field: 123 Main St, Springfield, IL 62704\nSubmit button visible."
+    assert address_agent.extract_address_field_value(text) == "123 Main St, Springfield, IL 62704"
+
+
+def test_extract_address_field_value_none_when_absent():
+    text = "Page loaded. Submit button visible. No address information here."
+    assert address_agent.extract_address_field_value(text) is None
+
+
+def test_extract_address_field_value_does_not_false_positive_on_unrelated_quotes():
+    # A suggestion that happens to also appear elsewhere in the page (e.g. a
+    # breadcrumb or the now-closed dropdown's leftover markup) must NOT be
+    # picked up as if it were the address field's own current value.
+    text = 'Breadcrumb: "123 Main St, Springfield, IL 62704" > Checkout\nSubmit button visible.'
+    assert address_agent.extract_address_field_value(text) is None
+
+
+def test_verify_selected_value_ignores_coincidental_match_elsewhere_on_page():
+    # Regression: verification must be based on the extracted field value,
+    # not a naive substring/overlap check against the entire observation —
+    # otherwise a suggestion appearing anywhere on the page falsely "verifies".
+    observation = (
+        'Breadcrumb: "123 Main St, Springfield, IL 62704" > Checkout\n'
+        "Address field: 456 Elm St, Shelbyville, IL 62565\n"
+    )
+    field_value = address_agent.extract_address_field_value(observation)
+    assert field_value == "456 Elm St, Shelbyville, IL 62565"
+    assert address_agent.verify_selected_value(
+        field_value, "123 Main St, Springfield, IL 62704"
+    ) is False
+
+
+# ── handle_address_dropdown_observation / handle_address_verification_observation ──
+# These are the exact functions Brain's tool-loop calls into each turn, so
+# testing them here proves the pause-trigger (ObstacleInputNeeded) behavior
+# without needing to reach into Brain's non-importable nested closures.
+
+_NO_MATCH_OBSERVATION = (
+    'Address field open. Suggestions: role="listbox" with matching addresses below.\n'
+    '- "999 Nowhere Ave, Faraway, ZZ 00000"\n'
+    '- "888 Unrelated Rd, Somewhere Else, YY 11111"\n'
+)
+
+
+def test_handle_address_dropdown_high_confidence_injects_guidance_and_sets_pending():
+    state = address_agent.AddressAutocompleteState()
+    observation = (
+        'Address field open. Suggestions: role="listbox" with matching addresses below.\n'
+        '- "123 Main St, Springfield, IL 62704"\n'
+    )
+    result = address_agent.handle_address_dropdown_observation(
+        observation,
+        {"street": "Main St", "house_number": "123", "city": "Springfield", "postal_code": "62704"},
+        state,
+        "example.com",
+    )
+    assert "[ADDRESS_AUTOCOMPLETE_DETECTED]" in result
+    assert state.pending_selection == "123 Main St, Springfield, IL 62704"
+    assert state.retries == 0
+
+
+def test_handle_address_dropdown_low_confidence_retries_once_then_escalates():
+    state = address_agent.AddressAutocompleteState()
+    requested = {"street": "Main St", "house_number": "123", "city": "Springfield", "postal_code": "62704"}
+
+    # First low-confidence pass: consumes the one retry, does NOT raise.
+    result = address_agent.handle_address_dropdown_observation(
+        _NO_MATCH_OBSERVATION, requested, state, "example.com"
+    )
+    assert "[ADDRESS_AUTOCOMPLETE_LOW_CONFIDENCE]" in result
+    assert state.retries == 1
+
+    # Second low-confidence pass: retry budget exhausted -> must pause the run.
+    with pytest.raises(ObstacleInputNeeded) as exc_info:
+        address_agent.handle_address_dropdown_observation(
+            _NO_MATCH_OBSERVATION, requested, state, "example.com"
+        )
+    assert exc_info.value.match.category == "address"
+    assert exc_info.value.match.obstacle_type == "low_confidence_selection"
+    assert exc_info.value.match.requires_human_input is True
+    assert exc_info.value.match.candidates
+
+
+def test_handle_address_dropdown_injects_spec_guidance_once():
+    state = address_agent.AddressAutocompleteState()
+    observation = (
+        'Address field open. Suggestions: role="listbox" with matching addresses below.\n'
+        '- "123 Main St, Springfield, IL 62704"\n'
+    )
+    result = address_agent.handle_address_dropdown_observation(
+        observation,
+        {"street": "Main St", "house_number": "123", "city": "Springfield", "postal_code": "62704"},
+        state,
+        "example.com",
+        spec_guidance="\n\n[ADDRESS_AGENT_SPEC]\nDecision Tree: ...",
+    )
+    assert "[ADDRESS_AGENT_SPEC]" in result
+    assert state.spec_injected is True
+
+    # A second turn must not re-inject the (already-seen) spec text again.
+    result2 = address_agent.handle_address_dropdown_observation(
+        observation,
+        {"street": "Main St", "house_number": "123", "city": "Springfield", "postal_code": "62704"},
+        state,
+        "example.com",
+        spec_guidance="\n\n[ADDRESS_AGENT_SPEC]\nDecision Tree: ...",
+    )
+    assert result2.count("[ADDRESS_AGENT_SPEC]") == 0
+
+
+def test_handle_address_verification_success_clears_pending_selection():
+    state = address_agent.AddressAutocompleteState(pending_selection="123 Main St, Springfield, IL 62704")
+    observation = "Address field: 123 Main St, Springfield, IL 62704\nForm ready to submit."
+    result = address_agent.handle_address_verification_observation(observation, state, "example.com")
+    assert state.pending_selection is None
+    assert "[ADDRESS_VERIFICATION_FAILED]" not in result
+
+
+def test_handle_address_verification_failure_retries_once_then_escalates():
+    state = address_agent.AddressAutocompleteState(
+        pending_selection="123 Main St, Springfield, IL 62704",
+        candidates=[("123 Main St, Springfield, IL 62704", 0.9)],
+    )
+    bad_observation = "Address field: 456 Elm St, Shelbyville, IL 62565\nForm ready to submit."
+
+    # First verification failure: consumes the one retry, does NOT raise.
+    result = address_agent.handle_address_verification_observation(bad_observation, state, "example.com")
+    assert "[ADDRESS_VERIFICATION_FAILED]" in result
+    assert state.retries == 1
+    assert state.pending_selection is None
+
+    # Simulate a second auto-selection + failed verification: retry budget
+    # exhausted -> must pause the run instead of looping forever.
+    state.pending_selection = "123 Main St, Springfield, IL 62704"
+    with pytest.raises(ObstacleInputNeeded) as exc_info:
+        address_agent.handle_address_verification_observation(bad_observation, state, "example.com")
+    assert exc_info.value.match.category == "address"
+    assert exc_info.value.match.obstacle_type == "verification_failed"
+    assert exc_info.value.match.requires_human_input is True
+
+
+def test_handle_address_verification_noop_when_nothing_pending():
+    state = address_agent.AddressAutocompleteState()
+    observation = "Address field: 123 Main St, Springfield, IL 62704\n"
+    result = address_agent.handle_address_verification_observation(observation, state, "example.com")
+    assert result == observation
+    assert state.pending_selection is None
 
 
 # ── build_address_guidance / build_address_retry_guidance ───────────────────

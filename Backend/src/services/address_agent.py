@@ -276,13 +276,59 @@ def score_suggestions(
 
 # ── Post-selection verification ─────────────────────────────────────────────
 
-def verify_selected_value(final_field_value: str, chosen_suggestion: str) -> bool:
-    """True if the address field's final value actually reflects the
-    suggestion that was chosen (fuzzy — a field may reformat casing/spacing).
+# Matches an address-labelled textbox/field's current value in common
+# accessibility-tree / DOM-dump observation shapes, e.g.:
+#   textbox "Address" value="123 Main St, Springfield, 62704"
+#   Address field: 123 Main St, Springfield, 62704
+#   input[name=address] value="123 Main St"
+# Best-effort by design (see Backend/src/services/address_agent.py module
+# docstring and follow-up task to calibrate against real site markup).
+_ADDRESS_FIELD_VALUE_RE = re.compile(
+    r'''(?:address|street)[^\n]{0,40}?(?:value|:)\s*[:=]?\s*["']([^"'\n]{4,160})["']''',
+    re.IGNORECASE,
+)
+_ADDRESS_FIELD_VALUE_FALLBACK_RE = re.compile(
+    r'''(?:address|street)\s*(?:field)?\s*:\s*([^\n]{4,160})''',
+    re.IGNORECASE,
+)
+
+
+def extract_address_field_value(observation_text: str) -> Optional[str]:
+    """Best-effort extraction of the CURRENT VALUE of the address input field
+    from a tool observation, so verification checks the specific field the
+    agent just filled in rather than the entire page/DOM text blob (which
+    could coincidentally contain the suggestion elsewhere, e.g. in a
+    breadcrumb, another field, or leftover dropdown markup).
+
+    Returns None when no address-field value can be confidently located —
+    callers must treat that as "cannot verify" rather than falling back to
+    scanning the whole observation.
     """
-    if not final_field_value or not chosen_suggestion:
+    if not observation_text:
+        return None
+    text = str(observation_text)
+    match = _ADDRESS_FIELD_VALUE_RE.search(text)
+    if match:
+        return match.group(1).strip()
+    match = _ADDRESS_FIELD_VALUE_FALLBACK_RE.search(text)
+    if match:
+        return match.group(1).strip()
+    return None
+
+
+def verify_selected_value(field_value: Optional[str], chosen_suggestion: str) -> bool:
+    """True if the address field's own current value (NOT the whole page/DOM
+    text) actually reflects the suggestion that was chosen (fuzzy — a field
+    may reformat casing/spacing).
+
+    `field_value` must be the extracted value of the specific address input
+    (see `extract_address_field_value`), not an entire observation blob —
+    otherwise the suggestion text could coincidentally appear elsewhere on
+    the page and produce a false positive.
+    """
+    if not field_value or not chosen_suggestion:
         return False
-    return _token_overlap_ratio(chosen_suggestion, final_field_value) >= HIGH_CONFIDENCE_THRESHOLD
+    return _token_overlap_ratio(chosen_suggestion, field_value) >= HIGH_CONFIDENCE_THRESHOLD
 
 
 # ── Guidance injected into the tool-loop (mirrors CAPTCHA skill injection) ──
@@ -330,3 +376,110 @@ class AddressAutocompleteState:
     retries: int = 0
     candidates: List[Tuple[str, float]] = field(default_factory=list)
     pending_selection: Optional[str] = None
+    spec_injected: bool = False
+
+
+# ── Orchestration: the two decision points Brain's tool-loop calls into ─────
+#
+# These wrap the pure detect/score/verify functions above into the two
+# stateful decisions the tool-loop needs each turn, INCLUDING the escalation
+# (raise ObstacleInputNeeded) branch, so that "does this eventually pause the
+# run and ask the user?" is unit-testable here instead of only reachable
+# through Brain's nested, non-importable `_call_tool` closure.
+
+def handle_address_dropdown_observation(
+    observation_text: str,
+    requested_address: Dict[str, str],
+    state: AddressAutocompleteState,
+    task_domain: str,
+    spec_guidance: Optional[str] = None,
+) -> str:
+    """Call when `detect_address_autocomplete_context` is True for the current
+    observation. Extracts + scores suggestions and either:
+      - injects high-confidence auto-select guidance, or
+      - injects one-time retry guidance and consumes the retry budget, or
+      - raises `ObstacleInputNeeded(category="address",
+        obstacle_type="low_confidence_selection")` once the retry budget is
+        exhausted, so the run pauses via the existing OTP-style flow.
+
+    Mutates `state` in place. Returns the (possibly guidance-augmented)
+    observation text.
+    """
+    from src.services.obstacle_handler import ObstacleInputNeeded, ObstacleMatch
+
+    text = str(observation_text)
+    if spec_guidance and not state.spec_injected:
+        text += spec_guidance
+        state.spec_injected = True
+
+    suggestions = extract_suggestions(text)
+    if not suggestions:
+        return text
+
+    scored = score_suggestions(suggestions, requested_address)
+    top_choice, top_score = scored[0]
+    if top_score >= HIGH_CONFIDENCE_THRESHOLD:
+        text += build_address_guidance(top_choice, top_score, scored)
+        state.pending_selection = top_choice
+        state.candidates = scored
+    elif state.retries < MAX_RETRIES:
+        text += build_address_retry_guidance(requested_address, scored)
+        state.retries += 1
+        state.candidates = scored
+    else:
+        raise ObstacleInputNeeded(
+            ObstacleMatch(
+                category="address",
+                obstacle_type="low_confidence_selection",
+                requires_human_input=True,
+                candidates=[s for s, _ in scored[:5]],
+            ),
+            task_domain,
+        )
+    return text
+
+
+def handle_address_verification_observation(
+    observation_text: str,
+    state: AddressAutocompleteState,
+    task_domain: str,
+) -> str:
+    """Call on the turn after an auto-selected suggestion's dropdown has
+    closed (`state.pending_selection` is set but the dropdown is no longer
+    open). Extracts the address field's OWN value and verifies it reflects
+    the selection; either clears `pending_selection`, injects a one-time
+    retry note, or raises `ObstacleInputNeeded(category="address",
+    obstacle_type="verification_failed")` once the retry budget is exhausted.
+
+    No-op (returns the text unchanged) if there is nothing pending to verify.
+    """
+    from src.services.obstacle_handler import ObstacleInputNeeded, ObstacleMatch
+
+    text = str(observation_text)
+    if not state.pending_selection:
+        return text
+
+    field_value = extract_address_field_value(text)
+    verified = verify_selected_value(field_value, state.pending_selection)
+    if verified:
+        state.pending_selection = None
+    elif state.retries < MAX_RETRIES:
+        text += (
+            "\n\n[ADDRESS_VERIFICATION_FAILED]\n"
+            f"The field does not appear to reflect the selected suggestion "
+            f"\"{state.pending_selection}\". Re-open the address field, "
+            "retype it, and re-select the correct suggestion from the dropdown."
+        )
+        state.retries += 1
+        state.pending_selection = None
+    else:
+        raise ObstacleInputNeeded(
+            ObstacleMatch(
+                category="address",
+                obstacle_type="verification_failed",
+                requires_human_input=True,
+                candidates=[s for s, _ in state.candidates[:5]],
+            ),
+            task_domain,
+        )
+    return text
