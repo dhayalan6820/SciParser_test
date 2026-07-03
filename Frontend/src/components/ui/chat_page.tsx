@@ -1337,16 +1337,16 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           {/* Avatar */}
           <div
             className={cn(
-              "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-lg transition-transform duration-300 group-hover:scale-110",
+              "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-lg transition-transform duration-300 group-hover:scale-110",
               isUser
                 ? "bg-emerald-600 text-white"
                 : "bg-muted border border-border text-foreground",
             )}
           >
             {isUser ? (
-              <User2 className="w-4 h-4" />
+              <User2 className="w-5 h-5" />
             ) : (
-              <img src={atomIcon} alt="SciParser" className="w-4 h-4 object-contain" />
+              <img src={atomIcon} alt="SciParser" className="w-6 h-6 object-contain" />
             )}
           </div>
 
@@ -2584,8 +2584,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         {!isMobile && isSidebarCollapsed && (
           <div className="flex h-full flex-col items-center py-4 gap-3 overflow-hidden">
             <div className="pointer-events-none absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,color-mix(in_oklab,var(--primary)_8%,transparent),transparent_28%)]" />
-            <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full border border-primary/20 bg-muted shadow-[0_0_18px_rgba(16,185,129,0.16)]">
-              <img src={atomIcon} alt="SciParser" className="h-6 w-6 object-contain" />
+            <div className="relative z-10 flex h-12 w-12 items-center justify-center rounded-full border border-primary/20 bg-muted shadow-[0_0_18px_rgba(16,185,129,0.16)]">
+              <img src={atomIcon} alt="SciParser" className="h-8 w-8 object-contain" />
             </div>
             <div className="relative z-10 w-8 h-px bg-border" />
             <button
@@ -2654,7 +2654,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             <div className="pointer-events-none absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,color-mix(in_oklab,var(--primary)_8%,transparent),transparent_28%)]" />
             {/* Logo */}
             <div className="relative z-10">
-              <img src={theme === "dark" ? logoDark : logoLight} alt="SciParser" className="h-8 w-auto object-contain" />
+              <img src={theme === "dark" ? logoDark : logoLight} alt="SciParser" className="h-10 w-auto object-contain" />
             </div>
             <div className="relative z-10 w-8 h-px bg-border" />
             {/* Chat nav icon */}
@@ -2752,7 +2752,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             <div className="rounded-[18px] border border-border bg-muted/30 px-4 py-4 shadow-[0_14px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
-                  <img src={theme === "dark" ? logoDark : logoLight} alt="SciParser" className="h-8 w-auto object-contain" />
+                  <img src={theme === "dark" ? logoDark : logoLight} alt="SciParser" className="h-10 w-auto object-contain" />
                 </div>
                 <div className="flex items-center gap-1.5">
                   {isMobile && (
@@ -2807,7 +2807,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                       AI Chat Core
                     </span>
                   </div>
-                  <img src={atomIcon} alt="SciParser" className="h-4 w-4 object-contain shrink-0" />
+                  <img src={atomIcon} alt="SciParser" className="h-6 w-6 object-contain shrink-0" />
                 </button>
 
                 <button
@@ -3242,8 +3242,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 >
                   {messages.length === 0 && !isAiTyping ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-center p-4 sm:p-6 chat-content-cap space-y-4">
-                      <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center border border-border">
-                        <img src={atomIcon} alt="SciParser" className="w-8 h-8 object-contain" />
+                      <div className="w-20 h-20 rounded-2xl bg-muted flex items-center justify-center border border-border">
+                        <img src={atomIcon} alt="SciParser" className="w-14 h-14 object-contain" />
                       </div>
                       <h2 className="text-xl font-bold text-foreground">
                         How can I assist you today?
