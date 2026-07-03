@@ -211,8 +211,17 @@ class ToolExecutionLog(Base):
     tool_output = Column(Text)
     status = Column(String(20), default="PENDING")
     error_message = Column(Text)
-    screenshot_url = Column(String(500))
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
+    # NOTE (Task #121): a `screenshot_url` column used to live here and was
+    # never written to by either write site (DatabaseManager.log_tool_execution
+    # in brain.py / AgentManager.log_tool_execution in agent_manager.py). It
+    # was removed because a dead column earmarked for image data is an
+    # attractive nuisance: a future "just store a debug screenshot link"
+    # change could start populating it with a live-typing frame that shows a
+    # password/OTP being entered, reopening the exact leak Task #120 closed.
+    # If a legitimate need for a screenshot reference arises, it must only
+    # ever store a link to a REDACTED/blurred snapshot — never a raw frame —
+    # and should be reviewed against Backend/tests/test_screenshot_leakage.py.
 
 
 # ─────────────────────────────────────────────

@@ -18,9 +18,11 @@ Audit findings (see code references below), each backed by a test:
    not a DB table) used only to replay the most recent frame to a
    reconnecting websocket client for the SAME authenticated user. It is
    never serialized to disk or a persisted table.
-3. `ToolExecutionLog.screenshot_url` is a schema column that is never
+3. `ToolExecutionLog.screenshot_url` was a schema column that was never
    populated by either write site (`Brain.log_tool_execution` /
-   `AgentManager.log_tool_execution`) — dead column, always NULL.
+   `AgentManager.log_tool_execution`) — dead column, always NULL. It has
+   since been removed entirely (Task #121) so it can't become an attractive
+   nuisance for a future change to start populating with raw frame data.
 4. The tool-output observation text that DOES get persisted to
    `ToolExecutionLog.tool_output` has any `[SCREENSHOT]...[/SCREENSHOT]`
    block stripped out BEFORE the secret-value redaction pass runs, so no
@@ -111,7 +113,12 @@ def test_last_frame_cache_is_plain_in_memory_dict():
     assert "user-2" not in manager.last_frame
 
 
-# ── 3. ToolExecutionLog.screenshot_url is never populated ──────────────────
+# ── 3. ToolExecutionLog no longer has a screenshot_url column ──────────────
+#
+# Task #121: the dead `screenshot_url` column (never written to by either
+# write site below) was removed entirely rather than left around as an
+# attractive nuisance for a future "just store a debug screenshot link"
+# change to accidentally populate with a raw frame.
 
 def test_tool_execution_log_never_sets_screenshot_url():
     """Static audit of both write sites that construct ToolExecutionLog rows:
@@ -127,17 +134,17 @@ def test_tool_execution_log_never_sets_screenshot_url():
     assert "screenshot_url" not in db_manager_log_source
     assert "screenshot_url" not in agent_manager_log_source
 
-    # Column still exists in the schema (documenting current dead-column
-    # state); if it gets removed entirely that's fine too, so don't assert
-    # its bare existence — just that nothing constructs a row with it set.
-    assert "screenshot_url" in ToolExecutionLog.__table__.columns
+    # The column itself was removed from the schema (Task #121) so it can
+    # never accidentally start holding raw screenshot frame data. If it is
+    # ever reintroduced, it must never be set by either write site above.
+    assert "screenshot_url" not in ToolExecutionLog.__table__.columns
 
 
 @pytest.mark.asyncio
-async def test_tool_execution_log_row_has_null_screenshot_url_after_write(sqlite_session_factory):
+async def test_tool_execution_log_row_has_no_screenshot_url_attribute(sqlite_session_factory):
     """End-to-end: actually persist a ToolExecutionLog row the same way the
-    real code path does, and confirm screenshot_url is NULL — never a
-    base64 payload."""
+    real code path does, and confirm there is no screenshot_url attribute at
+    all — never a base64 payload."""
     from datetime import datetime, timezone
 
     async with sqlite_session_factory() as db:
@@ -153,7 +160,7 @@ async def test_tool_execution_log_row_has_null_screenshot_url_after_write(sqlite
         db.add(log)
         await db.commit()
         await db.refresh(log)
-        assert log.screenshot_url is None
+        assert not hasattr(log, "screenshot_url")
 
 
 # ── 4. [SCREENSHOT]...[/SCREENSHOT] blocks are stripped before persistence ─

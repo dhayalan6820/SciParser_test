@@ -49,6 +49,11 @@ async def init_database():
             await conn.execute(text(
                 "ALTER TABLE schedules ADD COLUMN IF NOT EXISTS schedule_day_of_week VARCHAR(10) DEFAULT 'mon'"
             ))
+            # Task #121: drop the never-written screenshot_url column so it can't
+            # accidentally start holding raw screenshot frames (a secrets leak risk).
+            await conn.execute(text(
+                "ALTER TABLE tool_execution_logs DROP COLUMN IF EXISTS screenshot_url"
+            ))
             logger.info("Database tables checked/created successfully.")
     except Exception as e:
         logger.error(f"Error creating tables: {e}")
