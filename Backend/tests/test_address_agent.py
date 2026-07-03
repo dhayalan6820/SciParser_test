@@ -102,6 +102,112 @@ def test_extract_suggestions_returns_empty_for_no_matches():
     assert address_agent.extract_suggestions("") == []
 
 
+# ── Real-engine markup regression tests ─────────────────────────────────────
+# These fixtures mirror the ACTUAL text the two browser engines wired into
+# this repo (Backend/src/agents/browser_use_bridge.py) produce, verified
+# 2026-07-03 against the browser_use library's serializer source and a live
+# ARIA-compliant address-autocomplete widget (accessible-autocomplete /
+# GOV.UK address-lookup pattern) rendered in headless Chromium — see the
+# module docstring notes above `_AUTOCOMPLETE_HINTS` in address_agent.py.
+# Neither shape is a bullet/numbered list, which is what the previous
+# (unverified) regexes assumed.
+
+# Firefox/camoufox engine — config.BROWSER_ENGINE's DEFAULT. _CAMOUFOX_DOM_JS
+# never emits role/ARIA attributes, so every interactive element (including
+# role="option" rows, which still match its `[tabindex]` selector) collapses
+# to "  [N] <tag>[type] visible text".
+_CAMOUFOX_DROPDOWN_OBSERVATION = (
+    "URL: https://example.gov.uk/apply\n"
+    "Title: Address lookup\n"
+    "Engine: Firefox (camoufox)\n"
+    "\n"
+    "Interactive elements — use [index] with browser_click / browser_type:\n"
+    "  [0] <input>[text] 123 Main St\n"
+    "  [1] <li> 123 Main St, Springfield, IL 62704\n"
+    "  [2] <li> 456 Main St, Springfield, IL 62705\n"
+    "  [3] <li> 789 Oak Ave, Shelbyville, IL 62565\n"
+)
+
+# Chrome/browser-use CDP path — DOMTreeSerializer renders
+# "[backend_node_id]<tag attr=value ... />" with UNQUOTED attributes, and the
+# option's own visible text on the line immediately below it.
+_BROWSER_USE_DROPDOWN_OBSERVATION = (
+    "[10]<input id=shipping-address name=address role=combobox aria-expanded=true value=123 Main />\n"
+    "\t[11]<ul role=listbox />\n"
+    "\t\t[12]<li id=opt-0 role=option selected=false />\n"
+    "\t\t123 Main St, Springfield, IL 62704\n"
+    "\t\t[13]<li id=opt-1 role=option selected=false />\n"
+    "\t\t456 Main St, Springfield, IL 62705\n"
+)
+
+
+def test_detect_address_autocomplete_context_true_for_camoufox_markup_without_role_hints():
+    # Regression: camoufox never emits role=listbox/option, so detection must
+    # not depend solely on those keyword hints.
+    assert address_agent.detect_address_autocomplete_context(_CAMOUFOX_DROPDOWN_OBSERVATION) is True
+
+
+def test_detect_address_autocomplete_context_true_for_browser_use_unquoted_markup():
+    assert address_agent.detect_address_autocomplete_context(_BROWSER_USE_DROPDOWN_OBSERVATION) is True
+
+
+def test_detect_address_autocomplete_context_false_for_camoufox_markup_with_single_result():
+    # A single address-shaped line elsewhere on the page (e.g. a static
+    # "Address: 123 Main St" summary row) must not be mistaken for an open
+    # multi-option dropdown.
+    text = (
+        "Interactive elements — use [index] with browser_click / browser_type:\n"
+        "  [0] <a> Terms and conditions\n"
+        "  [1] <div> Address: 123 Main St, Springfield, IL 62704\n"
+    )
+    assert address_agent.detect_address_autocomplete_context(text) is False
+
+
+def test_extract_suggestions_parses_camoufox_element_lines():
+    suggestions = address_agent.extract_suggestions(_CAMOUFOX_DROPDOWN_OBSERVATION)
+    assert suggestions == [
+        "123 Main St, Springfield, IL 62704",
+        "456 Main St, Springfield, IL 62705",
+        "789 Oak Ave, Shelbyville, IL 62565",
+    ]
+
+
+def test_extract_suggestions_ignores_camoufox_input_field_line():
+    # The address input's own (still-being-typed) value must not be treated
+    # as one of the dropdown's suggestions.
+    suggestions = address_agent.extract_suggestions(_CAMOUFOX_DROPDOWN_OBSERVATION)
+    assert "123 Main St" not in suggestions
+
+
+def test_extract_suggestions_parses_browser_use_option_tag_lines():
+    suggestions = address_agent.extract_suggestions(_BROWSER_USE_DROPDOWN_OBSERVATION)
+    assert suggestions == [
+        "123 Main St, Springfield, IL 62704",
+        "456 Main St, Springfield, IL 62705",
+    ]
+
+
+def test_extract_address_field_value_from_browser_use_unquoted_attribute():
+    text = "[12]<input id=shipping-address name=address role=combobox value=123 Main St, Springfield, 62704 />"
+    assert address_agent.extract_address_field_value(text) == "123 Main St, Springfield, 62704"
+
+
+def test_handle_address_dropdown_high_confidence_on_camoufox_markup():
+    # End-to-end: the exact function Brain's tool-loop calls into must fire
+    # on real camoufox-shaped observation text, not just the old assumed
+    # bullet-list fixtures.
+    state = address_agent.AddressAutocompleteState()
+    assert address_agent.detect_address_autocomplete_context(_CAMOUFOX_DROPDOWN_OBSERVATION) is True
+    result = address_agent.handle_address_dropdown_observation(
+        _CAMOUFOX_DROPDOWN_OBSERVATION,
+        {"street": "Main St", "house_number": "123", "city": "Springfield", "postal_code": "62704"},
+        state,
+        "example.gov.uk",
+    )
+    assert "[ADDRESS_AUTOCOMPLETE_DETECTED]" in result
+    assert state.pending_selection == "123 Main St, Springfield, IL 62704"
+
+
 # ── score_suggestion / score_suggestions ────────────────────────────────────
 
 def test_score_suggestion_high_for_exact_match():

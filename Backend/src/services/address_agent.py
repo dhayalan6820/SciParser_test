@@ -142,6 +142,37 @@ def extract_requested_address_components(confirmed_inputs: Optional[Dict[str, An
 
 
 # ── Address-autocomplete context detection ──────────────────────────────────
+#
+# These patterns were originally written against an assumed, generic
+# accessibility-tree/bullet-list shape and were NEVER checked against what
+# the two browser engines actually wired into this repo (browser_use_bridge.py)
+# really emit. Verified 2026-07-03 by:
+#   1. Reading the production serializer source
+#      (browser_use.dom.serializer.serializer.DOMTreeSerializer /
+#      _build_attributes_string) used for the Chrome/CDP path — it renders
+#      "[backend_node_id]<tag attr=value ... />" with UNQUOTED attribute
+#      values, and puts each element's own visible text on a SEPARATE line
+#      below it (not inline, not bulleted, not quoted).
+#   2. Reading `_CAMOUFOX_DOM_JS` in browser_use_bridge.py — the JS injected
+#      for the Firefox/camoufox engine, which is `config.BROWSER_ENGINE`'s
+#      DEFAULT ("camoufox"). It NEVER reads/emits `role`/ARIA attributes at
+#      all, and collapses every interactive element (including
+#      `role="option"` suggestion rows, which still match its `[tabindex]`
+#      CSS selector) to a single line: "  [N] <tag>[type] visible text".
+#   3. Loading a live, real ARIA-compliant address/lookup-style autocomplete
+#      widget (github.com/alphagov/accessible-autocomplete — the same
+#      role=combobox/listbox/option pattern used by many production address
+#      lookups, incl. GOV.UK's address-lookup pattern) in headless Chromium
+#      and inspecting its actual rendered markup:
+#        <ul role="listbox">
+#          <li role="option" aria-selected="false" tabindex="-1">United States</li>
+#          ...
+#        </ul>
+#      i.e. plain option text with NO surrounding quotes/bullets/numbering.
+#
+# The original "-"/"1." bullet-list assumption matches NEITHER real engine's
+# output, which means the detector could silently never fire in production
+# (see task: "Confirm address-suggestion detection matches real site markup").
 
 _AUTOCOMPLETE_HINTS = [
     r"role=[\"']?listbox",
@@ -164,50 +195,92 @@ def detect_address_autocomplete_context(observation_text: str) -> bool:
     """True if the observation shows an address field with an open
     suggestion/autocomplete dropdown.
 
-    Requires BOTH an autocomplete-dropdown signal AND an address-field signal
-    so we don't fire on unrelated dropdowns (e.g. a country-code select).
+    Always requires an address-field signal (so we never fire on an
+    unrelated dropdown, e.g. a country-code select). On top of that, EITHER
+    of the following counts as evidence a dropdown is actually open:
+      - an explicit ARIA/keyword hint (`role=listbox`, "suggestions", ...) —
+        this is all the Chrome/browser-use CDP path ever needs, since its
+        serializer preserves `role` attributes.
+      - >=2 address-shaped candidate lines extracted from the raw text —
+        needed because the default camoufox/Firefox engine strips ARIA
+        `role` attributes entirely (see module-level note above), so a real
+        address-suggestion dropdown on that engine never contains any of the
+        keyword hints even though it is genuinely open.
     """
     if not observation_text:
         return False
     t = str(observation_text).lower()
-    has_dropdown = any(re.search(p, t) for p in _AUTOCOMPLETE_HINTS)
     has_address_field = any(re.search(p, t) for p in _ADDRESS_FIELD_HINTS)
-    return has_dropdown and has_address_field
+    if not has_address_field:
+        return False
+    has_dropdown_keyword = any(re.search(p, t) for p in _AUTOCOMPLETE_HINTS)
+    if has_dropdown_keyword:
+        return True
+    return len(extract_suggestions(observation_text)) >= 2
 
 
 # ── Suggestion extraction ───────────────────────────────────────────────────
 
-# Matches list-style suggestion lines, e.g.:
+# Chrome/browser-use CDP path: DOMTreeSerializer renders an option row as
+# "[id]<li role=option ... />" (unquoted attrs) with its visible text on the
+# NEXT line (any indentation), e.g.:
+#   [43]<li id=autocomplete-default__option--0 role=option selected=false />
+#   123 Main St, Springfield, IL 62704
+_OPTION_TAG_LINE_RE = re.compile(
+    r'''\[\d+\][^\n]*?\brole=[\"']?option\b[^\n]*/?>\s*\n\s*([^\n]{2,120})''',
+    re.IGNORECASE,
+)
+
+# Firefox/camoufox engine (the default per config.BROWSER_ENGINE): every
+# interactive element — including suggestion rows, since role is stripped —
+# collapses to a single line "  [N] <tag>[type] visible text". Restricted to
+# tags real suggestion rows are actually rendered as (list items, generic
+# containers, anchors, native <option>s) so we don't also sweep up unrelated
+# <button>/<input> controls on the same page.
+_CAMOUFOX_ELEMENT_LINE_RE = re.compile(
+    r'''\[\d+\]\s*<(?:li|div|a|option|span)>(?:\[[^\]\n]*\])?\s*([^\n]{4,120}?)\s*(?:\xe2\x86\x92[^\n]*)?$''',
+    re.MULTILINE | re.IGNORECASE,
+)
+
+# Best-effort legacy fallback for bullet/numbered-list-style tool output,
+# e.g.:
 #   - option "123 Main St, Springfield, IL 62704"
 #   1. 123 Main St, Springfield, IL 62704
-#   * 123 Main St, Springfield, IL 62704
+# Not confirmed against either real engine wired into this repo today, but
+# kept in case another MCP browser tool formats observations this way.
 _SUGGESTION_LINE_RE = re.compile(
     r'''(?:^|\n)\s*(?:[-*]|\d+[.)])\s*(?:option\s*)?["']?([^"'\n]{6,120}?)["']?\s*(?=\n|$)''',
     re.IGNORECASE,
 )
 
 
+def _looks_like_address_candidate(text: str) -> bool:
+    """Cheap filter so headings / unrelated element text isn't mistaken for
+    an address suggestion: must contain at least one digit (house number or
+    postal code) and some alphabetic content (street/city name)."""
+    return bool(re.search(r"\d", text) and re.search(r"[A-Za-z]", text))
+
+
 def extract_suggestions(observation_text: str) -> List[str]:
     """Pull candidate suggestion strings out of an observation.
 
-    Best-effort: looks for list-formatted lines that look like an address
-    (contain at least one digit and some alphabetic content), so headings /
-    unrelated bullet lines are skipped.
+    Tries, in order, the real Chrome/browser-use option-row shape, the real
+    (default) camoufox single-line element shape, and a legacy bullet/list
+    fallback — see the format notes above `_OPTION_TAG_LINE_RE`. Best-effort:
+    a candidate must look address-like (digit + alphabetic content) so
+    headings / unrelated lines are skipped.
     """
     if not observation_text:
         return []
     text = str(observation_text)
     candidates: List[str] = []
-    for match in _SUGGESTION_LINE_RE.finditer(text):
-        candidate = match.group(1).strip()
-        if not candidate:
-            continue
-        if not re.search(r"\d", candidate):
-            continue
-        if not re.search(r"[A-Za-z]", candidate):
-            continue
-        if candidate not in candidates:
-            candidates.append(candidate)
+    for pattern in (_OPTION_TAG_LINE_RE, _CAMOUFOX_ELEMENT_LINE_RE, _SUGGESTION_LINE_RE):
+        for match in pattern.finditer(text):
+            candidate = match.group(1).strip()
+            if not candidate or not _looks_like_address_candidate(candidate):
+                continue
+            if candidate not in candidates:
+                candidates.append(candidate)
     return candidates
 
 
@@ -291,6 +364,16 @@ _ADDRESS_FIELD_VALUE_FALLBACK_RE = re.compile(
     r'''(?:address|street)\s*(?:field)?\s*:\s*([^\n]{4,160})''',
     re.IGNORECASE,
 )
+# Real Chrome/browser-use CDP path: a whole element (incl. its `value=`
+# attribute) renders unquoted on ONE line, e.g.:
+#   [12]<input id=shipping-address name=address role=combobox value=123 Main St, Springfield, 62704 />
+# `value=` isn't the last attribute in browser-use's include-attributes
+# ordering, so the capture stops at the next `key=` token (or the closing
+# `/>`) rather than swallowing trailing attributes.
+_ADDRESS_FIELD_VALUE_UNQUOTED_RE = re.compile(
+    r'''<[a-zA-Z][\w:-]*\b[^\n]*?(?:address|street)[^\n]*?\bvalue=(.+?)(?=\s+[a-zA-Z][\w-]*=|\s*/>|\s*$)''',
+    re.IGNORECASE,
+)
 
 
 def extract_address_field_value(observation_text: str) -> Optional[str]:
@@ -308,6 +391,9 @@ def extract_address_field_value(observation_text: str) -> Optional[str]:
         return None
     text = str(observation_text)
     match = _ADDRESS_FIELD_VALUE_RE.search(text)
+    if match:
+        return match.group(1).strip()
+    match = _ADDRESS_FIELD_VALUE_UNQUOTED_RE.search(text)
     if match:
         return match.group(1).strip()
     match = _ADDRESS_FIELD_VALUE_FALLBACK_RE.search(text)
