@@ -1361,7 +1361,16 @@ class Brain:
                 await update_ui(0, "in-progress", input_data={"message": self._mask_labeled_secrets(user_message)})
 
                 # Construct a context string from history for Agent 1
-                history_context = "\n".join([f"{'User' if isinstance(m, HumanMessage) else 'AI'}: {m.content}" for m in chat_history[-5:]])
+                # Defense-in-depth: re-mask any "label: value" secret disclosures at
+                # READ time too, not just at write time. This protects against stale
+                # unmasked rows already sitting in the DB (e.g. written before this
+                # scrubbing existed, or any future write-path gap) leaking a raw
+                # password/OTP/card value into the prompt and causing the agent to
+                # reuse an expired code instead of asking for a fresh one.
+                history_context = "\n".join([
+                    f"{'User' if isinstance(m, HumanMessage) else 'AI'}: {self._mask_labeled_secrets(m.content)}"
+                    for m in chat_history[-5:]
+                ])
                 # Append prior browser state so the analysis agent knows what was already done
                 if prior_session_state:
                     history_context += (

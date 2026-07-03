@@ -57,3 +57,11 @@ it's a side effect of generic execution/audit logging.
   work / has expired and a new one is needed — silently re-asking with the
   exact same wording as the first prompt reads as if nothing happened and
   invites the user to resend the same stale value.
+- A write-time-only fix (scrub before storing) leaves every row written
+  *before* the fix shipped still raw in the DB — and any code that re-reads
+  message history (e.g. building an LLM context string) will happily replay
+  that old raw secret on the very next turn, looking like a fresh regression
+  even though the write path is already correct. Apply the same masking
+  function again at READ time (idempotent, cheap) as defense-in-depth, and
+  separately run a one-off remediation pass to scrub already-persisted rows —
+  fixing the writer alone does not fix the data that already exists.

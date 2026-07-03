@@ -288,3 +288,39 @@ def test_mask_labeled_secrets_leaves_normal_text_untouched():
 def test_mask_labeled_secrets_handles_empty():
     assert Brain._mask_labeled_secrets("") == ""
     assert Brain._mask_labeled_secrets(None) is None
+
+
+# ── Live bug: legacy raw OTP rows already in the DB (written before the
+# Task #118 fix shipped, or any other write-path gap) must not resurrect a
+# stale code once they're read back into history_context. This is
+# defense-in-depth applied at READ time, mirroring the write-time scrub, so
+# pre-existing unmasked data can never poison a later Agent-1 pass.
+
+def test_mask_labeled_secrets_scrubs_legacy_otp_and_verification_phrasings():
+    for text, otp in [
+        ("try this OTP : L4EX3M", "L4EX3M"),
+        ("6-Digit Verification Code: LK763F", "LK763F"),
+        ("Verification Code: XYLCHM", "XYLCHM"),
+    ]:
+        masked = Brain._mask_labeled_secrets(text)
+        assert otp not in masked
+        assert "[REDACTED]" in masked
+
+
+def test_history_context_construction_masks_legacy_unredacted_history(monkeypatch):
+    """Simulates the exact history_context list-comprehension in
+    Brain.process_message: even if chat_history contains an old Message row
+    that was never scrubbed, building history_context must not leak the raw
+    OTP value into the Agent-1 prompt."""
+    from langchain_core.messages import HumanMessage, AIMessage
+
+    chat_history = [
+        AIMessage(content="booking.com is asking for a verification code..."),
+        HumanMessage(content="try this OTP : L4EX3M"),
+    ]
+    history_context = "\n".join([
+        f"{'User' if isinstance(m, HumanMessage) else 'AI'}: {Brain._mask_labeled_secrets(m.content)}"
+        for m in chat_history[-5:]
+    ])
+    assert "L4EX3M" not in history_context
+    assert "[REDACTED]" in history_context
