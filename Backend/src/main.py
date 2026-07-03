@@ -1,5 +1,7 @@
 import os
 import re
+import io
+import csv
 import sys
 import uuid
 import json
@@ -19,7 +21,7 @@ from email.mime.text import MIMEText
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request, Query
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from sqlalchemy import select, delete
@@ -36,7 +38,7 @@ from src.schemas.schema import (
     AdminOverviewResponse, AdminActivityResponse, AdminAgentRunsResponse,
     AdminAutomationsResponse, AdminBrowserSessionsResponse, AdminUsageResponse,
     AdminSecurityResponse, AdminAgentRunTimelineResponse, AdminAgentActionResponse,
-    AdminAnalyticsResponse,
+    AdminAnalyticsResponse, OperationsLogListResponse
 )
 from src.utils.logger import logger
 from src.services.brain import brain
@@ -693,6 +695,65 @@ async def admin_operations_metrics(
 ):
     return await ChatService.admin_get_operations_metrics(db, days=days)
 
+@app.get("/sciparser/v1/admin/operations/logs", response_model=OperationsLogListResponse)
+async def admin_operations_logs(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+    user_id: Optional[str] = Query(None),
+    username: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    agent_stage: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_operations_logs(
+        db, page=page, page_size=page_size, user_id=user_id, username=username,
+        status_value=status, agent_stage=agent_stage, start_date=start_date, end_date=end_date,
+    )
+
+@app.get("/sciparser/v1/admin/operations/export")
+async def admin_operations_export(
+    format: str = Query("csv", pattern="^(csv|json)$"),
+    user_id: Optional[str] = Query(None),
+    username: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    agent_stage: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    rows = await ChatService.admin_export_operations_logs(
+        db, user_id=user_id, username=username, status_value=status,
+        agent_stage=agent_stage, start_date=start_date, end_date=end_date,
+    )
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+
+    if format == "json":
+        payload = json.dumps(rows, indent=2)
+        return Response(
+            content=payload,
+            media_type="application/json",
+            headers={"Content-Disposition": f"attachment; filename=operations_export_{timestamp}.json"},
+        )
+
+    fieldnames = [
+        "id", "chat_id", "user_id", "username", "email", "agent_stage",
+        "stage_name", "status", "error_message", "tokens", "cost", "created_at",
+    ]
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=fieldnames)
+    writer.writeheader()
+    for row in rows:
+        writer.writerow(row)
+    return Response(
+        content=buffer.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=operations_export_{timestamp}.csv"},
+    )
+
 @app.get("/sciparser/v1/admin/metrics/overview", response_model=AdminOverviewResponse)
 async def admin_metrics_overview(
     days: int = Query(30, ge=1, le=365),
@@ -807,7 +868,6 @@ async def admin_security(
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
     return await ChatService.admin_get_security_overview(db)
-
 # --- Upload Endpoints ---
 
 @app.post("/sciparser/v1/upload/metadata")

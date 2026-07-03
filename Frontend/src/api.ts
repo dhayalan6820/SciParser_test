@@ -828,7 +828,57 @@ export const sciparserApi = {
     if (!res.ok) throw new Error(await res.text());
     return res.json() as Promise<AdminSecurity>;
   },
+
+  // Admin: Operations Logs (filter/audit)
+  adminGetOperationsLogs: async (filters: OperationsLogFilters) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const params = buildOperationsLogParams(filters);
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/operations/logs?${params.toString()}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<OperationsLogListResponse>;
+  },
+
+  adminExportOperationsLogs: async (filters: OperationsLogFilters, format: "csv" | "json") => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const params = buildOperationsLogParams(filters);
+    params.set("format", format);
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/operations/export?${params.toString()}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename=([^;]+)/);
+    const filename = match ? match[1].trim() : `operations_export.${format}`;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  },
 };
+
+function buildOperationsLogParams(filters: OperationsLogFilters): URLSearchParams {
+  const params = new URLSearchParams();
+  if (filters.page) params.set("page", String(filters.page));
+  if (filters.pageSize) params.set("page_size", String(filters.pageSize));
+  if (filters.username) params.set("username", filters.username);
+  if (filters.userId) params.set("user_id", filters.userId);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.agentStage) params.set("agent_stage", filters.agentStage);
+  if (filters.startDate) params.set("start_date", filters.startDate);
+  if (filters.endDate) params.set("end_date", filters.endDate);
+  return params;
+}
 
 export interface ChatMessage {
   form: any;
@@ -993,28 +1043,35 @@ export interface AdminAnalytics {
   total_failed: number;
   overall_success_rate: number;
 }
+export interface OperationsLogFilters {
+  page?: number;
+  pageSize?: number;
+  userId?: string;
+  username?: string;
+  status?: string;
+  agentStage?: string;
+  startDate?: string;
+  endDate?: string;
+}
 
-export interface AgentStage {
+export interface OperationsLogEntry {
   id: string;
   chat_id: string;
   user_id: string;
+  username: string | null;
+  email: string | null;
   agent_stage: string;
   stage_name: string;
-  input_data: Record<string, any>;
-  output_data: Record<string, any>;
   status: string;
-  error_message?: string;
+  error_message: string | null;
+  tokens: number;
+  cost: number;
   created_at: string;
 }
 
-export interface ToolExecution {
-  id: string;
-  chat_id: string;
-  agent_id: string;
-  tool_name: string;
-  tool_input: Record<string, any>;
-  tool_output: Record<string, any>;
-  status: string;
-  error_message?: string;
-  created_at: string;
+export interface OperationsLogListResponse {
+  logs: OperationsLogEntry[];
+  total: number;
+  page: number;
+  page_size: number;
 }

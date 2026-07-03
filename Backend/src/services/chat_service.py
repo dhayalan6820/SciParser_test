@@ -309,6 +309,159 @@ class ChatService:
             "status_breakdown": status_breakdown,
         }
 
+    # ── Admin: operations log filtering / export ────────────────────────
+    @staticmethod
+    async def _build_operations_log_query(
+        db: AsyncSession,
+        user_id: Optional[str] = None,
+        username: Optional[str] = None,
+        status_value: Optional[str] = None,
+        agent_stage: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ):
+        from src.database.chat_db import AgentExecutionLog
+        from sqlalchemy import and_, or_
+
+        conditions = []
+        if user_id:
+            conditions.append(AgentExecutionLog.user_id == user_id)
+        if status_value:
+            conditions.append(func.upper(AgentExecutionLog.status) == status_value.upper())
+        if agent_stage:
+            conditions.append(AgentExecutionLog.agent_stage == agent_stage)
+        if start_date:
+            try:
+                start_dt = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+                conditions.append(AgentExecutionLog.created_at >= start_dt)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid start_date, expected YYYY-MM-DD")
+        if end_date:
+            try:
+                end_dt = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc) + timedelta(days=1)
+                conditions.append(AgentExecutionLog.created_at < end_dt)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid end_date, expected YYYY-MM-DD")
+
+        resolved_user_ids = None
+        if username:
+            user_stmt = select(User.user_id).where(
+                or_(User.username.ilike(f"%{username}%"), User.email.ilike(f"%{username}%"))
+            )
+            user_result = await db.execute(user_stmt)
+            resolved_user_ids = [row[0] for row in user_result.all()]
+            if not resolved_user_ids:
+                # No matching users -> force an empty result set downstream.
+                resolved_user_ids = ["__no_match__"]
+            conditions.append(AgentExecutionLog.user_id.in_(resolved_user_ids))
+
+        stmt = select(AgentExecutionLog)
+        if conditions:
+            stmt = stmt.where(and_(*conditions))
+        return stmt, AgentExecutionLog
+
+    @staticmethod
+    def _serialize_operations_log(log, users_by_id: dict) -> dict:
+        tokens = 0
+        if log.token_usage:
+            try:
+                parsed = json.loads(log.token_usage)
+                if isinstance(parsed, dict):
+                    tokens = int(parsed.get("total_tokens") or parsed.get("total") or 0)
+                elif isinstance(parsed, (int, float)):
+                    tokens = int(parsed)
+            except Exception:
+                pass
+
+        cost = 0.0
+        if log.cost:
+            try:
+                cost = float(log.cost)
+            except Exception:
+                pass
+
+        user = users_by_id.get(log.user_id)
+        return {
+            "id": log.id,
+            "chat_id": log.chat_id,
+            "user_id": log.user_id,
+            "username": user.username if user else None,
+            "email": user.email if user else None,
+            "agent_stage": log.agent_stage,
+            "stage_name": log.stage_name,
+            "status": (log.status or "UNKNOWN").upper(),
+            "error_message": log.error_message,
+            "tokens": tokens,
+            "cost": round(cost, 6),
+            "created_at": log.created_at.isoformat() if log.created_at else "",
+        }
+
+    @staticmethod
+    async def admin_get_operations_logs(
+        db: AsyncSession,
+        page: int = 1,
+        page_size: int = 20,
+        user_id: Optional[str] = None,
+        username: Optional[str] = None,
+        status_value: Optional[str] = None,
+        agent_stage: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> dict:
+        """Return a paginated, filterable list of raw execution log rows for admin auditing."""
+        stmt, AgentExecutionLog = await ChatService._build_operations_log_query(
+            db, user_id=user_id, username=username, status_value=status_value,
+            agent_stage=agent_stage, start_date=start_date, end_date=end_date,
+        )
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await db.execute(count_stmt)).scalar() or 0
+
+        stmt = stmt.order_by(AgentExecutionLog.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+        result = await db.execute(stmt)
+        logs = result.scalars().all()
+
+        user_ids = {log.user_id for log in logs}
+        users_by_id = {}
+        if user_ids:
+            user_result = await db.execute(select(User).where(User.user_id.in_(user_ids)))
+            users_by_id = {u.user_id: u for u in user_result.scalars().all()}
+
+        return {
+            "logs": [ChatService._serialize_operations_log(log, users_by_id) for log in logs],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+
+    @staticmethod
+    async def admin_export_operations_logs(
+        db: AsyncSession,
+        user_id: Optional[str] = None,
+        username: Optional[str] = None,
+        status_value: Optional[str] = None,
+        agent_stage: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        max_rows: int = 20000,
+    ) -> List[dict]:
+        """Return every matching execution log row (capped) for CSV/JSON export."""
+        stmt, AgentExecutionLog = await ChatService._build_operations_log_query(
+            db, user_id=user_id, username=username, status_value=status_value,
+            agent_stage=agent_stage, start_date=start_date, end_date=end_date,
+        )
+        stmt = stmt.order_by(AgentExecutionLog.created_at.desc()).limit(max_rows)
+        result = await db.execute(stmt)
+        logs = result.scalars().all()
+
+        user_ids = {log.user_id for log in logs}
+        users_by_id = {}
+        if user_ids:
+            user_result = await db.execute(select(User).where(User.user_id.in_(user_ids)))
+            users_by_id = {u.user_id: u for u in user_result.scalars().all()}
+
+        return [ChatService._serialize_operations_log(log, users_by_id) for log in logs]
+
     @staticmethod
     def _parse_token_usage(raw: Optional[str]) -> dict:
         """Best-effort parse of the JSON token_usage blob stored on AgentExecutionLog rows."""

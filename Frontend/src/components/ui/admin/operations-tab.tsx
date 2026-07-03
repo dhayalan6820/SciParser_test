@@ -1,5 +1,13 @@
 import * as React from "react";
-import { sciparserApi, OperationsMetrics } from "../../../api";
+import { Button } from "../button";
+import { Input } from "../input";
+import {
+  sciparserApi,
+  OperationsMetrics,
+  OperationsLogEntry,
+  OperationsLogFilters,
+} from "../../../api";
+import { cn } from "../../../../lib/utils";
 import {
   Loader2,
   AlertCircle,
@@ -10,6 +18,10 @@ import {
   Cpu,
   DollarSign,
   XCircle,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Filter,
 } from "lucide-react";
 
 export const OperationsTab: React.FC = () => {
@@ -141,6 +153,8 @@ export const OperationsTab: React.FC = () => {
           </ul>
         )}
       </div>
+
+      <OperationsLogTable />
     </div>
   );
 };
@@ -154,3 +168,252 @@ const StatCard: React.FC<{ icon: React.ReactNode; label: string; value: string }
     <div className="text-2xl font-semibold">{value}</div>
   </div>
 );
+
+const LOG_PAGE_SIZE = 20;
+
+const OperationsLogTable: React.FC = () => {
+  const [logs, setLogs] = React.useState<OperationsLogEntry[]>([]);
+  const [total, setTotal] = React.useState(0);
+  const [page, setPage] = React.useState(1);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const [exporting, setExporting] = React.useState<"csv" | "json" | null>(null);
+  const [exportError, setExportError] = React.useState<string | null>(null);
+
+  const [username, setUsername] = React.useState("");
+  const [status, setStatus] = React.useState("");
+  const [agentStage, setAgentStage] = React.useState("");
+  const [startDate, setStartDate] = React.useState("");
+  const [endDate, setEndDate] = React.useState("");
+
+  const totalPages = Math.max(1, Math.ceil(total / LOG_PAGE_SIZE));
+
+  const buildFilters = React.useCallback(
+    (
+      pageArg: number,
+      overrides?: Partial<{ username: string; status: string; agentStage: string; startDate: string; endDate: string }>
+    ): OperationsLogFilters => {
+      const merged = {
+        username,
+        status,
+        agentStage,
+        startDate,
+        endDate,
+        ...overrides,
+      };
+      return {
+        page: pageArg,
+        pageSize: LOG_PAGE_SIZE,
+        username: merged.username || undefined,
+        status: merged.status || undefined,
+        agentStage: merged.agentStage || undefined,
+        startDate: merged.startDate || undefined,
+        endDate: merged.endDate || undefined,
+      };
+    },
+    [username, status, agentStage, startDate, endDate]
+  );
+
+  const loadLogs = React.useCallback(
+    async (
+      pageArg: number,
+      overrides?: Partial<{ username: string; status: string; agentStage: string; startDate: string; endDate: string }>
+    ) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await sciparserApi.adminGetOperationsLogs(buildFilters(pageArg, overrides));
+        setLogs(res.logs);
+        setTotal(res.total);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load operations log");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [buildFilters]
+  );
+
+  React.useEffect(() => {
+    loadLogs(page);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
+
+  const applyFilters = () => {
+    setPage(1);
+    loadLogs(1);
+  };
+
+  const clearFilters = () => {
+    setUsername("");
+    setStatus("");
+    setAgentStage("");
+    setStartDate("");
+    setEndDate("");
+    setPage(1);
+    loadLogs(1, { username: "", status: "", agentStage: "", startDate: "", endDate: "" });
+  };
+
+  const handleExport = async (format: "csv" | "json") => {
+    setExporting(format);
+    setExportError(null);
+    try {
+      await sciparserApi.adminExportOperationsLogs(buildFilters(1), format);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  return (
+    <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-4 space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h3 className="text-sm font-medium flex items-center gap-1.5">
+          <Filter className="h-4 w-4" /> Execution Log
+        </h3>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={exporting !== null}
+            onClick={() => handleExport("csv")}
+          >
+            {exporting === "csv" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            Export CSV
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={exporting !== null}
+            onClick={() => handleExport("json")}
+          >
+            {exporting === "json" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            Export JSON
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+        <Input
+          placeholder="User (username/email)"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          className="text-sm"
+        />
+        <select
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          className="bg-transparent border border-slate-200 dark:border-slate-700 rounded px-2 py-1.5 text-sm"
+        >
+          <option value="">Any status</option>
+          <option value="SUCCESS">Success</option>
+          <option value="FAILED">Failed</option>
+          <option value="PENDING">Pending</option>
+        </select>
+        <Input
+          placeholder="Stage (e.g. Agent 1)"
+          value={agentStage}
+          onChange={(e) => setAgentStage(e.target.value)}
+          className="text-sm"
+        />
+        <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="text-sm" />
+        <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="text-sm" />
+      </div>
+      <div className="flex items-center gap-2">
+        <Button size="sm" onClick={applyFilters}>Apply Filters</Button>
+        <Button size="sm" variant="outline" onClick={clearFilters}>Clear</Button>
+        {exportError && <span className="text-xs text-red-500">{exportError}</span>}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-10 text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading logs...
+        </div>
+      ) : error ? (
+        <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/40 rounded-lg text-red-600 dark:text-red-400 text-sm">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          {error}
+        </div>
+      ) : logs.length === 0 ? (
+        <p className="text-xs text-muted-foreground py-6 text-center">No runs match these filters.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-muted-foreground border-b border-slate-200 dark:border-slate-800">
+                <th className="py-2 pr-3 font-medium">Time</th>
+                <th className="py-2 pr-3 font-medium">User</th>
+                <th className="py-2 pr-3 font-medium">Stage</th>
+                <th className="py-2 pr-3 font-medium">Status</th>
+                <th className="py-2 pr-3 font-medium">Tokens</th>
+                <th className="py-2 pr-3 font-medium">Cost</th>
+                <th className="py-2 pr-3 font-medium">Error</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map((log) => (
+                <tr key={log.id} className="border-b border-slate-100 dark:border-slate-900/60">
+                  <td className="py-2 pr-3 whitespace-nowrap text-xs text-muted-foreground">
+                    {new Date(log.created_at).toLocaleString()}
+                  </td>
+                  <td className="py-2 pr-3">{log.username || log.user_id}</td>
+                  <td className="py-2 pr-3">{log.stage_name}</td>
+                  <td className="py-2 pr-3">
+                    <span
+                      className={cn(
+                        "px-1.5 py-0.5 rounded text-xs font-medium",
+                        log.status === "SUCCESS"
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
+                          : log.status === "FAILED"
+                          ? "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400"
+                          : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                      )}
+                    >
+                      {log.status}
+                    </span>
+                  </td>
+                  <td className="py-2 pr-3">{log.tokens.toLocaleString()}</td>
+                  <td className="py-2 pr-3">${log.cost.toFixed(4)}</td>
+                  <td className="py-2 pr-3 max-w-[220px] truncate text-xs text-muted-foreground" title={log.error_message || ""}>
+                    {log.error_message || "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {!loading && !error && logs.length > 0 && (
+        <div className="flex items-center justify-between text-xs text-muted-foreground pt-2">
+          <span>
+            Page {page} of {totalPages} ({total} total)
+          </span>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 w-7 p-0"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 w-7 p-0"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

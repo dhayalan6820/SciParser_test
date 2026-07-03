@@ -194,6 +194,28 @@ class AdminAnalyticsResponse(BaseModel):
     total_failed: int
     overall_success_rate: float
 
+
+class OperationsLogEntry(BaseModel):
+    id: str
+    chat_id: str
+    user_id: str
+    username: Optional[str] = None
+    email: Optional[str] = None
+    agent_stage: str
+    stage_name: str
+    status: str
+    error_message: Optional[str] = None
+    tokens: int
+    cost: float
+    created_at: str
+
+
+class OperationsLogListResponse(BaseModel):
+    logs: List[OperationsLogEntry]
+    total: int
+    page: int
+    page_size: int
+
 class BackendChatMessage(BaseModel):
     id: Optional[str] = None # Added to match frontend 'id'
     log_id: Optional[str] = None # Changed to Optional to prevent validation failure
