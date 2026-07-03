@@ -2417,6 +2417,11 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       <PremiumScheduler
         isOpen={isSchedulerOpen}
         onClose={() => setIsSchedulerOpen(false)}
+        onScheduled={() => {
+          setIsSelectionMode(false);
+          setSelectedMessages([]);
+          setSelectedToolIds([]);
+        }}
         selectedMessages={selectedMessages}
         selectedTools={selectedTools}
         chatId={activeThreadId}
@@ -2654,7 +2659,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             <div className="pointer-events-none absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,color-mix(in_oklab,var(--primary)_8%,transparent),transparent_28%)]" />
             {/* Logo */}
             <div className="relative z-10">
-              <img src={theme === "dark" ? logoDark : logoLight} alt="SciParser" className="h-40 w-auto object-contain" />
+              <img src={theme === "dark" ? logoDark : logoLight} alt="SciParser" className="h-10 w-auto object-contain" />
             </div>
             <div className="relative z-10 w-8 h-px bg-border" />
             {/* Chat nav icon */}
@@ -2752,7 +2757,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             <div className="rounded-[18px] border border-border bg-muted/30 px-4 py-4 shadow-[0_14px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
-                  <img src={theme === "dark" ? logoDark : logoLight} alt="SciParser" className="h-40 w-auto object-contain" />
+                  <img src={theme === "dark" ? logoDark : logoLight} alt="SciParser" className="h-10 w-auto object-contain" />
                 </div>
                 <div className="flex items-center gap-1.5">
                   {isMobile && (

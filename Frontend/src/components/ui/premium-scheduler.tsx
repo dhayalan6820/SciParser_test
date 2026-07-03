@@ -84,6 +84,7 @@ interface Schedule {
 interface PremiumSchedulerProps {
   isOpen: boolean;
   onClose: () => void;
+  onScheduled?: () => void;
   selectedMessages: string[];
   selectedTools: string[];
   chatId?: string;
@@ -95,6 +96,7 @@ interface PremiumSchedulerProps {
 export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({ 
   isOpen, 
   onClose, 
+  onScheduled,
   selectedMessages, 
   selectedTools,
   chatId,
@@ -127,6 +129,8 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
 
   // Empty tool log warning state
   const [showEmptyToolsWarning, setShowEmptyToolsWarning] = React.useState(false);
+  const [taskNameMissing, setTaskNameMissing] = React.useState(false);
+  const taskNameInputRef = React.useRef<HTMLInputElement>(null);
 
   // Truncate tool output to keep token cost low
   const summarizeOutput = (raw: unknown, maxChars = 500): string => {
@@ -137,6 +141,16 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
 
   const handleCreateSchedule = async (skipWarning = false) => {
     setScheduleError("");
+
+    // Task name is required — tell the user instead of silently blocking the button
+    if (!taskName.trim()) {
+      setTaskNameMissing(true);
+      setScheduleError("Please enter a task name before confirming the schedule.");
+      taskNameInputRef.current?.focus();
+      taskNameInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    setTaskNameMissing(false);
 
     // If no tools have been selected, warn the user first
     if (!skipWarning && selectedTools.length === 0) {
@@ -178,6 +192,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
       };
       await sciparserApi.createSchedule(data);
       setScheduleSuccess(true);
+      onScheduled?.();
       setTimeout(() => onClose(), 1500);
     } catch (err: any) {
       console.error("Failed to create schedule:", err);
@@ -439,12 +454,27 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">Task Name <span className="text-red-500">*</span></label>
                   <input
+                    ref={taskNameInputRef}
                     type="text"
                     placeholder="e.g. Check website availability"
                     value={taskName}
-                    onChange={(e) => setTaskName(e.target.value)}
-                    className="w-full px-4 py-4 rounded-xl bg-card border border-border text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all placeholder:text-muted-foreground"
+                    onChange={(e) => {
+                      setTaskName(e.target.value);
+                      if (e.target.value.trim()) {
+                        setTaskNameMissing(false);
+                        setScheduleError("");
+                      }
+                    }}
+                    className={cn(
+                      "w-full px-4 py-4 rounded-xl bg-card border text-sm font-bold text-foreground focus:outline-none focus:ring-2 transition-all placeholder:text-muted-foreground",
+                      taskNameMissing
+                        ? "border-red-500 focus:ring-red-500/20"
+                        : "border-border focus:ring-indigo-500/20"
+                    )}
                   />
+                  {taskNameMissing && (
+                    <p className="text-[10px] font-bold text-red-500 ml-1">Task name is required to confirm the schedule.</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">Description (Optional)</label>
@@ -1076,7 +1106,7 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                   </Button>
                   <Button 
                     onClick={() => handleCreateSchedule()}
-                    disabled={loading || !taskName || scheduleSuccess}
+                    disabled={loading || scheduleSuccess}
                     className="h-11 sm:h-14 flex-1 sm:flex-none sm:px-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-foreground text-[11px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-indigo-500/20 transition-all active:scale-95 disabled:opacity-50 sm:min-w-[200px] flex items-center justify-center gap-2 sm:gap-3"
                   >
                     {loading ? (
