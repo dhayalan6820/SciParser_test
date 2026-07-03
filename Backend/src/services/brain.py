@@ -32,6 +32,13 @@ from src import config
 from src.agents.mcp_agent import MCPToolManager
 from src.utils.session_manager import SessionManager
 from src.services.memory_service import MemoryService
+from src.services.obstacle_handler import (
+    detect_captcha_type,
+    detect_obstacle,
+    ObstacleMatch,
+    ObstacleInputNeeded,
+    build_input_form,
+)
 
 # ATAG Models
 from src.services.ATAG import (
@@ -56,23 +63,22 @@ def _build_browser_static_prompt() -> str:
 
 
 def _detect_captcha(observation_text: str) -> Optional[str]:
-    """Return CAPTCHA type string if a known CAPTCHA signal is present, else None."""
-    t = observation_text.lower()
-    if 'recaptcha' in t or 'g-recaptcha' in t:
-        if 'v3' in t or 'invisible' in t:
-            return 'recaptcha_v3'
-        return 'recaptcha_v2'
-    if 'hcaptcha' in t or 'h-captcha' in t:
-        return 'hcaptcha'
-    if 'cf-turnstile' in t or ('cloudflare' in t and 'challenge' in t):
-        return 'cloudflare_turnstile'
-    if 'slider' in t and ('captcha' in t or 'drag' in t or 'verify' in t):
-        return 'slider'
-    if ('captcha' in t or 'verification code' in t) and (
-        'type' in t or 'enter' in t or 'characters' in t
-    ):
-        return 'image_text'
-    return None
+    """Return CAPTCHA type string if a known CAPTCHA signal is present, else None.
+
+    Thin wrapper kept for backward compatibility (existing tests call this by
+    name) — the canonical detector now lives in the generic obstacle-handling
+    framework (`src.services.obstacle_handler`) alongside the other obstacle
+    detectors (e.g. OTP), so detection logic isn't duplicated per type.
+    """
+    return detect_captcha_type(observation_text)
+
+
+def _extract_form_answer(user_message: str) -> str:
+    """Pull the raw value out of a NEEDS_INPUT form submission like
+    'Verification Code: 123456' — falls back to the full message if no
+    'Label: value' pattern is found."""
+    m = re.search(r":\s*(.+)$", (user_message or "").strip())
+    return m.group(1).strip() if m else (user_message or "").strip()
 
 
 class DatabaseManager:
@@ -810,7 +816,32 @@ class Brain:
                             )
                 except Exception as _ce:
                     logger.warning(f"CAPTCHA detection error (non-fatal): {_ce}")
-                
+
+                # ── Obstacle detection (generic framework) — human-input types like OTP ──
+                # CAPTCHA is handled above (agent attempts to self-solve). Obstacles that
+                # can only be resolved by a human (requires_human_input=True) pause the run
+                # here so it can be surfaced via the NEEDS_INPUT form and resumed later.
+                try:
+                    if not _captcha_type:
+                        _obstacle = detect_obstacle(str(observation))
+                        if _obstacle and _obstacle.requires_human_input:
+                            if self.memory_service:
+                                try:
+                                    # Remember that this site/flow uses this obstacle type so
+                                    # future runs recognize and pause on it immediately. This
+                                    # never stores the code/secret itself — only that the
+                                    # pattern exists on this domain.
+                                    await self.memory_service._update_procedural(
+                                        user_id, _obstacle.skill_name, _task_domain, [], success=True,
+                                    )
+                                except Exception:
+                                    pass
+                            raise ObstacleInputNeeded(_obstacle, _task_domain)
+                except ObstacleInputNeeded:
+                    raise
+                except Exception as _oe:
+                    logger.warning(f"Obstacle detection error (non-fatal): {_oe}")
+
                 status = "SUCCESS" if "Error" not in str(observation) else "FAILED"
 
                 # Clean observation for logs (remove large base64 data)
@@ -1035,6 +1066,13 @@ class Brain:
                         await db.commit()
                     logger.info(f"[brain] Reset intent detected for chat {chat_id} — session_state cleared.")
 
+                # ── Obstacle resume check ───────────────────────────────────────
+                # If the previous turn paused mid-run for human input (e.g. an OTP
+                # code), this message is that answer — resume the paused run
+                # instead of treating it as a brand-new task.
+                pending_obstacle = prior_session_state.pop("pending_obstacle", None) if prior_session_state else None
+                _obstacle_attempt_count = (pending_obstacle or {}).get("attempt", 0)
+
                 # Add current message to DB
                 human_msg = Message(
                     message_id=str(uuid.uuid4()),
@@ -1047,70 +1085,88 @@ class Brain:
                 db.add(human_msg)
                 await db.commit()
 
-            # --- Agent 1: Analysis (Now with history context) ---
-            await update_ui(0, "in-progress", input_data={"message": user_message})
-            
-            # Construct a context string from history for Agent 1
-            history_context = "\n".join([f"{'User' if isinstance(m, HumanMessage) else 'AI'}: {m.content}" for m in chat_history[-5:]])
-            # Append prior browser state so the analysis agent knows what was already done
-            if prior_session_state:
-                history_context += (
-                    f"\n\nPREVIOUS SESSION STATE: The agent previously completed: "
-                    f"{prior_session_state.get('accomplishment_summary', '')} "
-                    f"The browser is currently on: {prior_session_state.get('last_url', 'unknown page')}."
-                )
-            understanding = await self.atag_processor.run_input_understanding(user_message, history_context=history_context)
-            
-            if understanding.get("status") == "NEEDS_INPUT":
-                form_data = understanding.get("form")
-                await update_ui(0, "completed", output_data=understanding, details=f"Missing critical inputs. Form requested.")
-                
-                # Save the NEEDS_INPUT message to DB with form data
-                async with AsyncSessionLocal() as db:
-                    ai_msg = Message(
-                        message_id=str(uuid.uuid4()),
-                        chat_id=chat_id,
-                        user_id=user_id,
-                        role="ai",
-                        content=form_data.get("description", "I need more information to proceed."),
-                        form_data=json.dumps(form_data),
-                        created_at=datetime.now(timezone.utc)
-                    )
-                    db.add(ai_msg)
-                    await db.commit()
-                
-                return {"status": "NEEDS_INPUT", "form": form_data}
-
-            task_summary = understanding.get("task_summary", "Processing...")
-            confirmed_inputs = understanding.get("confirmed_inputs", {})
-            discovery_strategy = understanding.get("discovery_strategy", "direct_execution")
-
-            # ── Memory routing: extract domain + retrieve relevant memories ──
-            domain = self._extract_domain_from_task(user_message, confirmed_inputs)
             graph_output: Dict[str, Any] = {}   # ensure exists for finally write-back
             memory_block = ""
-            if self.memory_service:
-                try:
-                    mem_ctx = await self.memory_service.retrieve(user_id, domain, task_summary)
-                    memory_block = mem_ctx.to_prompt_block()
-                    if memory_block:
-                        logger.info(f"[Memory] Injecting {len(memory_block)} chars for domain '{domain}'")
-                except Exception as _me:
-                    logger.warning(f"[Memory] retrieve error (non-fatal): {_me}")
 
-            await update_ui(0, "completed", output_data=understanding, details=f"Task Summary: {task_summary}")
-            # --- NEW: Update Session Title based on Task Summary ---
-            async with AsyncSessionLocal() as db:
-                stmt = select(ChatSession).where(ChatSession.id == chat_id)
-                res = await db.execute(stmt)
-                session_db = res.scalar_one_or_none()
-                if session_db and (session_db.title == "New Chat" or len(session_db.title) < 5):
-                    session_db.title = task_summary[:100]
-                    await db.commit()
+            if pending_obstacle:
+                # Resuming a run that paused for human input (e.g. an OTP code) —
+                # skip Agent 1 entirely and reuse the task context captured when
+                # the run paused, so the user's answer isn't misread as a new task.
+                task_summary = pending_obstacle["task_summary"]
+                confirmed_inputs = pending_obstacle.get("confirmed_inputs", {})
+                discovery_strategy = pending_obstacle.get("discovery_strategy", "direct_execution")
+                domain = pending_obstacle.get("site_domain") or self._extract_domain_from_task(task_summary, confirmed_inputs)
+                await update_ui(0, "completed", details="Resuming after obstacle input was provided.")
+                if self.memory_service:
+                    try:
+                        mem_ctx = await self.memory_service.retrieve(user_id, domain, task_summary)
+                        memory_block = mem_ctx.to_prompt_block()
+                    except Exception as _me:
+                        logger.warning(f"[Memory] retrieve error (non-fatal): {_me}")
+            else:
+                # --- Agent 1: Analysis (Now with history context) ---
+                await update_ui(0, "in-progress", input_data={"message": user_message})
+
+                # Construct a context string from history for Agent 1
+                history_context = "\n".join([f"{'User' if isinstance(m, HumanMessage) else 'AI'}: {m.content}" for m in chat_history[-5:]])
+                # Append prior browser state so the analysis agent knows what was already done
+                if prior_session_state:
+                    history_context += (
+                        f"\n\nPREVIOUS SESSION STATE: The agent previously completed: "
+                        f"{prior_session_state.get('accomplishment_summary', '')} "
+                        f"The browser is currently on: {prior_session_state.get('last_url', 'unknown page')}."
+                    )
+                understanding = await self.atag_processor.run_input_understanding(user_message, history_context=history_context)
+
+                if understanding.get("status") == "NEEDS_INPUT":
+                    form_data = understanding.get("form")
+                    await update_ui(0, "completed", output_data=understanding, details=f"Missing critical inputs. Form requested.")
+
+                    # Save the NEEDS_INPUT message to DB with form data
+                    async with AsyncSessionLocal() as db:
+                        ai_msg = Message(
+                            message_id=str(uuid.uuid4()),
+                            chat_id=chat_id,
+                            user_id=user_id,
+                            role="ai",
+                            content=form_data.get("description", "I need more information to proceed."),
+                            form_data=json.dumps(form_data),
+                            created_at=datetime.now(timezone.utc)
+                        )
+                        db.add(ai_msg)
+                        await db.commit()
+
+                    return {"status": "NEEDS_INPUT", "form": form_data}
+
+                task_summary = understanding.get("task_summary", "Processing...")
+                confirmed_inputs = understanding.get("confirmed_inputs", {})
+                discovery_strategy = understanding.get("discovery_strategy", "direct_execution")
+
+                # ── Memory routing: extract domain + retrieve relevant memories ──
+                domain = self._extract_domain_from_task(user_message, confirmed_inputs)
+                if self.memory_service:
+                    try:
+                        mem_ctx = await self.memory_service.retrieve(user_id, domain, task_summary)
+                        memory_block = mem_ctx.to_prompt_block()
+                        if memory_block:
+                            logger.info(f"[Memory] Injecting {len(memory_block)} chars for domain '{domain}'")
+                    except Exception as _me:
+                        logger.warning(f"[Memory] retrieve error (non-fatal): {_me}")
+
+                await update_ui(0, "completed", output_data=understanding, details=f"Task Summary: {task_summary}")
+                # --- NEW: Update Session Title based on Task Summary ---
+                async with AsyncSessionLocal() as db:
+                    stmt = select(ChatSession).where(ChatSession.id == chat_id)
+                    res = await db.execute(stmt)
+                    session_db = res.scalar_one_or_none()
+                    if session_db and (session_db.title == "New Chat" or len(session_db.title) < 5):
+                        session_db.title = task_summary[:100]
+                        await db.commit()
             # --- Agent 2: Execution (with Retries & AI Thinking) ---
             retry_count = 0
             max_retries = 3
             last_error = None
+            obstacle_paused = False
             final_response = None
             all_tool_calls = [] # Track all tool calls for saving to DB
 
@@ -1290,15 +1346,27 @@ class Brain:
                             "steps that have already been completed. Pick up exactly where the previous "
                             "message left off."
                         )
-                    mission_objective = await self.atag_processor.run_execution_generation(
-                        user_message, task_summary, confirmed_inputs, discovery_strategy,
-                        prior_context=prior_context_str
-                    )
-                    
-                    # Parse reasoning and plan if present
                     reasoning = ""
                     plan_data = []
-                    
+
+                    if pending_obstacle and retry_count == 0:
+                        # Resuming after the user answered an obstacle prompt (e.g. an
+                        # OTP code) — feed their answer straight into the graph instead
+                        # of re-planning from scratch.
+                        _otp_answer = _extract_form_answer(user_message)
+                        mission_objective = (
+                            f"The user was asked for a '{pending_obstacle.get('obstacle_type', 'verification')}' "
+                            f"and responded: '{_otp_answer}'. Enter this into the corresponding field on the "
+                            f"current page (e.g. the verification/OTP code field) and submit/continue. "
+                            f"Then proceed with the original task: {task_summary}."
+                        )
+                        pending_obstacle = None  # only bypass planning on this first resumed attempt
+                    else:
+                        mission_objective = await self.atag_processor.run_execution_generation(
+                            user_message, task_summary, confirmed_inputs, discovery_strategy,
+                            prior_context=prior_context_str
+                        )
+
                     if "REASONING:" in mission_objective and "PLAN:" in mission_objective:
                         try:
                             parts = re.split(r"REASONING:|PLAN:|MISSION OBJECTIVE:", mission_objective)
@@ -1388,6 +1456,86 @@ class Brain:
                         break
                     else:
                         raise Exception(f"Execution failed: {final_msg}")
+
+                except ObstacleInputNeeded as obstacle_exc:
+                    # Track how many times this run has paused for human input — if the
+                    # user's answer didn't resolve it and we hit the SAME obstacle again,
+                    # stop asking forever and explain clearly instead.
+                    _obstacle_attempt_count += 1
+                    if _obstacle_attempt_count > 2:
+                        logger.warning(
+                            f"[Obstacle] '{obstacle_exc.match.skill_name}' on {obstacle_exc.site_domain} "
+                            f"still unresolved after {_obstacle_attempt_count} attempts — giving up gracefully."
+                        )
+                        final_response = (
+                            f"I got stuck on a {obstacle_exc.match.category} step on {obstacle_exc.site_domain} — "
+                            f"the code you provided may not have worked, or the site needs a fresh one. Please "
+                            f"try the task again with a new/rechecked code."
+                        )
+                        if self.memory_service:
+                            try:
+                                await self.memory_service._update_procedural(
+                                    user_id, obstacle_exc.match.skill_name, obstacle_exc.site_domain, [], success=False,
+                                )
+                                await self.memory_service.store_reflection(
+                                    user_id,
+                                    obstacle_exc.site_domain,
+                                    (
+                                        f"Obstacle '{obstacle_exc.match.skill_name}' on {obstacle_exc.site_domain} "
+                                        f"was not resolved after {_obstacle_attempt_count} user-provided answers."
+                                    ),
+                                    category="OTP" if obstacle_exc.match.category == "otp" else obstacle_exc.match.category.upper(),
+                                    severity="MEDIUM",
+                                )
+                            except Exception:
+                                pass
+                        await update_ui(1, "failed", details=final_response)
+                        break
+
+                    form_data = build_input_form(obstacle_exc.match, obstacle_exc.site_domain)
+                    await update_ui(1, "completed", details=f"Paused — needs {obstacle_exc.match.category} input from the user.")
+
+                    _pending_obstacle_state = {
+                        "obstacle_type": obstacle_exc.match.obstacle_type,
+                        "obstacle_category": obstacle_exc.match.category,
+                        "skill_name": obstacle_exc.match.skill_name,
+                        "site_domain": obstacle_exc.site_domain,
+                        "task_summary": task_summary,
+                        "confirmed_inputs": confirmed_inputs,
+                        "discovery_strategy": discovery_strategy,
+                        "attempt": _obstacle_attempt_count,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    async with AsyncSessionLocal() as db:
+                        upd_stmt = select(ChatSession).where(ChatSession.id == chat_id)
+                        upd_res = await db.execute(upd_stmt)
+                        upd_row = upd_res.scalar_one_or_none()
+                        if upd_row:
+                            _existing_state = {}
+                            if upd_row.session_state:
+                                try:
+                                    _existing_state = json.loads(upd_row.session_state)
+                                except Exception:
+                                    _existing_state = {}
+                            _existing_state["pending_obstacle"] = _pending_obstacle_state
+                            upd_row.session_state = json.dumps(_existing_state)
+                            await db.commit()
+
+                    async with AsyncSessionLocal() as db:
+                        ai_msg = Message(
+                            message_id=str(uuid.uuid4()),
+                            chat_id=chat_id,
+                            user_id=user_id,
+                            role="ai",
+                            content=form_data.get("description", "I need more information to proceed."),
+                            form_data=json.dumps(form_data),
+                            created_at=datetime.now(timezone.utc)
+                        )
+                        db.add(ai_msg)
+                        await db.commit()
+
+                    obstacle_paused = True
+                    return {"status": "NEEDS_INPUT", "form": form_data}
 
                 except Exception as e:
                     retry_count += 1
@@ -1496,7 +1644,9 @@ class Brain:
             self.cancelled_chats.discard(chat_id)
 
             # ── Memory write-back (non-fatal — never blocks cleanup) ──────────
-            if self.memory_service:
+            # Skip storing an episode when the run merely paused for obstacle input
+            # (e.g. waiting on an OTP code) — it hasn't failed, it's still in flight.
+            if self.memory_service and not ('obstacle_paused' in locals() and obstacle_paused):
                 try:
                     _outcome = "FAIL"
                     if 'final_response' in locals() and final_response and \
