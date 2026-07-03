@@ -61,7 +61,7 @@ class MCPToolManager:
     def stream_manager(self):
         return getattr(self.client, 'stream_manager', None)
 
-    def __init__(self, config: Dict[str, Any] = None, cdp_url: Optional[str] = None, port: Optional[int] = None, user_agent_index: int = 0, own_browser: bool = True, proxy_url: Optional[str] = None, browser_engine: Optional[str] = None):
+    def __init__(self, mcp_config: Dict[str, Any] = None, cdp_url: Optional[str] = None, port: Optional[int] = None, user_agent_index: int = 0, own_browser: bool = True, proxy_url: Optional[str] = None, browser_engine: Optional[str] = None):
         if hasattr(self, '_initialized_base') and self._initialized_base:
             return
 
@@ -89,7 +89,7 @@ class MCPToolManager:
         # They are read back out on the bridge side via the matching
         # config.browser_*_override() accessors in src/config.py, which
         # documents this contract from that end too.
-        self.config = config or {
+        self.config = mcp_config or {
             "browser-use": {
                 "command": "python",
                 "args": [bridge_path],
