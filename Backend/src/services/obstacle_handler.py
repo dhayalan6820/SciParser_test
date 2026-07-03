@@ -95,6 +95,33 @@ _OTP_FALSE_POSITIVE_CONTEXT = [
     r"marketing (?:texts|messages|emails)",
 ]
 
+# A verification-code prompt is only a real "human must type a code" blocker
+# when it happens on a sign-in/authentication step or a payment/checkout
+# step — those are the only two places a site legitimately needs to prove
+# it's really you before letting the run continue. The same wording can also
+# show up on unrelated steps (e.g. an address-verification/autocomplete
+# widget) where the agent should NOT stop and interrupt the user. Require at
+# least one of these context cues to appear alongside the OTP pattern.
+_OTP_SIGNIN_CONTEXT = [
+    r"\bsign[- ]?in\b", r"\blog[- ]?in\b", r"\blogin\b", r"\bpassword\b",
+    r"\byour account\b", r"\btwo[- ]factor\b", r"\b2fa\b", r"\bmfa\b",
+    r"\bauthenticat", r"\bidentity\b", r"\bverify your account\b",
+]
+_OTP_PAYMENT_CONTEXT = [
+    r"\bpayment\b", r"\bcheckout\b", r"\bbilling\b", r"\bcard number\b",
+    r"\bcvv\b", r"\bcharge\b", r"\bpurchase\b", r"\border total\b",
+    r"\bplace your order\b", r"\btransaction\b", r"\bpay now\b", r"\bsubtotal\b",
+]
+
+
+def _detect_otp_context(t: str) -> Optional[str]:
+    """Return 'signin' or 'payment' if the text shows one of those contexts, else None."""
+    if any(re.search(p, t) for p in _OTP_SIGNIN_CONTEXT):
+        return "signin"
+    if any(re.search(p, t) for p in _OTP_PAYMENT_CONTEXT):
+        return "payment"
+    return None
+
 
 def detect_otp(observation_text: str) -> Optional[str]:
     """Return an OTP obstacle_type string if a verification-code prompt is
@@ -110,11 +137,19 @@ def detect_otp(observation_text: str) -> Optional[str]:
     "verification code"/"otp" elsewhere on the page (help text, footer,
     unrelated newsletter/SMS opt-in banner) must never pause the run and ask
     the user for something that was never actually required.
+
+    We also require the prompt to actually be tied to a sign-in/authentication
+    step or a payment/checkout step (`_detect_otp_context`) — those are the
+    only two places a real identity/security code is legitimately needed. The
+    same wording appearing on an unrelated step (e.g. an address-check or
+    autocomplete widget) is not treated as a human-input obstacle.
     """
     if detect_captcha_type(observation_text):
         return None
     t = observation_text.lower()
     if any(re.search(p, t) for p in _OTP_FALSE_POSITIVE_CONTEXT):
+        return None
+    if not _detect_otp_context(t):
         return None
     for pattern in _OTP_PATTERNS:
         if re.search(pattern, t):

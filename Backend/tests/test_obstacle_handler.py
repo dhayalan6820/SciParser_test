@@ -22,7 +22,7 @@ from src.database.chat_db import ChatSession
 
 # ── detect_obstacle / detect_otp ────────────────────────────────────────────
 
-OTP_OBS = "We've sent you a code. Please check your email for a code and enter it below."
+OTP_OBS = "Sign in: We've sent you a code. Please check your email for a code and enter it below."
 CAPTCHA_OBS = "Please solve the recaptcha verification code challenge below."
 CLEAN_OBS = "Booking confirmed! Your reservation is complete."
 
@@ -78,11 +78,12 @@ def test_detect_otp_ignores_unrelated_page_mentions(observation):
 @pytest.mark.parametrize(
     "observation",
     [
-        "Please enter the verification code we just sent to your email to continue.",
-        "A verification code is required to continue. Enter it below.",
-        "Please enter your OTP below to proceed.",
-        "Your one-time password has been sent to your registered phone number.",
-        "We've texted you a code. Enter the 6-digit code to verify your account.",
+        "Sign in to your account: please enter the verification code we just sent to your email to continue.",
+        "Two-factor authentication: a verification code is required to continue. Enter it below.",
+        "Login verification: please enter your OTP below to proceed.",
+        "To protect your account, your one-time password has been sent to your registered phone number.",
+        "Complete payment: we've texted you a code. Enter the 6-digit code to verify your account.",
+        "Checkout — verify it's really you: enter the code sent to your phone before we charge your card.",
     ],
 )
 def test_detect_otp_still_matches_genuine_blocking_prompts(observation):
@@ -91,6 +92,25 @@ def test_detect_otp_still_matches_genuine_blocking_prompts(observation):
     assert match is not None
     assert match.category == "otp"
     assert match.requires_human_input is True
+
+
+# ── Regression: an OTP-shaped prompt on a step that is NOT sign-in or
+# payment/checkout (e.g. an address-verification widget) must never pause the
+# run and interrupt the user — only sign-in/authentication and payment steps
+# are places a site legitimately needs to prove identity mid-task.
+
+@pytest.mark.parametrize(
+    "observation",
+    [
+        "Frontier requires a verification code to proceed with the address check.",
+        "Please enter the verification code to confirm your shipping address.",
+        "Enter the 6-digit code sent to your phone to validate your delivery address.",
+        "A verification code is required to continue with the address lookup.",
+    ],
+)
+def test_detect_otp_ignores_genuine_prompts_outside_signin_or_payment(observation):
+    assert detect_otp(observation) is None
+    assert detect_obstacle(observation) is None
 
 
 def test_detect_obstacle_handles_empty_and_none():
