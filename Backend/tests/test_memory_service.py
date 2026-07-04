@@ -463,3 +463,56 @@ async def test_llm_assisted_extraction_filters_task_specific_keys(sqlite_session
     fact_keys = {r.fact_key for r in rows}
     assert "search_query" not in fact_keys, "Task-specific LLM-proposed fact must be filtered out"
     assert "bot_detection_delay_ms" in fact_keys, "Durable LLM-proposed fact must still be stored"
+
+
+@pytest.mark.asyncio
+async def test_llm_assisted_extraction_filters_task_specific_values_under_generic_keys(
+    sqlite_session_factory, memory_service
+):
+    """A task-specific value smuggled in under an innocuous-looking key (an
+    email address, or the literal text the run typed/searched for) must
+    still be rejected — the filter must inspect the *value*, not just the
+    key name."""
+    from sqlalchemy import select
+    from src.database.chat_db import MemorySemantic
+    import json as _json
+
+    class _FakeResponse:
+        content = _json.dumps({
+            "facts": [
+                {"key": "contact_info", "value": "alice.newton@example.com"},
+                {"key": "typed_value", "value": "isaac newton biography"},
+                {"key": "page_url", "value": "https://site.example.com/search?q=isaac+newton"},
+                {"key": "retry_wait_seconds", "value": "3"},
+            ]
+        })
+
+    class _FakeLLM:
+        async def ainvoke(self, messages):
+            return _FakeResponse()
+
+    memory_service.llm = _FakeLLM()
+
+    user_id = "user-fact-005"
+    domain = "llm2.example.com"
+    key_steps = [{
+        "tool": "browser_type",
+        "args": {"text": "isaac newton biography"},
+    }]
+
+    with patch("src.services.memory_service.AsyncSessionLocal", sqlite_session_factory):
+        await memory_service.store_episode(
+            user_id=user_id, domain=domain, task_summary="Search task",
+            outcome="SUCCESS", key_steps=key_steps,
+        )
+
+    async with sqlite_session_factory() as db:
+        rows = (await db.execute(
+            select(MemorySemantic).where(MemorySemantic.user_id == user_id)
+        )).scalars().all()
+
+    fact_by_key = {r.fact_key: r.fact_value for r in rows}
+    assert "contact_info" not in fact_by_key, "Email smuggled under a generic key must be filtered"
+    assert "typed_value" not in fact_by_key, "Literal task input smuggled under a generic key must be filtered"
+    assert "page_url" not in fact_by_key, "Leaked query string under a generic key must be filtered"
+    assert fact_by_key.get("retry_wait_seconds") == "3", "Durable fact must still pass through"

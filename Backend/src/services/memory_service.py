@@ -90,6 +90,46 @@ def _looks_task_specific(key: str) -> bool:
     return any(marker in k for marker in _TASK_SPECIFIC_KEY_MARKERS)
 
 
+_EMAIL_RE = re.compile(r'[\w.+-]+@[\w-]+\.[\w.-]+')
+_PHONE_RE = re.compile(r'(?:\+?\d[\s\-.]?){7,}')
+_QUERY_STRING_RE = re.compile(r'\?[\w%.+-]+=')
+
+
+def _collect_task_input_values(key_steps: List[Dict]) -> List[str]:
+    """Gather the literal string argument values used across a run's steps
+    (e.g. a typed search term, a name, an address) so LLM-proposed facts can
+    be checked for containing them verbatim — a value-level backstop that
+    doesn't rely on the fact's *key* being labeled honestly."""
+    values: List[str] = []
+    for step in key_steps or []:
+        args = step.get("args") or {}
+        if not isinstance(args, dict):
+            continue
+        for v in args.values():
+            if isinstance(v, str) and len(v.strip()) >= 4:
+                values.append(v.strip().lower())
+    return values
+
+
+def _looks_task_specific_value(value: str, task_input_values: Optional[List[str]] = None) -> bool:
+    """Heuristic: does a proposed fact *value* look like task-input data
+    (an email, phone number, leaked query string, or a literal value the
+    task actually typed/searched for) rather than a durable site mechanic.
+    This is deliberately checked independently of the fact's key, since a
+    task-specific value can be smuggled in under an innocuous-looking key.
+    """
+    v = (value or "").strip()
+    if not v:
+        return False
+    if _EMAIL_RE.search(v) or _PHONE_RE.search(v) or _QUERY_STRING_RE.search(v):
+        return True
+    v_lower = v.lower()
+    for input_value in (task_input_values or []):
+        if input_value and (input_value in v_lower or v_lower in input_value):
+            return True
+    return False
+
+
 def _strip_query_and_fragment(url: str) -> str:
     """Drop query string / fragment from a URL before storing it as a
     durable fact — query params frequently encode task-specific values
@@ -282,6 +322,7 @@ class MemoryService:
 
         # LLM-assisted extraction when available
         if self.llm and key_steps:
+            _task_input_values = _collect_task_input_values(key_steps)
             try:
                 steps_text = json.dumps(key_steps[:10], indent=2)
                 prompt = (
@@ -306,9 +347,15 @@ class MemoryService:
                         if not (fact_key and fact_value):
                             continue
                         # Safety net beyond the prompt: reject anything whose key
-                        # or value pattern looks like task-input data rather than
-                        # a durable site fact.
+                        # OR value looks like task-input data rather than a
+                        # durable site fact. The value check matters even when
+                        # the key looks innocuous, since a task-specific value
+                        # (email, phone, leaked query string, or a literal
+                        # value the run actually typed/searched for) can be
+                        # smuggled in under a generic-sounding key.
                         if _looks_task_specific(str(fact_key)):
+                            continue
+                        if _looks_task_specific_value(str(fact_value), _task_input_values):
                             continue
                         facts.append((str(fact_key)[:100], str(fact_value)[:255]))
             except Exception as e:
