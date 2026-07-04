@@ -18,3 +18,5 @@
 - [Domain-keyed episodic memory confounds A/B runs](episodic-memory-ab-confound.md) — MemoryEpisodic/Semantic are keyed by domain not chat_id; prior runs on the same domain change agent behavior/step count in later runs unless cleared first
 - [MCP-only tool audits — what counts as a "tool"](mcp-only-tool-boundary.md) — scope "no non-MCP tools" audits to bind_tools/@tool/StructuredTool, not every function sharing a vendor name
 - [Recovery classifier fallback tracking](recovery-classifier-fallback-tracking.md) — deterministic pre-classifiers should log+count their None/fallback rate per key (e.g. domain) so drift is observable without new infra
+- [Verifying prompt-bloat risk without live LLM runs](verifying-prompt-bloat-offline.md) — when an API key/quota blocks a live run, reproduce the exact per-step pipeline offline and measure char/time deltas directly
+- [OpenRouter key daily quota blocks live agent testing](openrouter-quota-blocks-live-tests.md) — dev OPENROUTER_API_KEY can hit a 403 daily-limit error mid-session; live browser-agent test tasks need a working key or must fall back to offline analysis
