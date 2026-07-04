@@ -1,0 +1,530 @@
+You are a Senior AI Architect specializing in production-grade browser automation systems.
+
+Your task is to design a modular AI Agent Framework for browser automation that is scalable, maintainable, and optimized for reasoning models.
+
+Do NOT build a single prompt.
+
+Instead, generate a complete agent architecture.
+
+==================================================
+Objective
+==================================================
+
+Design an agent framework that separates:
+
+• Identity
+• Instructions
+• Reasoning
+• Planning
+• Execution
+• Validation
+• Recovery
+• Memory
+• Tools
+• Configuration
+
+Every responsibility must be isolated into its own file.
+
+The system should be production-ready.
+
+==================================================
+Folder Structure
+==================================================
+
+Generate the following structure.
+
+agents/
+│
+├── browser/
+│   ├── agent.md
+│   ├── planner.md
+│   ├── executor.md
+│   ├── verifier.md
+│   ├── recovery.md
+│   ├── observer.md
+│   ├── memory.md
+│   ├── prompts/
+│   │      system.md
+│   │      browser.md
+│   │      extraction.md
+│   │      validation.md
+│   │
+│   ├── config.json
+│   ├── tools.json
+│   ├── workflow.json
+│   ├── state.json
+│   └── examples/
+
+manager/
+planner/
+validator/
+reporter/
+extractor/
+
+==================================================
+Requirements
+==================================================
+
+For EVERY markdown file generate:
+
+Purpose
+
+Responsibilities
+
+Input
+
+Output
+
+Rules
+
+Examples
+
+Failure Handling
+
+Best Practices
+
+==================================================
+agent.md
+==================================================
+
+Generate a complete system prompt defining
+
+Identity
+
+Role
+
+Mission
+
+Capabilities
+
+Limitations
+
+Communication Style
+
+Core Principles
+
+Reasoning Rules
+
+Browser Rules
+
+Error Handling
+
+Security
+
+PII Handling
+
+Output Format
+
+Success Criteria
+
+Failure Criteria
+
+==================================================
+planner.md
+==================================================
+
+Generate a planning prompt.
+
+Planner responsibilities:
+
+Break task into steps.
+
+Choose best strategy.
+
+Estimate complexity.
+
+Estimate retries.
+
+Avoid unnecessary browser actions.
+
+Reuse information.
+
+Reduce token usage.
+
+Produce execution plan.
+
+==================================================
+executor.md
+==================================================
+
+Generate execution instructions.
+
+Should include
+
+Navigation strategy
+
+Click strategy
+
+Typing strategy
+
+Scrolling
+
+Waiting
+
+DOM inspection
+
+Element verification
+
+Network waits
+
+Screenshot policy
+
+Retry policy
+
+Token optimization
+
+Never guess.
+
+==================================================
+observer.md
+==================================================
+
+Generate observation prompt.
+
+Responsibilities
+
+Observe current page.
+
+Extract visible elements.
+
+Read DOM.
+
+Detect loading.
+
+Detect modal.
+
+Detect captcha.
+
+Detect errors.
+
+Detect login.
+
+Return structured state.
+
+==================================================
+verifier.md
+==================================================
+
+Generate verification prompt.
+
+Responsibilities
+
+Verify every action.
+
+Confirm navigation.
+
+Confirm button clicked.
+
+Confirm data entered.
+
+Confirm success.
+
+Detect failure.
+
+Detect unexpected changes.
+
+==================================================
+recovery.md
+==================================================
+
+Generate recovery instructions.
+
+Handle
+
+Timeout
+
+Popup
+
+Modal
+
+Captcha
+
+Network failure
+
+Wrong page
+
+Unexpected redirect
+
+Element missing
+
+Permission denied
+
+Browser crash
+
+Session expired
+
+Generate recovery decision tree.
+
+==================================================
+memory.md
+==================================================
+
+Generate memory rules.
+
+Store
+
+Visited URLs
+
+Completed steps
+
+Extracted values
+
+Form inputs
+
+Cookies (metadata only)
+
+Task history
+
+Failures
+
+Retries
+
+Avoid duplicated actions.
+
+==================================================
+config.json
+==================================================
+
+Generate configuration schema.
+
+Include
+
+Model
+
+Temperature
+
+Timeout
+
+Retries
+
+Viewport
+
+Headless
+
+Max Steps
+
+Max Tokens
+
+Screenshot Policy
+
+Logging
+
+Caching
+
+Rate Limits
+
+Streaming
+
+Browser Preferences
+
+==================================================
+tools.json
+==================================================
+
+Generate JSON schemas describing tools.
+
+Example tools
+
+goto
+
+click
+
+fill
+
+select
+
+scroll
+
+wait
+
+evaluate
+
+extract
+
+screenshot
+
+download
+
+upload
+
+close_tab
+
+new_tab
+
+keyboard
+
+mouse
+
+Each tool should define
+
+Description
+
+Parameters
+
+Validation
+
+Error Codes
+
+==================================================
+workflow.json
+==================================================
+
+Generate execution workflow.
+
+Observe
+
+↓
+
+Plan
+
+↓
+
+Execute
+
+↓
+
+Verify
+
+↓
+
+Success?
+
+↓
+
+No
+
+↓
+
+Recover
+
+↓
+
+Verify Again
+
+↓
+
+Complete
+
+==================================================
+state.json
+==================================================
+
+Design the runtime state.
+
+Include
+
+Current URL
+
+Current Page
+
+Previous Action
+
+Current Goal
+
+Completed Steps
+
+Remaining Steps
+
+Retries
+
+Browser Status
+
+Execution Time
+
+Memory
+
+Observations
+
+Validation Result
+
+==================================================
+Prompt Engineering
+==================================================
+
+Every markdown file should
+
+Use headings
+
+Use numbered rules
+
+Avoid duplicated instructions
+
+Be optimized for reasoning models
+
+Be concise
+
+Avoid unnecessary tokens
+
+Support GPT
+
+Support Claude
+
+Support Gemini
+
+Support DeepSeek
+
+Support OpenRouter
+
+==================================================
+Architecture
+==================================================
+
+Design the framework so that the runtime only loads the files needed for the current stage.
+
+Example
+
+Planning stage
+
+Load
+
+agent.md
+
+planner.md
+
+config.json
+
+Execution stage
+
+Load
+
+agent.md
+
+executor.md
+
+tools.json
+
+config.json
+
+Verification stage
+
+Load
+
+agent.md
+
+verifier.md
+
+Recovery stage
+
+Load
+
+agent.md
+
+recovery.md
+
+This architecture should minimize prompt size and reduce token consumption.
+
+==================================================
+Code Quality
+==================================================
+
+Generate production-ready content.
+
+Avoid placeholder text.
+
+Avoid generic AI wording.
+
+Provide practical instructions suitable for real browser automation systems.
+
+Design for maintainability, scalability, and extensibility.
+
+The output should be a complete agent framework that can be directly used in a production browser automation platform.
