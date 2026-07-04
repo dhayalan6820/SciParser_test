@@ -426,6 +426,49 @@ def test_handle_address_verification_noop_when_nothing_pending():
     assert state.pending_selection is None
 
 
+# ── Non-blocking verification: missing submit button / already-navigated ───
+# Regression coverage for Task #142 — a genuinely mismatched field value must
+# still be treated as a failure, but a page that has simply moved on (no
+# address field left to inspect at all, e.g. it auto-advanced to a
+# plan/package page) must NOT be treated as a verification failure.
+
+def test_handle_address_verification_non_blocking_when_page_already_navigated():
+    state = address_agent.AddressAutocompleteState(pending_selection="123 Main St, Springfield, IL 62704")
+    # No address field of any kind on this page — e.g. selecting the
+    # suggestion caused the site to jump straight to a plan-selection page.
+    observation = "Choose your plan:\n- Basic\n- Premium\n- Enterprise\n"
+    result = address_agent.handle_address_verification_observation(observation, state, "example.com")
+    assert result == observation
+    assert state.pending_selection is None
+    assert "[ADDRESS_VERIFICATION_FAILED]" not in result
+    assert state.retries == 0
+
+
+def test_handle_address_verification_non_blocking_when_no_submit_button_visible():
+    # A missing "submit" control by itself must never gate progress — only
+    # extract_address_field_value returning None (no field found) does, and
+    # that must be non-blocking too.
+    state = address_agent.AddressAutocompleteState(pending_selection="123 Main St, Springfield, IL 62704")
+    observation = "Order confirmed. Continue to shipping options."
+    assert address_agent.extract_address_field_value(observation) is None
+    result = address_agent.handle_address_verification_observation(observation, state, "example.com")
+    assert state.pending_selection is None
+    assert "[ADDRESS_VERIFICATION_FAILED]" not in result
+
+
+def test_handle_address_verification_still_fails_for_genuine_mismatch_even_without_submit_language():
+    # A present-but-wrong field value must still be caught as a real failure
+    # — non-blocking verification must not become "never verify".
+    state = address_agent.AddressAutocompleteState(
+        pending_selection="123 Main St, Springfield, IL 62704",
+        candidates=[("123 Main St, Springfield, IL 62704", 0.9)],
+    )
+    observation = "Address field: 456 Elm St, Shelbyville, IL 62565\n"
+    result = address_agent.handle_address_verification_observation(observation, state, "example.com")
+    assert "[ADDRESS_VERIFICATION_FAILED]" in result
+    assert state.retries == 1
+
+
 # ── build_address_guidance / build_address_retry_guidance ───────────────────
 
 def test_build_address_guidance_contains_top_choice_and_instruction():
@@ -435,6 +478,39 @@ def test_build_address_guidance_contains_top_choice_and_instruction():
     )
     assert "123 Main St, Springfield, IL 62704" in guidance
     assert "ADDRESS_AUTOCOMPLETE_DETECTED" in guidance
+
+
+def test_build_address_guidance_instructs_stop_typing_and_non_blocking_submit():
+    # Regression for Task #142: the instant a confident match is detected the
+    # agent must be told to stop typing and click now, and that a missing
+    # submit control / already-navigated page does not block progress.
+    guidance = address_agent.build_address_guidance(
+        "123 Main St, Springfield, IL 62704", 0.9,
+        [("123 Main St, Springfield, IL 62704", 0.9)],
+    )
+    assert "STOP typing" in guidance
+    assert "does not block you" in guidance
+    assert "submit" in guidance.lower()
+
+
+def test_handle_address_dropdown_fires_on_partial_typed_input():
+    # A confident match can appear after only a few characters have been
+    # typed — detection/scoring must not require the full address string to
+    # already be present anywhere in requested/observation text.
+    state = address_agent.AddressAutocompleteState()
+    partial_observation = (
+        'Address field open. Suggestions: role="listbox" with matching addresses below.\n'
+        '- "123 Main St, Springfield, IL 62704"\n'
+    )
+    result = address_agent.handle_address_dropdown_observation(
+        partial_observation,
+        {"street": "Main St", "house_number": "123", "city": "Springfield", "postal_code": "62704"},
+        state,
+        "example.com",
+    )
+    assert "[ADDRESS_AUTOCOMPLETE_DETECTED]" in result
+    assert "STOP typing" in result
+    assert state.pending_selection == "123 Main St, Springfield, IL 62704"
 
 
 def test_build_address_retry_guidance_warns_against_clicking():

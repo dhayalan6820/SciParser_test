@@ -411,6 +411,13 @@ def verify_selected_value(field_value: Optional[str], chosen_suggestion: str) ->
     (see `extract_address_field_value`), not an entire observation blob —
     otherwise the suggestion text could coincidentally appear elsewhere on
     the page and produce a false positive.
+
+    NOTE: a `None`/empty `field_value` means "no address field could be
+    located at all" (e.g. the site already navigated past this step) — this
+    function deliberately returns False for that case, but callers (see
+    `handle_address_verification_observation`) must NOT treat that False the
+    same as an actual mismatch. Only a present-but-different field value is
+    a genuine verification failure.
     """
     if not field_value or not chosen_suggestion:
         return False
@@ -423,7 +430,13 @@ def build_address_guidance(
     top_choice: str, score: float, candidates: List[Tuple[str, float]]
 ) -> str:
     """Text appended to the tool observation instructing the agent exactly
-    what to do next — auto-select the high-confidence suggestion."""
+    what to do next — auto-select the high-confidence suggestion.
+
+    This fires the moment a confident match appears, which may be after only
+    a partial (not fully-typed) address — the instruction is explicit that
+    typing must STOP now rather than finishing out the rest of the address
+    first, and that selection alone (not a visible submit control) is what
+    counts as success."""
     ranked = "\n".join(f"  {i+1}. \"{s}\" (confidence {c:.2f})" for i, (s, c) in enumerate(candidates[:5]))
     return (
         "\n\n[ADDRESS_AUTOCOMPLETE_DETECTED]\n"
@@ -431,10 +444,15 @@ def build_address_guidance(
         f"{HIGH_CONFIDENCE_THRESHOLD:.2f} auto-select threshold):\n"
         f"  \"{top_choice}\"\n\n"
         f"All candidates considered:\n{ranked}\n\n"
-        "Click exactly this suggestion from the dropdown (match its visible "
-        "text). After clicking it, re-inspect the field's value and confirm "
-        "it reflects this suggestion before moving on. Never invent or guess "
-        "an address that is not one of the listed suggestions."
+        "STOP typing now — do not type any remaining characters of the "
+        "address. Click exactly this suggestion from the dropdown (match "
+        "its visible text) immediately. A best-effort check of the field's "
+        "value happens automatically afterward for logging purposes only — "
+        "it does not block you. Whether or not a 'submit' control is "
+        "visible, or the site has already navigated to a new step (e.g. a "
+        "plan/package-selection page), proceed with the task on whatever "
+        "page is now showing. Never invent or guess an address that is not "
+        "one of the listed suggestions."
     )
 
 
@@ -538,6 +556,14 @@ def handle_address_verification_observation(
     obstacle_type="verification_failed")` once the retry budget is exhausted.
 
     No-op (returns the text unchanged) if there is nothing pending to verify.
+
+    IMPORTANT — verification is non-blocking by design: if the address field
+    can no longer be located at all (e.g. a "submit" button never appeared
+    because the site already auto-advanced to a plan/package-selection page
+    once the suggestion was clicked), that is treated as a benign sign the
+    selection worked and the run moved on — NOT as a failure. Only a field
+    that is still present but holds a genuinely different value counts as a
+    verification failure and triggers the retry/escalation path below.
     """
     from src.services.obstacle_handler import ObstacleInputNeeded, ObstacleMatch
 
@@ -546,6 +572,13 @@ def handle_address_verification_observation(
         return text
 
     field_value = extract_address_field_value(text)
+    if field_value is None:
+        # No address field found on the page at all — most likely the site
+        # already navigated on after the selection took effect. Do not
+        # block or escalate; simply consider this selection settled.
+        state.pending_selection = None
+        return text
+
     verified = verify_selected_value(field_value, state.pending_selection)
     if verified:
         state.pending_selection = None
