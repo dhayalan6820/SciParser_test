@@ -136,19 +136,6 @@ def _compress_observation_for_llm(text: str, max_chars: int) -> str:
     return compressed
 
 
-def _build_browser_static_prompt() -> str:
-    """Builds the Browser agent's static system prompt from browser.agent.md.
-
-    This is the single place the 20-section persona/playbook is assembled —
-    editing browser.agent.md changes agent behavior on the next request, with
-    no code change or redeploy required. Cached at module import time since
-    the prompt is identical across every run and step (see caching note at
-    its call site in _execute_tool_graph).
-    """
-    spec = spec_loader.load_spec("browser")
-    return spec_loader.build_system_prompt(spec)
-
-
 def _detect_captcha(observation_text: str) -> Optional[str]:
     """Return CAPTCHA type string if a known CAPTCHA signal is present, else None.
 
@@ -857,10 +844,32 @@ class Brain:
         # Bind tools to the LLM
         llm_with_tools = self.llm.bind_tools(filtered_tools)
 
-        # Build the static system message ONCE per execution — never rebuilt per step.
-        # The 20-section prompt (~2500 tokens) is identical on every call, so Google
-        # Gemini's implicit prefix cache hits it after the first step.
-        static_sys_msg = SystemMessage(content=_build_browser_static_prompt())
+        # Build one static system message PER STAGE, once per execution — never
+        # rebuilt per step. Each stage's prompt (~1-1.5KB) is identical across
+        # every turn that stays in that stage, so Google Gemini's implicit
+        # prefix cache still hits after the first turn in a stage; the prefix
+        # only changes on an actual stage transition (e.g. entering recovery
+        # after a failed action), which is the point of stage-based loading —
+        # the agent gets the Recovery Protocol/Diagnostic sections only when
+        # it's actually recovering, not on every single turn.
+        _browser_spec_for_stage = spec_loader.load_spec("browser")
+        _stage_static_msgs: Dict[str, SystemMessage] = {
+            stage: SystemMessage(content=spec_loader.build_system_prompt(_browser_spec_for_stage, stage=stage))
+            for stage in ("plan", "execute", "recover")
+        }
+
+        def _select_turn_stage(execution_history: List[Dict[str, Any]]) -> str:
+            """Determines which Plan/Execute/Recover stage the upcoming LLM
+            call belongs to, based on state accumulated so far this run."""
+            if not execution_history:
+                return "plan"
+            last_entry = execution_history[-1]
+            if last_entry.get("status") == "FAILED":
+                return "recover"
+            last_validation = last_entry.get("validation") or {}
+            if not last_validation.get("passed", True) and last_validation.get("severity") == "BLOCKING":
+                return "recover"
+            return "execute"
 
         # Domain for the current run (used by CAPTCHA outcome tracking below)
         _task_domain = self._extract_domain_from_task(task_summary, confirmed_inputs)
@@ -981,7 +990,7 @@ class Brain:
             execution_history = state.get("execution_history", [])
             
             # Build small dynamic context (~200 tokens) — task + memory only.
-            # The 20-section static prompt lives in static_sys_msg and is never rebuilt.
+            # The stage-scoped static prompt lives in _stage_static_msgs and is never rebuilt per turn.
             memory_summary = ""
             if execution_history:
                 memory_summary = "\nEXECUTION MEMORY (What happened so far):\n"
@@ -998,11 +1007,14 @@ class Brain:
             )
 
             # --- DEAD CODE MARKER START (kept for grep reference only) ---
-            # system_message_content f-string removed; static prompt is built by _build_browser_static_prompt() from browser.agent.md
+            # system_message_content f-string removed; static prompt is built per
+            # stage by build_system_prompt(spec, stage=...) — see _stage_static_msgs
+            # and _select_turn_stage() above.
             # --- DEAD CODE MARKER END ---
 
             # Strip any stale SystemMessages from LangGraph state, then prepend the
-            # cached static system message. The growing TASK CONTEXT (memory summary
+            # stage-appropriate cached static system message (see _select_turn_stage
+            # below). The growing TASK CONTEXT (memory summary
             # gets longer every turn) is appended as a trailing message instead of
             # being spliced into an earlier HumanMessage in place. Mutating an
             # earlier message's content on every call made that message differ from
@@ -1031,6 +1043,8 @@ class Brain:
             context_msg = HumanMessage(
                 content=f"## TASK CONTEXT\n{dynamic_context}\n\n---\n\nContinue working toward the goal above using the conversation so far."
             )
+            _turn_stage = _select_turn_stage(execution_history)
+            static_sys_msg = _stage_static_msgs[_turn_stage]
             current_messages = [static_sys_msg] + raw_messages + [context_msg]
 
             # Token Management & Summarization.

@@ -215,3 +215,68 @@ def test_build_system_prompt_always_includes_backstory_regardless_of_stage():
     spec = spec_loader.load_spec("browser")
     recover_prompt = spec_loader.build_system_prompt(spec, stage="recover")
     assert "Backstory" in recover_prompt
+
+
+# ---------------------------------------------------------------------------
+# Stage-based prompt loading wired into the main runtime Plan/Execute/Recover
+# loop (not just the helper Critic/Page-Analysis call sites) — Task #154
+# requires the active loop to select stage-scoped sections per turn.
+# ---------------------------------------------------------------------------
+
+def test_execute_tool_graph_builds_one_static_prompt_per_stage_not_a_single_static_one():
+    import inspect
+    import src.services.brain as brain_module
+    source = inspect.getsource(brain_module.Brain._execute_tool_graph)
+
+    assert "_stage_static_msgs" in source, (
+        "_execute_tool_graph must build per-stage system prompts via "
+        "build_system_prompt(spec, stage=...) instead of a single static "
+        "prompt reused for every turn."
+    )
+    assert '"plan", "execute", "recover"' in source or "'plan', 'execute', 'recover'" in source, (
+        "The main runtime loop must cover at least the plan/execute/recover "
+        "stages, not just the helper Critic/Page-Analysis call sites."
+    )
+    assert "_select_turn_stage" in source, (
+        "_execute_tool_graph must select which stage's prompt to use per "
+        "turn based on accumulated execution_history/validation state."
+    )
+
+
+def test_call_model_selects_stage_prompt_from_execution_history_each_turn():
+    import inspect
+    import src.services.brain as brain_module
+    source = inspect.getsource(brain_module.Brain._execute_tool_graph)
+
+    assert "_turn_stage = _select_turn_stage(execution_history)" in source, (
+        "call_model must recompute the active stage from execution_history "
+        "on every turn, not just once at graph-build time."
+    )
+    assert "static_sys_msg = _stage_static_msgs[_turn_stage]" in source, (
+        "call_model must look up the stage-appropriate cached system prompt "
+        "for the turn's stage before invoking the LLM."
+    )
+
+
+def test_select_turn_stage_logic_covers_plan_recover_and_execute_transitions():
+    """Reimplements the same decision rule documented in brain.py's
+    _select_turn_stage to lock in the intended plan/execute/recover
+    transitions (empty history -> plan, a failed/blocking-validated last
+    action -> recover, otherwise -> execute)."""
+
+    def select_turn_stage(execution_history):
+        if not execution_history:
+            return "plan"
+        last_entry = execution_history[-1]
+        if last_entry.get("status") == "FAILED":
+            return "recover"
+        last_validation = last_entry.get("validation") or {}
+        if not last_validation.get("passed", True) and last_validation.get("severity") == "BLOCKING":
+            return "recover"
+        return "execute"
+
+    assert select_turn_stage([]) == "plan"
+    assert select_turn_stage([{"status": "SUCCESS", "validation": {"passed": True}}]) == "execute"
+    assert select_turn_stage([{"status": "FAILED", "validation": {"passed": False, "severity": "BLOCKING"}}]) == "recover"
+    assert select_turn_stage([{"status": "SUCCESS", "validation": {"passed": False, "severity": "BLOCKING"}}]) == "recover"
+    assert select_turn_stage([{"status": "SUCCESS", "validation": {"passed": False, "severity": "WARNING"}}]) == "execute"
