@@ -80,7 +80,7 @@ export const UsersTab: React.FC<{ currentUsername?: string }> = ({ currentUserna
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-4">
+    <div className="max-w-6xl mx-auto space-y-4">
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -101,19 +101,19 @@ export const UsersTab: React.FC<{ currentUsername?: string }> = ({ currentUserna
         </div>
       )}
 
-      <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-x-auto">
+        <table className="w-full min-w-[980px] text-sm">
           <thead className="bg-slate-50 dark:bg-slate-900 text-left text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
-              <th className="px-4 py-3 font-medium">Username</th>
-              <th className="px-4 py-3 font-medium">Email</th>
-              <th className="px-4 py-3 font-medium">Role</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Last Active</th>
-              <th className="px-4 py-3 font-medium">Success Rate</th>
-              <th className="px-4 py-3 font-medium">Total Cost</th>
-              <th className="px-4 py-3 font-medium">Joined</th>
-              <th className="px-4 py-3 font-medium text-right">Actions</th>
+              <th className="px-4 py-3 font-medium whitespace-nowrap">Username</th>
+              <th className="px-4 py-3 font-medium whitespace-nowrap">Email</th>
+              <th className="px-4 py-3 font-medium whitespace-nowrap">Role</th>
+              <th className="px-4 py-3 font-medium whitespace-nowrap">Status</th>
+              <th className="px-4 py-3 font-medium whitespace-nowrap">Last Active</th>
+              <th className="px-4 py-3 font-medium whitespace-nowrap">Success Rate</th>
+              <th className="px-4 py-3 font-medium whitespace-nowrap">Total Cost</th>
+              <th className="px-4 py-3 font-medium whitespace-nowrap">Joined</th>
+              <th className="px-4 py-3 font-medium text-right whitespace-nowrap">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -142,11 +142,11 @@ export const UsersTab: React.FC<{ currentUsername?: string }> = ({ currentUserna
                 const isBusy = busyUserId === u.user_id;
                 return (
                   <tr key={u.user_id} className="border-t border-slate-100 dark:border-slate-800">
-                    <td className="px-4 py-3 font-medium">
+                    <td className="px-4 py-3 font-medium whitespace-nowrap">
                       {u.username} {isSelf && <span className="text-xs text-muted-foreground">(you)</span>}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{u.email}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{u.email}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <select
                         value={u.role}
                         disabled={isSelf || isBusy}
@@ -161,7 +161,7 @@ export const UsersTab: React.FC<{ currentUsername?: string }> = ({ currentUserna
                         <option value="admin">Admin</option>
                       </select>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <span
                         className={cn(
                           "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
@@ -174,19 +174,19 @@ export const UsersTab: React.FC<{ currentUsername?: string }> = ({ currentUserna
                         {u.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">
+                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                       {formatRelativeTime(u.last_active)}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">
+                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                       {u.success_rate !== undefined ? `${u.success_rate}%` : "—"}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">
+                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                       {u.total_cost !== undefined ? `$${u.total_cost.toFixed(4)}` : "—"}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">
+                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                       {new Date(u.created_at).toLocaleDateString()}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center justify-end gap-2">
                         {isBusy ? (
                           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
