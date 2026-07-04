@@ -752,6 +752,8 @@ class ChatService:
                     "detail": u.email,
                     "status": u.status,
                     "timestamp": u.created_at,
+                    "user_id": u.user_id,
+                    "username": u.username,
                 })
 
         if include_logins:
@@ -777,12 +779,15 @@ class ChatService:
                     "detail": le.failure_reason,
                     "status": "SUCCESS" if le.success else "FAILED",
                     "timestamp": le.created_at,
+                    "user_id": le.user_id,
+                    "username": le.username_attempted,
                 })
 
         if include_runs:
             stmt = (
-                select(ScheduleRun, Schedule)
+                select(ScheduleRun, Schedule, User)
                 .join(Schedule, Schedule.schedule_id == ScheduleRun.schedule_id)
+                .join(User, User.user_id == Schedule.user_id, isouter=True)
                 .order_by(ScheduleRun.created_at.desc())
                 .limit(fetch_limit)
             )
@@ -791,17 +796,19 @@ class ChatService:
             if end_dt:
                 stmt = stmt.where(ScheduleRun.created_at <= end_dt)
             if user_pattern:
-                stmt = stmt.join(User, User.user_id == Schedule.user_id).where(
+                stmt = stmt.where(
                     or_(User.username.ilike(user_pattern), User.email.ilike(user_pattern))
                 )
             runs = (await db.execute(stmt)).all()
-            for run, schedule in runs:
+            for run, schedule, run_user in runs:
                 items.append({
                     "type": "automation_run",
                     "title": f"Automation \"{schedule.title or schedule.schedule_id[:8]}\" {run.status.lower()}",
                     "detail": run.error_log[:200] if run.error_log else None,
                     "status": run.status,
                     "timestamp": run.created_at,
+                    "user_id": schedule.user_id,
+                    "username": run_user.username if run_user else None,
                 })
 
         agent_logs = []
@@ -824,6 +831,17 @@ class ChatService:
                 else:
                     stmt = stmt.where(AgentExecutionLog.user_id.in_(matching_user_ids))
             agent_logs = (await db.execute(stmt)).scalars().all()
+
+        agent_log_user_ids = {log.user_id for log in agent_logs if log.user_id}
+        agent_log_username_map = {}
+        if agent_log_user_ids:
+            rows = (
+                await db.execute(
+                    select(User.user_id, User.username).where(User.user_id.in_(agent_log_user_ids))
+                )
+            ).all()
+            agent_log_username_map = {row[0]: row[1] for row in rows}
+
         for log in agent_logs:
             status_upper = (log.status or "").upper()
             derived_type = None
@@ -848,6 +866,8 @@ class ChatService:
                     "detail": (log.error_message or "")[:200] or None,
                     "status": log.status,
                     "timestamp": log.created_at,
+                    "user_id": log.user_id,
+                    "username": agent_log_username_map.get(log.user_id),
                 })
             elif derived_type == "agent_run_started":
                 items.append({
@@ -856,6 +876,8 @@ class ChatService:
                     "detail": f"chat {log.chat_id[:12]}",
                     "status": log.status,
                     "timestamp": log.created_at,
+                    "user_id": log.user_id,
+                    "username": agent_log_username_map.get(log.user_id),
                 })
             elif derived_type == "agent_run_completed":
                 items.append({
@@ -864,6 +886,8 @@ class ChatService:
                     "detail": f"chat {log.chat_id[:12]}",
                     "status": log.status,
                     "timestamp": log.updated_at or log.created_at,
+                    "user_id": log.user_id,
+                    "username": agent_log_username_map.get(log.user_id),
                 })
 
         items.sort(key=lambda i: i["timestamp"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)

@@ -59,6 +59,7 @@ export const OverviewTab: React.FC = () => {
   const [showUserSuggestions, setShowUserSuggestions] = React.useState(false);
   const [selectedUser, setSelectedUser] = React.useState<User | null>(null);
   const [analyticsUser, setAnalyticsUser] = React.useState<User | null>(null);
+  const [rowAnalyticsLoadingId, setRowAnalyticsLoadingId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const handle = setTimeout(() => setUserFilter(userInput.trim()), 350);
@@ -132,6 +133,24 @@ export const OverviewTab: React.FC = () => {
       cancelled = true;
     };
   }, [startDate, endDate, typeFilter, userFilter]);
+
+  const viewAnalyticsForRow = async (item: AdminActivityItem) => {
+    if (!item.user_id) return;
+    const rowKey = item.user_id;
+    setRowAnalyticsLoadingId(rowKey);
+    try {
+      const user = await sciparserApi.adminGetUser(item.user_id);
+      setAnalyticsUser(user);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? `This user no longer exists or could not be loaded (${err.message})`
+          : "This user no longer exists or could not be loaded"
+      );
+    } finally {
+      setRowAnalyticsLoadingId(null);
+    }
+  };
 
   const hasActiveFilters = !!(startDate || endDate || typeFilter || userFilter);
   const clearFilters = () => {
@@ -307,6 +326,19 @@ export const OverviewTab: React.FC = () => {
                     <div>
                       <p className="text-sm font-medium">{item.title}</p>
                       {item.detail && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{item.detail}</p>}
+                      {item.user_id && (
+                        <button
+                          type="button"
+                          onClick={() => viewAnalyticsForRow(item)}
+                          disabled={rowAnalyticsLoadingId === item.user_id}
+                          className="mt-1 flex items-center gap-1 text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50"
+                        >
+                          <BarChart3 className="h-3 w-3" />
+                          {rowAnalyticsLoadingId === item.user_id
+                            ? "Loading…"
+                            : `View analytics${item.username ? ` for ${item.username}` : ""}`}
+                        </button>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">

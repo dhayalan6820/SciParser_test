@@ -174,6 +174,8 @@ class AdminActivityItem(BaseModel):
     detail: Optional[str] = None
     status: Optional[str] = None
     timestamp: datetime
+    user_id: Optional[str] = None
+    username: Optional[str] = None
 
 
 class AdminActivityResponse(BaseModel):
