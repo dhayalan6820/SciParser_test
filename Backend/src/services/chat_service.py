@@ -298,7 +298,11 @@ class ChatService:
         username: Optional[str] = None,
         email: Optional[str] = None,
     ) -> User:
-        """Update a user's role/status/profile fields. Prevents an admin from locking themselves out."""
+        """Update a user's role/status/profile fields. Prevents an admin from locking themselves out.
+
+        Credit balance changes go through the dedicated `admin_set_user_credits` endpoint
+        instead of this general profile-update path (Task #146).
+        """
         user = await ChatService.admin_get_user(db, user_id)
 
         if user.user_id == acting_admin.user_id:
@@ -1445,6 +1449,94 @@ class ChatService:
         stmt = select(ChatSession).where(ChatSession.user_id == str(user_id)).order_by(ChatSession.created_at.desc())
         result = await db.execute(stmt)
         return result.scalars().all()
+
+    @staticmethod
+    async def get_user_sessions_with_usage(db: AsyncSession, user_id: str) -> List[dict]:
+        """Task #146: chat sessions for the sidebar, each augmented with its own
+        input/output/total token counts and cost — aggregated from the
+        AgentExecutionLog rows recorded for that chat (same source of truth used
+        by the admin analytics views), not the unused per-message token columns."""
+        from src.database.chat_db import AgentExecutionLog
+
+        sessions = await ChatService.get_user_sessions(db, user_id)
+        if not sessions:
+            return []
+
+        chat_ids = [s.id for s in sessions]
+        logs = (
+            await db.execute(
+                select(AgentExecutionLog).where(AgentExecutionLog.chat_id.in_(chat_ids))
+            )
+        ).scalars().all()
+
+        usage_by_chat: dict = {}
+        for l in logs:
+            usage = ChatService._parse_token_usage(l.token_usage)
+            input_tokens = int(usage.get("input") or usage.get("prompt_tokens") or 0)
+            output_tokens = int(usage.get("output") or usage.get("completion_tokens") or 0)
+            total_tokens = int(usage.get("total") or usage.get("total_tokens") or (input_tokens + output_tokens))
+            try:
+                cost = float(l.cost) if l.cost else 0.0
+            except Exception:
+                cost = 0.0
+
+            entry = usage_by_chat.setdefault(l.chat_id, {
+                "total_input_tokens": 0, "total_output_tokens": 0, "total_tokens": 0, "total_cost": 0.0,
+            })
+            entry["total_input_tokens"] += input_tokens
+            entry["total_output_tokens"] += output_tokens
+            entry["total_tokens"] += total_tokens
+            entry["total_cost"] += cost
+
+        out = []
+        for s in sessions:
+            usage = usage_by_chat.get(s.id, {
+                "total_input_tokens": 0, "total_output_tokens": 0, "total_tokens": 0, "total_cost": 0.0,
+            })
+            out.append({
+                "id": s.id,
+                "title": s.title,
+                "status": getattr(s, "status", None),
+                "created_at": s.created_at,
+                "updated_at": getattr(s, "updated_at", None),
+                "total_input_tokens": usage["total_input_tokens"],
+                "total_output_tokens": usage["total_output_tokens"],
+                "total_tokens": usage["total_tokens"],
+                "total_cost": round(usage["total_cost"], 4),
+            })
+        return out
+
+    @staticmethod
+    async def get_user_total_usage(db: AsyncSession, user_id: str) -> dict:
+        """Task #146: a user's total token usage/cost across all of their conversations."""
+        from src.database.chat_db import AgentExecutionLog
+
+        logs = (
+            await db.execute(select(AgentExecutionLog).where(AgentExecutionLog.user_id == user_id))
+        ).scalars().all()
+
+        total_input = 0
+        total_output = 0
+        total_tokens = 0
+        total_cost = 0.0
+        for l in logs:
+            usage = ChatService._parse_token_usage(l.token_usage)
+            input_tokens = int(usage.get("input") or usage.get("prompt_tokens") or 0)
+            output_tokens = int(usage.get("output") or usage.get("completion_tokens") or 0)
+            total_input += input_tokens
+            total_output += output_tokens
+            total_tokens += int(usage.get("total") or usage.get("total_tokens") or (input_tokens + output_tokens))
+            try:
+                total_cost += float(l.cost) if l.cost else 0.0
+            except Exception:
+                pass
+
+        return {
+            "total_input_tokens": total_input,
+            "total_output_tokens": total_output,
+            "total_tokens": total_tokens,
+            "total_cost": round(total_cost, 4),
+        }
 
     @staticmethod
     async def get_chat_history(db: AsyncSession, chat_id: str, user_id: str) -> dict:

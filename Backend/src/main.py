@@ -421,6 +421,23 @@ async def _run_schedule_task(schedule_id: str, run_id: str) -> None:
         sched = res.scalar_one_or_none()
         if not sched:
             return
+
+        # Task #146: block auto-runs (APScheduler-triggered) once the owning
+        # user's credit balance is exhausted, same rule as manual runs/chat.
+        owner = (
+            await db.execute(select(User).where(User.user_id == sched.user_id))
+        ).scalar_one_or_none()
+        if owner is not None and (owner.credit_balance or 0.0) <= 0:
+            run_stmt = select(ScheduleRun).where(ScheduleRun.run_id == run_id)
+            run_row = (await db.execute(run_stmt)).scalar_one_or_none()
+            if run_row:
+                run_row.status = "FAILED"
+                run_row.error_log = "Run blocked: the account is out of credits."
+                run_row.finished_at = datetime.now(timezone.utc)
+            await db.commit()
+            logger.warning(f"Schedule {schedule_id} run {run_id} blocked: user {sched.user_id} is out of credits.")
+            return
+
         title           = sched.title
         current_script  = sched.generated_script or ""
         email_recipient = sched.email_recipient or ""
@@ -1055,7 +1072,16 @@ async def stop_chat_process(chat_id: str = Query(...), current_user: User = Depe
 
 @app.get("/sciparser/v1/chat/sessions")
 async def get_sessions(db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_user)):
-    return await ChatService.get_user_sessions(db, current_user.user_id)
+    # Task #146: sessions are returned with each conversation's own token usage totals.
+    return await ChatService.get_user_sessions_with_usage(db, current_user.user_id)
+
+@app.get("/sciparser/v1/chat/usage")
+async def get_my_total_usage(db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_user)):
+    """Task #146: the current user's total token usage/cost across all conversations,
+    plus their remaining credit balance."""
+    usage = await ChatService.get_user_total_usage(db, current_user.user_id)
+    usage["credit_balance"] = current_user.credit_balance if current_user.credit_balance is not None else 0.0
+    return usage
 
 @app.get("/sciparser/v1/chat/history")
 async def get_history(
@@ -1369,6 +1395,13 @@ async def run_schedule(schedule_id: str, db: AsyncSession = Depends(get_db), cur
     res = await db.execute(stmt)
     if not res.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Schedule not found")
+
+    # Task #146: block manual runs once the user's credit balance is exhausted.
+    if (current_user.credit_balance or 0.0) <= 0:
+        raise HTTPException(
+            status_code=402,
+            detail="You're out of credits. Please contact an administrator to top up your balance before running automations.",
+        )
 
     run = ScheduleRun(
         run_id=str(uuid.uuid4()),

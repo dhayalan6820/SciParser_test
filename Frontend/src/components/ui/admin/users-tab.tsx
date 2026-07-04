@@ -508,6 +508,7 @@ const EditUserModal: React.FC<{ user: User; onClose: () => void; onSaved: () => 
       const changes: Partial<{ username: string; email: string }> = {};
       if (username !== user.username) changes.username = username;
       if (email !== user.email) changes.email = email;
+
       if (Object.keys(changes).length > 0) {
         await sciparserApi.adminUpdateUser(user.user_id, changes);
       }

@@ -126,7 +126,20 @@ export const sciparserApi = {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
-    return res.json();
+    return res.json() as Promise<ChatSessionSummary[]>;
+  },
+
+  // Task #146: the current user's total token usage/cost across all conversations + credits.
+  getMyUsage: async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+
+    const res = await fetch(`${BASE_URL}/sciparser/v1/chat/usage`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<UserTotalUsage>;
   },
 
   renameChatSession: async (chatId: string, title: string) => {
@@ -644,7 +657,12 @@ export const sciparserApi = {
 
   adminUpdateUser: async (
     userId: string,
-    data: Partial<{ role: "admin" | "user"; status: "active" | "suspended"; username: string; email: string }>
+    data: Partial<{
+      role: "admin" | "user";
+      status: "active" | "suspended";
+      username: string;
+      email: string;
+    }>
   ) => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
@@ -980,6 +998,26 @@ export interface ConversationTokenUsage {
   output_tokens: number;
   total_tokens: number;
   total_cost: number;
+}
+
+export interface ChatSessionSummary {
+  id: string;
+  title: string;
+  status?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_tokens: number;
+  total_cost: number;
+}
+
+export interface UserTotalUsage {
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_tokens: number;
+  total_cost: number;
+  credit_balance: number;
 }
 
 export interface AdminUserAnalytics {
