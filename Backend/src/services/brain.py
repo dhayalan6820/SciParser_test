@@ -51,7 +51,8 @@ from src.services.recovery import classify_failure, format_hint
 from src.services.ATAG import (
     AgentState, 
     ATAGProcessor, 
-    serialize_state
+    serialize_state,
+    calculate_llm_cost
 )
 from src.agents import spec_loader
 
@@ -817,17 +818,12 @@ class Brain:
         return MemoryService.extract_domain(user_message)
 
     def _calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
-        """Calculates the cost of an LLM call based on OpenRouter pricing (approximate)."""
-        # Pricing per 1M tokens (approximate for Gemini 3 Flash Preview)
-        prices = {
-            "google/gemini-3-flash-preview": {"input": 0.1, "output": 0.4},
-            "moonshotai/kimi-k2.7-code": {"input": 0.5, "output": 1.5},
-            "default": {"input": 0.1, "output": 0.4}
-        }
-        
-        p = prices.get(model, prices["default"])
-        cost = (input_tokens / 1_000_000 * p["input"]) + (output_tokens / 1_000_000 * p["output"])
-        return round(cost, 6)
+        """Calculates the cost of an LLM call based on OpenRouter pricing (approximate).
+
+        Delegates to ATAG.calculate_llm_cost so both the live browsing run
+        (here) and script-generation (ATAG.run_script_generation) bill off
+        the exact same per-model pricing table."""
+        return calculate_llm_cost(model, input_tokens, output_tokens)
 
     async def _execute_tool_graph(self, graph_input: Dict[str, Any], tools: List[BaseTool], user_id: str, chat_id: str, task_summary: str, confirmed_inputs: Dict[str, Any], update_ui_func=None, memory_block: str = "", obstacle_answer: Optional[str] = None, suppress_address_agent: bool = False) -> Dict[str, Any]:
         """Executes a LangGraph tool-calling graph for the given input and tools."""

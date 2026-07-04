@@ -96,6 +96,44 @@ Reduce the token count while keeping:
 Provide a structured summary that an automation agent can use to continue the task without needing the full raw logs.
 """
 
+# ============================================================
+# SHARED LLM COST CALCULATION
+# ============================================================
+# Single source of truth for OpenRouter pricing so every billed flow
+# (live browsing in brain.py AND script-generation here) uses the same
+# per-model rates instead of maintaining duplicate pricing tables that
+# can drift out of sync.
+LLM_PRICING = {
+    "google/gemini-3-flash-preview": {"input": 0.1, "output": 0.4},
+    "moonshotai/kimi-k2.7-code": {"input": 0.5, "output": 1.5},
+    "default": {"input": 0.1, "output": 0.4},
+}
+
+
+def calculate_llm_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+    """Calculates the cost of an LLM call based on OpenRouter pricing (approximate)."""
+    p = LLM_PRICING.get(model, LLM_PRICING["default"])
+    cost = (input_tokens / 1_000_000 * p["input"]) + (output_tokens / 1_000_000 * p["output"])
+    return round(cost, 6)
+
+
+def extract_token_usage(response, model: str) -> Dict[str, Any]:
+    """Pulls prompt/completion token counts + computed cost off an LLM
+    response's response_metadata, mirroring the shape used elsewhere
+    (brain.py's per-turn browsing usage) so both flows can be summed
+    and logged consistently."""
+    token_usage: Dict[str, Any] = {}
+    if hasattr(response, "response_metadata") and "token_usage" in response.response_metadata:
+        usage = response.response_metadata["token_usage"]
+        token_usage = {
+            "input": usage.get("prompt_tokens", 0),
+            "output": usage.get("completion_tokens", 0),
+            "total": usage.get("total_tokens", 0),
+        }
+        token_usage["cost"] = calculate_llm_cost(model, token_usage["input"], token_usage["output"])
+    return token_usage
+
+
 class ATAGProcessor:
     """Processes user requests using a decoupled multi-step pipeline.
 
@@ -390,6 +428,8 @@ class ATAGProcessor:
         tool_context: Optional[List[Dict[str, Any]]] = None,
         user_goal: str = "",
         plan_context: str = "",
+        user_id: Optional[str] = None,
+        chat_id: Optional[str] = None,
     ) -> str:
         """
         Generates a production-ready automation script from the execution history.
@@ -405,7 +445,24 @@ class ATAGProcessor:
         The system prompt also instructs the LLM that it MAY embed a Tavily
         search step inside the generated script itself for tasks that require
         dynamic URL discovery at runtime.
+
+        Billing: every LLM call made in this method (initial generation +
+        self-validation fix passes) is metered and, when `user_id` is
+        supplied, logged + deducted from the user's credit balance before
+        returning — otherwise script generation would be effectively free
+        regardless of how many fix passes it took.
         """
+        _total_input_tokens = 0
+        _total_output_tokens = 0
+        _total_cost = 0.0
+
+        def _meter(response) -> None:
+            nonlocal _total_input_tokens, _total_output_tokens, _total_cost
+            usage = extract_token_usage(response, self.llm.model_name)
+            if usage:
+                _total_input_tokens += usage.get("input", 0)
+                _total_output_tokens += usage.get("output", 0)
+                _total_cost += usage.get("cost", 0.0)
 
         # System prompt is assembled entirely from coder.agent.md — role,
         # output rules, and the framework-specific playbook all live in the
@@ -476,6 +533,7 @@ hardcode placeholder URLs like "https://example.com".
             SystemMessage(content=SYSTEM_PROMPT),
             HumanMessage(content=USER_PROMPT),
         ])
+        _meter(response)
         content = response.content.strip()
         content = re.sub(r"```(?:python)?\n?(.*?)\n?```", r"\1", content, flags=re.DOTALL)
 
@@ -493,8 +551,37 @@ hardcode placeholder URLs like "https://example.com".
                 SystemMessage(content=SYSTEM_PROMPT),
                 HumanMessage(content=fix_prompt),
             ])
+            _meter(response)
             content = response.content.strip()
             content = re.sub(r"```(?:python)?\n?(.*?)\n?```", r"\1", content, flags=re.DOTALL)
+
+        # ── 6. Bill the run ────────────────────────────────────────────────
+        # Script-generation LLM calls were previously untracked, letting users
+        # generate (and repeatedly fix-pass) reusable scripts for free. Log the
+        # same AgentExecutionLog shape the live browsing run uses and deduct
+        # the real cost immediately — this flow runs outside process_message's
+        # finally-block accounting (it's invoked from scheduler/schedule routes),
+        # so it must self-bill rather than relying on that shared code path.
+        if user_id and _total_cost > 0:
+            try:
+                from src.services.brain import DatabaseManager
+                await DatabaseManager().log_agent_execution(
+                    user_id=user_id,
+                    chat_id=chat_id or "script-generation",
+                    stage="script_generation",
+                    name=f"generate_script:{framework}",
+                    status="COMPLETED",
+                    token_usage={
+                        "input": _total_input_tokens,
+                        "output": _total_output_tokens,
+                        "total": _total_input_tokens + _total_output_tokens,
+                        "cost": _total_cost,
+                    },
+                    cost=_total_cost,
+                )
+                await DatabaseManager().deduct_credits(user_id, _total_cost)
+            except Exception as _bill_err:
+                logger.warning(f"[Credits] Failed to bill script-generation usage for user {user_id}: {_bill_err}")
 
         return content
 

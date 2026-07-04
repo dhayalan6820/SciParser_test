@@ -439,6 +439,7 @@ async def _run_schedule_task(schedule_id: str, run_id: str) -> None:
             return
 
         title           = sched.title
+        owner_user_id   = sched.user_id
         current_script  = sched.generated_script or ""
         email_recipient = sched.email_recipient or ""
         schedule_type   = sched.schedule_type or "manual"
@@ -567,6 +568,8 @@ async def _run_schedule_task(schedule_id: str, run_id: str) -> None:
                         title + " (FIXING ERROR: " + last_error[:100] + ")",
                         [],
                         framework=current_framework,
+                        user_id=owner_user_id,
+                        chat_id=f"schedule:{schedule_id}",
                     )
                     async with AsyncSessionLocal() as db:
                         stmt = select(ScheduleRun).where(ScheduleRun.run_id == run_id)
@@ -1204,6 +1207,8 @@ async def create_schedule(req: ScheduleRequest, db: AsyncSession = Depends(get_d
         tool_context=tool_context,
         user_goal=schedule_db.user_prompt or "",
         plan_context=schedule_db.plan_data or "",
+        user_id=current_user.user_id,
+        chat_id=f"schedule:{schedule.schedule_id}",
     )
 
     # 7. Save generated script + compute next_run
@@ -1365,6 +1370,8 @@ async def activate_schedule(schedule_id: str, db: AsyncSession = Depends(get_db)
         tool_context=tool_context,
         user_goal=schedule_db.user_prompt or "",
         plan_context=schedule_db.plan_data or "",
+        user_id=current_user.user_id,
+        chat_id=f"schedule:{schedule_id}",
     )
 
     # Persist and activate
