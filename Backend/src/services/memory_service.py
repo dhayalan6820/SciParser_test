@@ -3,6 +3,7 @@ import uuid
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
+from urllib.parse import urlsplit, urlunsplit
 
 from sqlalchemy import delete, select, and_, or_
 
@@ -65,6 +66,39 @@ _DECAY_DELETE_THRESHOLD = 0.05
 
 _CAPTCHA_REFLECTION_MAX_DAYS = 30
 _CAPTCHA_SKILL_CONFIDENCE_FLOOR = 0.15
+
+# Argument/fact keys that typically carry task-specific *input data* (search
+# terms, personal info, credentials, free-form answers) rather than durable
+# facts about how a site works. Used both to skip rule-based extraction of
+# risky args and as a safety-net filter on LLM-proposed facts. Task #162:
+# semantic ("Known Facts") memory must only retain reusable site mechanics
+# (selectors, stable URLs, timing/bot-detection notes) — never the specific
+# values a task happened to use.
+_TASK_SPECIFIC_KEY_MARKERS = (
+    "text", "value", "query", "search", "keys", "answer", "input",
+    "address", "email", "phone", "name", "amount", "message", "content",
+    "otp", "code", "password", "username", "secret", "token", "ssn",
+    "card", "cvv", "dob", "birth", "zip", "postal",
+)
+
+
+def _looks_task_specific(key: str) -> bool:
+    """Heuristic: does a fact/arg key look like it holds task input data
+    (rather than a durable, reusable site fact) based on common naming
+    patterns for form values, credentials, and personal data."""
+    k = (key or "").lower()
+    return any(marker in k for marker in _TASK_SPECIFIC_KEY_MARKERS)
+
+
+def _strip_query_and_fragment(url: str) -> str:
+    """Drop query string / fragment from a URL before storing it as a
+    durable fact — query params frequently encode task-specific values
+    (e.g. a search term or record id) that don't generalize across tasks."""
+    try:
+        parts = urlsplit(url)
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+    except Exception:
+        return url
 
 
 class MemoryService:
@@ -230,25 +264,37 @@ class MemoryService:
     ):
         facts: List[tuple] = []
 
-        # Rule-based extraction — no LLM needed
+        # Rule-based extraction — no LLM needed. Deliberately narrow: only
+        # structural/navigational args (url, selector) are ever read here —
+        # never form values, search terms, or other task-input fields — so
+        # this loop can't leak task-specific data even if callers pass richer
+        # args in the future. URLs are stripped of query/fragment since those
+        # frequently encode the task's specific input (e.g. a search term).
         for step in key_steps:
             args = step.get("args", {})
             tool = step.get("tool", "")
             if url := (args.get("url") or args.get("go_to_url")):
-                facts.append(("known_url", str(url)[:255]))
+                facts.append(("known_url", _strip_query_and_fragment(str(url))[:255]))
             if sel := (args.get("selector") or args.get("css_selector")):
                 label = args.get("label") or f"selector_{tool}"
-                facts.append((label[:100], str(sel)[:255]))
+                if not _looks_task_specific(label):
+                    facts.append((label[:100], str(sel)[:255]))
 
         # LLM-assisted extraction when available
         if self.llm and key_steps:
             try:
                 steps_text = json.dumps(key_steps[:10], indent=2)
                 prompt = (
-                    f"Extract factual knowledge about the domain '{domain}' from these "
-                    f"successful automation steps.\n"
+                    f"Extract durable, REUSABLE factual knowledge about the domain '{domain}' "
+                    f"from these successful automation steps — facts that would still be true "
+                    f"and useful on a completely DIFFERENT task on this same site.\n"
                     f"Return ONLY JSON: {{\"facts\": [{{\"key\": \"...\", \"value\": \"...\"}}]}}\n"
-                    f"Focus on: selectors, URLs, timing constraints, bot-detection notes.\n"
+                    f"Focus on: stable selectors, stable page URLs (no query params), "
+                    f"timing/rate-limit constraints, and bot-detection behavior.\n"
+                    f"Do NOT include anything specific to this one task's request: no search "
+                    f"terms, names, addresses, emails, phone numbers, dates, amounts, order/ "
+                    f"item details, credentials, codes, or any other input value the user "
+                    f"supplied. If a step's only notable content is a value like that, skip it.\n"
                     f"Keep values under 150 chars.\n\nSteps:\n{steps_text[:2000]}"
                 )
                 resp = await self.llm.ainvoke([HumanMessage(content=prompt)])
@@ -256,8 +302,15 @@ class MemoryService:
                 if m:
                     data = json.loads(m.group())
                     for f in data.get("facts", []):
-                        if f.get("key") and f.get("value"):
-                            facts.append((str(f["key"])[:100], str(f["value"])[:255]))
+                        fact_key, fact_value = f.get("key"), f.get("value")
+                        if not (fact_key and fact_value):
+                            continue
+                        # Safety net beyond the prompt: reject anything whose key
+                        # or value pattern looks like task-input data rather than
+                        # a durable site fact.
+                        if _looks_task_specific(str(fact_key)):
+                            continue
+                        facts.append((str(fact_key)[:100], str(fact_value)[:255]))
             except Exception as e:
                 logger.debug(f"[Memory] LLM fact extraction skipped: {e}")
 

@@ -316,3 +316,150 @@ async def test_apply_decay_rate_limited_within_6_hours(sqlite_session_factory, m
             f"Second call (rate-limited) must not change confidence_score: "
             f"first={score_after_first}, second={row_after_second.confidence_score}"
         )
+
+
+# ── Task #162: semantic fact hygiene (durable facts vs. task-specific data) ──
+
+@pytest.mark.asyncio
+async def test_semantic_fact_url_strips_query_string(sqlite_session_factory, memory_service):
+    """A navigated URL's query string (often a task-specific search term or
+    record id) must never be stored verbatim in the durable known_url fact."""
+    from sqlalchemy import select, and_
+    from src.database.chat_db import MemorySemantic
+
+    user_id = "user-fact-001"
+    domain = "shop.example.com"
+    key_steps = [{
+        "tool": "browser_navigate",
+        "args": {"url": "https://shop.example.com/search?q=isaac+newton+biography"},
+    }]
+
+    with patch("src.services.memory_service.AsyncSessionLocal", sqlite_session_factory):
+        await memory_service.store_episode(
+            user_id=user_id, domain=domain, task_summary="Search for a book",
+            outcome="SUCCESS", key_steps=key_steps,
+        )
+
+    async with sqlite_session_factory() as db:
+        row = (await db.execute(
+            select(MemorySemantic).where(and_(
+                MemorySemantic.user_id == user_id,
+                MemorySemantic.fact_key == "known_url",
+            ))
+        )).scalar_one_or_none()
+
+    assert row is not None, "known_url fact should still be stored"
+    assert "q=isaac" not in row.fact_value, (
+        f"Task-specific query string leaked into stored fact: {row.fact_value}"
+    )
+    assert row.fact_value == "https://shop.example.com/search"
+
+
+@pytest.mark.asyncio
+async def test_semantic_fact_skips_task_specific_selector_label(sqlite_session_factory, memory_service):
+    """A selector labeled after a task-input field (e.g. a search query box
+    holding the actual query text as its label) must not be stored as a fact
+    under that task-specific label."""
+    from sqlalchemy import select, func
+    from src.database.chat_db import MemorySemantic
+
+    user_id = "user-fact-002"
+    domain = "shop.example.com"
+    key_steps = [{
+        "tool": "browser_type",
+        "args": {"selector": "#q", "label": "search_query_text"},
+    }]
+
+    with patch("src.services.memory_service.AsyncSessionLocal", sqlite_session_factory):
+        await memory_service.store_episode(
+            user_id=user_id, domain=domain, task_summary="Search for a book",
+            outcome="SUCCESS", key_steps=key_steps,
+        )
+
+    async with sqlite_session_factory() as db:
+        count = (await db.execute(
+            select(func.count()).select_from(MemorySemantic).where(
+                MemorySemantic.user_id == user_id
+            )
+        )).scalar_one()
+
+    assert count == 0, "Task-specific-labeled selector fact must not be stored"
+
+
+@pytest.mark.asyncio
+async def test_failed_episode_does_not_write_semantic_facts_or_skills(sqlite_session_factory, memory_service):
+    """A FAILED episode must not produce any new semantic fact or a positive
+    procedural skill update — only SUCCESS episodes teach the agent."""
+    from sqlalchemy import select, func
+    from src.database.chat_db import MemorySemantic, MemoryProcedural
+
+    user_id = "user-fact-003"
+    domain = "fail.example.com"
+    key_steps = [{
+        "tool": "browser_navigate",
+        "args": {"url": "https://fail.example.com/checkout"},
+    }]
+
+    with patch("src.services.memory_service.AsyncSessionLocal", sqlite_session_factory):
+        await memory_service.store_episode(
+            user_id=user_id, domain=domain, task_summary="Checkout attempt that failed",
+            outcome="FAIL", key_steps=key_steps,
+        )
+
+    async with sqlite_session_factory() as db:
+        sem_count = (await db.execute(
+            select(func.count()).select_from(MemorySemantic).where(
+                MemorySemantic.user_id == user_id
+            )
+        )).scalar_one()
+        proc_count = (await db.execute(
+            select(func.count()).select_from(MemoryProcedural).where(
+                MemoryProcedural.user_id == user_id
+            )
+        )).scalar_one()
+
+    assert sem_count == 0, "FAILED episode must not write semantic facts"
+    assert proc_count == 0, "FAILED episode must not write/update procedural skills"
+
+
+@pytest.mark.asyncio
+async def test_llm_assisted_extraction_filters_task_specific_keys(sqlite_session_factory, memory_service):
+    """Even if the LLM proposes a fact whose key looks like task-input data,
+    the safety-net filter must reject it before it reaches storage, while a
+    durable fact from the same response is still kept."""
+    from sqlalchemy import select
+    from src.database.chat_db import MemorySemantic
+    import json as _json
+
+    class _FakeResponse:
+        content = _json.dumps({
+            "facts": [
+                {"key": "search_query", "value": "isaac newton biography"},
+                {"key": "bot_detection_delay_ms", "value": "1500"},
+            ]
+        })
+
+    class _FakeLLM:
+        async def ainvoke(self, messages):
+            return _FakeResponse()
+
+    memory_service.llm = _FakeLLM()
+
+    user_id = "user-fact-004"
+    domain = "llm.example.com"
+    key_steps = [{"tool": "browser_type", "args": {}}]
+
+    with patch("src.services.memory_service.AsyncSessionLocal", sqlite_session_factory):
+        await memory_service.store_episode(
+            user_id=user_id, domain=domain, task_summary="Search task",
+            outcome="SUCCESS", key_steps=key_steps,
+        )
+
+    async with sqlite_session_factory() as db:
+        rows = (await db.execute(
+            select(MemorySemantic).where(MemorySemantic.user_id == user_id)
+        )).scalars().all()
+
+    fact_keys = {r.fact_key for r in rows}
+    assert "search_query" not in fact_keys, "Task-specific LLM-proposed fact must be filtered out"
+    assert "bot_detection_delay_ms" in fact_keys, "Durable LLM-proposed fact must still be stored"
