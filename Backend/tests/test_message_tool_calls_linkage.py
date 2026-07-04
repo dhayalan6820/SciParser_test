@@ -32,8 +32,11 @@ def test_execution_history_entries_carry_the_real_db_log_id():
     module_source = inspect.getsource(brain_module)
 
     assert (
-        'execution_history.append({"tool": tool_call["name"], "status": status, '
-        '"result": llm_observation[:500], "id": _db_log_id})' in module_source
+        'execution_history.append({' in module_source
+        and '"tool": tool_call["name"],' in module_source
+        and '"status": status,' in module_source
+        and '"result": llm_observation[:500],' in module_source
+        and '"id": _db_log_id,' in module_source
     ), (
         "execution_history entries must carry the real ToolExecutionLog.id "
         "(_db_log_id), or Message.tool_calls can never be linked back to a "

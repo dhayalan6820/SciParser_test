@@ -192,6 +192,22 @@ def detect_obstacle(observation_text: str) -> Optional[ObstacleMatch]:
     return None
 
 
+def detect_obstacle_from_observed(state: Any) -> Optional[ObstacleMatch]:
+    """Same result shape as `detect_obstacle`, but reads pre-computed
+    `captcha_type`/`otp_type` flags off an `observer.ObservedState` instead
+    of re-running the raw-text regex scan a second time. Callers that already
+    ran the Observer step for this tool result (`src.services.observer.observe`)
+    should use this instead of `detect_obstacle(str(observation))`.
+    """
+    if state is None:
+        return None
+    if getattr(state, "captcha_type", None):
+        return ObstacleMatch(category="captcha", obstacle_type=state.captcha_type, requires_human_input=False)
+    if getattr(state, "otp_type", None):
+        return ObstacleMatch(category="otp", obstacle_type=state.otp_type, requires_human_input=True)
+    return None
+
+
 class ObstacleInputNeeded(Exception):
     """Raised mid-run when an obstacle can only be resolved by a human (e.g.
     OTP). Caught around the tool-execution graph to pause the run and surface

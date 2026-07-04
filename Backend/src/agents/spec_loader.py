@@ -146,17 +146,86 @@ def filter_tools(tools: List[Any], pattern: str) -> List[Any]:
     ]
 
 
-def build_system_prompt(spec: AgentSpec, extra_sections: Optional[Dict[str, str]] = None) -> str:
+# Maps each Observe -> Plan -> Execute -> Verify -> Recover -> Complete stage
+# (see Backend/src/agents/workflows.json) to the browser.agent.md section
+# titles that are actually relevant to it. `build_system_prompt(spec,
+# stage=...)` uses this to send only the sections a given LLM call needs
+# instead of the full ~2KB spec on every single call — e.g. the Critic
+# (Recover stage) never needs Stealth Behavior or Form Handling, and the
+# per-turn Planner call doesn't need the Recovery Protocol text at all
+# unless a failure actually occurred. Sections not listed under any stage
+# (e.g. "Backstory") are considered stage-agnostic and always included.
+_STAGE_AGNOSTIC_SECTIONS = {"Backstory"}
+_STAGE_SECTION_MAP: Dict[str, List[str]] = {
+    "plan": [
+        "Reasoning Format",
+        "Completion Rules",
+        "Failure Rules",
+        "Safety Rules",
+    ],
+    "observe": [
+        "Observation Rules",
+        "Overlay & Popup Handling (mandatory priority)",
+    ],
+    "execute": [
+        "Stealth Behavior (mandatory on every mission)",
+        "Form Handling",
+        "Safety Rules",
+    ],
+    "verify": [
+        "Observation Rules",
+        "Completion Rules",
+    ],
+    "recover": [
+        "Error Recovery & Retry Policy",
+        "Recovery Protocol (used by the Critic on failure)",
+        "Page Analysis (Diagnostic Mode)",
+    ],
+    "complete": [
+        "Completion Rules",
+        "Failure Rules",
+    ],
+}
+
+
+def build_system_prompt(
+    spec: AgentSpec,
+    extra_sections: Optional[Dict[str, str]] = None,
+    stage: Optional[str] = None,
+) -> str:
     """
     Assembles a flat system-prompt string from an AgentSpec's sections. Used
     by agents that plug directly into a LangChain/LangGraph tool-calling loop
     (currently: the Browser agent) rather than running as a full CrewAI Agent.
+
+    `stage` restricts the assembled prompt to the sections relevant to one
+    step of the Observe/Plan/Execute/Verify/Recover/Complete loop (see
+    `_STAGE_SECTION_MAP` and `Backend/src/agents/workflows.json`), instead of
+    always sending the agent's full spec regardless of what the call is
+    actually for. Pass `stage=None` (the default) to get the full prompt —
+    this preserves existing behavior for any caller that hasn't opted into
+    stage-based loading yet.
     """
     parts = [f"# {spec.role}", f"## Goal\n{spec.goal}"]
     if spec.backstory:
         parts.append(f"## Backstory\n{spec.backstory}")
+
+    allowed_titles: Optional[set] = None
+    if stage:
+        normalized_stage = stage.strip().lower()
+        stage_titles = _STAGE_SECTION_MAP.get(normalized_stage)
+        if stage_titles is None:
+            logger.warning(
+                f"[spec_loader] Unknown stage '{stage}' — falling back to the full spec. "
+                f"Known stages: {sorted(_STAGE_SECTION_MAP)}"
+            )
+        else:
+            allowed_titles = _STAGE_AGNOSTIC_SECTIONS | set(stage_titles)
+
     for title, content in spec.sections.items():
         if title == "Backstory" or not content.strip():
+            continue
+        if allowed_titles is not None and title not in allowed_titles:
             continue
         parts.append(f"## {title}\n{content}")
     if extra_sections:

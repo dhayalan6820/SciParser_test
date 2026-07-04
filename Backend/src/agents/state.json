@@ -1,0 +1,47 @@
+{
+  "$schema": "Documents the runtime state contract carried through the LangGraph execution loop. This is a REVIEWABLE ARTIFACT, not a file loaded at runtime — the authoritative, enforced shape is the `AgentState` TypedDict in Backend/src/services/ATAG.py plus the structured objects in Backend/src/services/observer.py and Backend/src/services/verifier.py. Keep field names in sync with those; do not add a JSON-driven state loader.",
+  "graph_state_fields": {
+    "messages": "list[BaseMessage] — full LangGraph message history for this run",
+    "atag_phase": "str | null — current ATAG phase (address/tools/goal input-understanding sub-flow)",
+    "atag_form": "dict | null — pending NEEDS_INPUT form, if the run is paused waiting on the user",
+    "atag_prompt": "str | null — the mission/execution prompt currently driving the browser agent",
+    "execution_result": "Any | null — final structured result once the mission completes",
+    "user_id": "str",
+    "chat_id": "str",
+    "retry_count": "int — number of critic-driven retries consumed so far (see config.json retry_limits.max_attempts)",
+    "last_error": "str | null — most recent raw error/observed-state text, fed into the Critic",
+    "browser_session_id": "str | null",
+    "execution_history": "list[dict] — one entry per tool call: {tool, status, result, id, validation}",
+    "validation_result": "dict | null — the most recent Verifier ValidationResult.to_dict() (tool_name, passed, reason, severity)"
+  },
+  "observed_state_fields": {
+    "source": "Backend/src/services/observer.py:ObservedState",
+    "fields": {
+      "url": "str | null — current page URL, parsed from the tool observation",
+      "is_loading": "bool",
+      "has_modal": "bool",
+      "has_login_form": "bool",
+      "has_error": "bool",
+      "error_signals": "list[str] — matched error patterns",
+      "captcha_type": "str | null",
+      "otp_type": "str | null",
+      "is_blocked": "bool (derived) — true when captcha_type or otp_type or has_modal"
+    }
+  },
+  "validation_result_fields": {
+    "source": "Backend/src/services/verifier.py:ValidationResult",
+    "fields": {
+      "tool_name": "str",
+      "passed": "bool",
+      "reason": "str",
+      "severity": "INFO | WARNING | BLOCKING"
+    }
+  },
+  "execution_history_entry_fields": {
+    "tool": "str — tool name",
+    "status": "SUCCESS | FAILED",
+    "result": "str — truncated observation text (max 500 chars)",
+    "id": "str — real ToolExecutionLog.id (never a disconnected uuid4())",
+    "validation": "dict — ValidationResult.to_dict() for this tool call"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "Documents the browser-agent execution loop as an explicit task-graph/state-transition contract. This is a REVIEWABLE ARTIFACT, not a file loaded at runtime — the authoritative implementation is the LangGraph StateGraph built in Backend/src/services/brain.py:_execute_tool_graph (nodes: agent/call_model, tools/_call_tool) plus the outer retry loop in Backend/src/services/brain.py:process_message. Keep this in sync with those; do not add a JSON-driven workflow interpreter.",
+  "loop": "Observe -> Plan -> Execute -> Verify -> Recover -> Complete",
+  "stages": {
+    "Observe": {
+      "description": "Parse the raw tool observation into a structured ObservedState (url, is_loading, has_modal, has_login_form, has_error, error_signals, captcha_type, otp_type).",
+      "implementation": "src/services/observer.py:observe()",
+      "runs": "once per tool result, immediately after the tool call returns and browser-observation sanitization runs",
+      "transitions_to": ["Plan (first turn)", "Verify (after a tool call this turn)"]
+    },
+    "Plan": {
+      "description": "The LLM (browser agent, following browser.agent.md's ReAct-style prompt) reasons over the message history + latest observation and either calls a tool or produces a final answer.",
+      "implementation": "src/services/brain.py:_execute_tool_graph -> call_model node",
+      "transitions_to": ["Execute (tool_calls present)", "Complete (no tool_calls -> END)"]
+    },
+    "Execute": {
+      "description": "Runs the LLM-selected MCP tool call(s), buffers/broadcasts tool_start and tool_output events to the UI, and logs the real ToolExecutionLog row.",
+      "implementation": "src/services/brain.py:_call_tool node",
+      "transitions_to": ["Observe (of the new result)"]
+    },
+    "Verify": {
+      "description": "Checks whether the tool call's expected effect occurred, using the tool name/args + the ObservedState from this turn's Observe step. Appends a ValidationResult (INFO/WARNING/BLOCKING) to execution_history and to the graph's validation_result field; on failure, appends a note to the observation the Planner reads next.",
+      "implementation": "src/services/verifier.py:verify_action()",
+      "transitions_to": ["Plan (validation passed or non-blocking)", "Recover (BLOCKING validation, or obstacle/critic-triggered failure)"]
+    },
+    "Recover": {
+      "description": "On a failure that exhausts in-graph retries (obstacle requiring human input, or the outer retry loop's max_retries), classify the failure and produce a revised strategy or pause for human input.",
+      "implementation": [
+        "src/services/obstacle_handler.py:detect_obstacle_from_observed() + ObstacleInputNeeded -> pauses run, surfaces NEEDS_INPUT form (CAPTCHA/OTP obstacles)",
+        "src/services/recovery.py:classify_failure()/format_hint() -> deterministic pre-classification hint for mechanically-detectable failure types",
+        "Backend/src/services/ATAG.py:run_critic() -> LLM-driven classification into one of the 11 Recovery Protocol branches (see Backend/src/agents/specs/recovery.md) + revised prompt",
+        "Backend/src/services/brain.py retry loop -> resets the browser session with a rotated identity and re-enters Plan with the critic's revised prompt"
+      ],
+      "transitions_to": ["Plan (revised strategy, retries remain)", "Complete (retries exhausted or human-input pause)"]
+    },
+    "Complete": {
+      "description": "The LLM produces a final answer with no further tool calls, or the retry budget is exhausted; the run's final_response and execution_history are persisted.",
+      "implementation": "src/services/brain.py:process_message (final response assembly + Message persistence)"
+    }
+  },
+  "retry_policy": {
+    "max_attempts": 3,
+    "source": "config.json:retry_limits.max_attempts / Backend/src/services/brain.py:max_retries"
+  }
+}

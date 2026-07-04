@@ -79,6 +79,7 @@ class AgentState(TypedDict):
     last_error: Optional[str]     # Store last error for critic analysis
     browser_session_id: Optional[str] # New field to store browser session ID
     execution_history: List[Dict[str, Any]] # Memory of tool successes/failures
+    validation_result: Optional[Dict[str, Any]] # Verifier's outcome for the most recent tool call
 
 
 PROMPT_6_CONTEXT_SUMMARIZER = """
@@ -274,9 +275,13 @@ class ATAGProcessor:
 
     async def run_page_analysis(self, goal: str, page_content: str, last_error: Optional[str] = None) -> str:
         """Diagnoses the gap between the current page and the goal, using the
-        'Page Analysis (Diagnostic Mode)' section of browser.agent.md."""
+        stage-scoped 'recover' subset of browser.agent.md (Error Recovery &
+        Retry Policy, Recovery Protocol, Page Analysis) rather than the full
+        ~20-section spec — this call happens off the main per-step ReAct
+        loop, so it doesn't need to preserve Gemini's implicit prefix cache
+        the way the main static prompt does (see brain.py's caching note)."""
         spec = spec_loader.load_spec("browser")
-        section = spec.sections.get("Page Analysis (Diagnostic Mode)", "")
+        section = spec_loader.build_system_prompt(spec, stage="recover")
         formatted_prompt = (
             f"{section}\n\n"
             f"GOAL: {goal}\n\n"
@@ -286,15 +291,28 @@ class ATAGProcessor:
         response = await self.llm.ainvoke([SystemMessage(content=formatted_prompt)])
         return response.content
 
-    async def run_critic(self, user_request: str, failed_prompt: str, error_msg: str) -> str:
+    async def run_critic(self, user_request: str, failed_prompt: str, error_msg: str, failure_hint: str = "") -> str:
         """Analyzes an execution failure and produces a structured, classified
         revision, per browser.agent.md's Recovery Protocol section. The
         FAILURE_TYPE line lets brain.py's retry loop branch behavior
         (retry vs. re-plan vs. ask user vs. give up) instead of blindly
-        retrying the same instructions every time."""
+        retrying the same instructions every time.
+
+        `failure_hint` is an optional deterministic pre-classification line
+        (see `src.services.recovery.classify_failure`/`format_hint`) prepended
+        to the prompt for the mechanically-detectable failure types — the LLM
+        still makes the final call, this just saves it re-deriving what
+        pattern-matching on the error text already answered confidently.
+
+        Uses the stage-scoped 'recover' subset of browser.agent.md (Task #154
+        Step 6) instead of the full spec — this call is off the main per-step
+        ReAct loop, so it doesn't need the Gemini prefix-cache stability the
+        main static prompt in brain.py relies on.
+        """
         spec = spec_loader.load_spec("browser")
-        recovery_protocol = spec.sections.get("Recovery Protocol (used by the Critic on failure)", "")
+        recovery_protocol = spec_loader.build_system_prompt(spec, stage="recover")
         formatted_prompt = (
+            f"{failure_hint}"
             f"{recovery_protocol}\n\n"
             f"ORIGINAL USER REQUEST:\n{user_request}\n\n"
             f"FAILED INSTRUCTION:\n{failed_prompt}\n\n"

@@ -108,7 +108,11 @@ back PII beyond what's strictly necessary for the current action.
 
 ## Recovery Protocol (used by the Critic on failure)
 When a step fails, classify the failure into exactly one type, then give a
-revised strategy:
+revised strategy. A deterministic pre-classifier may prepend a
+`DETERMINISTIC PRE-CLASSIFICATION HINT:` line to this prompt for the
+mechanically-detectable types below — treat it as a strong suggestion, not
+a fact; confirm or override it based on what you actually see in the
+observed state. Full decision-tree rationale: `recovery.md`.
 - `TRANSIENT_BLOCK` — a temporary bot-detection wall, rate limit, or slow
   load; retrying the same mission with a fresh browser identity is
   appropriate.
@@ -120,11 +124,35 @@ revised strategy:
 - `SITE_UNSUPPORTED` — a hard blocker exists that no retry can fix (login
   wall with no credentials, CAPTCHA with no bypass, page permanently
   unreachable); stop and report clearly instead of consuming retries.
+- `TIMEOUT` — an action or navigation exceeded its wait budget (spinner
+  never resolved, element never appeared, network call never returned);
+  retry once with a longer explicit wait, escalate to `TRANSIENT_BLOCK` if
+  it times out again.
+- `BROWSER_CRASH` — the browser process/tab/context closed or disconnected
+  mid-run; close and fully re-launch the session before resuming from the
+  last confirmed state, don't just retry the tool call.
+- `SESSION_EXPIRED` — a previously-valid authenticated session is no longer
+  valid; re-run login if credentials are available, otherwise treat as
+  `MISSING_INPUT`.
+- `UNEXPECTED_REDIRECT` — a navigation/submission landed on a URL the
+  mission didn't intend with no explanatory error; re-inspect what page was
+  actually reached, continue if it's a legitimate intermediate hop,
+  otherwise navigate back to the intended URL before retrying.
+- `WRONG_PAGE` — landed on a 404/error page or content that doesn't match
+  what the mission expected; navigate back and retry with a corrected
+  selector/URL/query, not the exact same input.
+- `PERMISSION_DENIED` — an explicit 401/403/access-denied response; treat
+  as `SITE_UNSUPPORTED` unless a plausible fix exists (missing credentials
+  the user can supply), in which case treat as `MISSING_INPUT`.
+- `MISSING_ELEMENT` — a selector/element the plan expected could not be
+  found; re-inspect the page for a renamed/moved equivalent before
+  concluding the layout changed; if still missing after one retry, treat as
+  `WRONG_PLAN`.
 
 Output format:
 ```
 THINKING: <root cause + visual clues from the page state>
-FAILURE_TYPE: <one of the four types above>
+FAILURE_TYPE: <one of the eleven types above>
 REVISED PROMPT: <the complete, updated execution instructions, or — for
 MISSING_INPUT/SITE_UNSUPPORTED — an explanation of what to tell the user>
 ```

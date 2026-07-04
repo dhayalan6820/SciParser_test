@@ -1,0 +1,50 @@
+{
+  "$schema": "Documents the operational configuration contract for the browser-automation agent. This is a REVIEWABLE ARTIFACT, not a file read at runtime — the actual values are sourced from Backend/src/config.py (env-var driven) and the per-call kwargs in Backend/src/services/brain.py / spec_loader.py. Keep this file's field names and defaults in sync with those two sources; do not fork a second source of truth by adding a config loader that reads this JSON.",
+  "model": {
+    "provider": "openrouter",
+    "default_model_env": "OPENROUTER_MODEL",
+    "default_model": "google/gemini-3-flash-preview",
+    "source": "Backend/src/config.py:OPENROUTER_MODEL"
+  },
+  "temperature": {
+    "planner": 0.2,
+    "browser_agent": 0.2,
+    "critic": 0.2,
+    "source": "Backend/src/agents/specs/*.agent.md frontmatter `temperature` field"
+  },
+  "max_tokens": {
+    "primary_llm_call": 16384,
+    "secondary_llm_call": 8192,
+    "source": "Backend/src/services/brain.py call_model() ChatOpenAI kwargs"
+  },
+  "observation_limits": {
+    "max_observation_chars_for_llm": 12000,
+    "source": "Backend/src/services/brain.py:MAX_OBSERVATION_CHARS_FOR_LLM"
+  },
+  "timeouts": {
+    "http_client_timeout_seconds_env": "HTTP_CLIENT_TIMEOUT_SECONDS",
+    "cdp_json_timeout_seconds_env": "CDP_JSON_TIMEOUT_SECONDS",
+    "cdp_screenshot_timeout_seconds_env": "CDP_SCREENSHOT_TIMEOUT_SECONDS",
+    "proxy_test_timeout_seconds_env": "PROXY_TEST_TIMEOUT_SECONDS",
+    "browser_cdp_ready_timeout_seconds_env": "BROWSER_CDP_READY_TIMEOUT_SECONDS",
+    "browser_navigation_timeout_ms_env": "BROWSER_NAVIGATION_TIMEOUT_MS",
+    "source": "Backend/src/config.py"
+  },
+  "retry_limits": {
+    "max_attempts": 3,
+    "source": "Backend/src/services/brain.py:max_retries (process_message retry loop)"
+  },
+  "browser": {
+    "engine_env": "BROWSER_ENGINE",
+    "default_engine": "camoufox",
+    "default_cdp_host_env": "BROWSER_DEFAULT_CDP_HOST",
+    "default_cdp_port_env": "BROWSER_DEFAULT_CDP_PORT",
+    "headless_default_env": "BROWSER_USE_HEADLESS",
+    "user_agent_index_default_env": "BROWSER_USER_AGENT_INDEX",
+    "source": "Backend/src/config.py"
+  },
+  "tool_sourcing": {
+    "policy": "MCP-only. Every callable tool must be discoverable via MCPToolManager.get_tools() (built-in browser-use bridge server + any server declared in Backend/src/agents/mcp_servers.json). No @tool/StructuredTool definitions are permitted outside the MCP registry.",
+    "source": "Backend/src/agents/mcp_agent.py"
+  }
+}

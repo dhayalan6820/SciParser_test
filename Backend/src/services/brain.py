@@ -21,7 +21,6 @@ from langchain_core.messages import (
 
 from langchain_core.tools import BaseTool 
 from langchain_openai import ChatOpenAI
-from langchain_tavily import TavilySearch
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
@@ -35,6 +34,7 @@ from src.services.memory_service import MemoryService
 from src.services.obstacle_handler import (
     detect_captcha_type,
     detect_obstacle,
+    detect_obstacle_from_observed,
     ObstacleMatch,
     ObstacleInputNeeded,
     build_input_form,
@@ -43,6 +43,9 @@ from src.services import address_agent
 from src.services import calendar_agent
 from src.services import login_agent
 from src.services import booking_agent
+from src.services.observer import observe as observe_state, ObservedState
+from src.services.verifier import verify_action, ValidationResult
+from src.services.recovery import classify_failure, format_hint
 
 # ATAG Models
 from src.services.ATAG import (
@@ -328,7 +331,6 @@ class Brain:
         self.db_manager = DatabaseManager()
         self.atag_processor: Optional[ATAGProcessor] = None
         self.llm = None
-        self.search_tool = None
         self.initialized = False
         self.checkpointer = MemorySaver()
         self.active_tasks: Dict[str, asyncio.Task] = {}
@@ -448,7 +450,13 @@ class Brain:
             default_headers={"x-or-cache": "1"},
         )
 
-        self.search_tool = TavilySearch(max_results=3)
+        # Note: no direct (non-MCP) tool is added to the agent's tool-calling
+        # loop here. Every tool available to the browser agent is sourced
+        # exclusively from `mcp_manager.get_tools()` — see
+        # `Backend/src/agents/mcp_agent.py` / `mcp_servers.json` to add
+        # capabilities. ATAGProcessor's own Tavily usage (below) is a
+        # separate, non-tool text-enrichment step for standalone script
+        # generation, not part of the live agent's bound tool list.
         self.atag_processor = ATAGProcessor(self.llm)
         self.code_processor = ATAGProcessor(self.code_llm, tavily_api_key=config.TAVILY_API_KEY)
 
@@ -1118,6 +1126,7 @@ class Brain:
             execution_history = state.get("execution_history", [])
             
             new_messages = []
+            _last_validation_result: Optional[Dict[str, Any]] = None
             for tool_call in last_message.tool_calls:
                 tool = tool_map.get(tool_call["name"])
                 
@@ -1157,6 +1166,13 @@ class Brain:
                     except Exception as e:
                         observation = f"Error executing tool: {str(e)}"
 
+                # ── Observer step (Task #154 Step 2) ────────────────────────────────────
+                # Parse the raw observation ONCE into a structured state — every detector
+                # below (CAPTCHA/OTP/address/calendar/login/booking, plus the Verifier and
+                # recovery classification) reads flags off `_observed` instead of each
+                # re-running its own regex pass over `str(observation)`.
+                _observed: ObservedState = observe_state(str(observation))
+
                 # ── CAPTCHA outcome evaluation ────────────────────────────────────────
                 # Delegated to Brain._evaluate_captcha_outcome for testability.
                 await self._evaluate_captcha_outcome(
@@ -1165,7 +1181,7 @@ class Brain:
 
                 # ── CAPTCHA detection (runs after try/except, observation always set) ──
                 try:
-                    _captcha_type = _detect_captcha(str(observation))
+                    _captcha_type = _observed.captcha_type
                     if _captcha_type and self.memory_service:
                         _skill = await self.memory_service.get_captcha_skill(user_id, _captcha_type)
                         if _skill:
@@ -1288,7 +1304,7 @@ class Brain:
                 # here so it can be surfaced via the NEEDS_INPUT form and resumed later.
                 try:
                     if not _captcha_type:
-                        _obstacle = detect_obstacle(str(observation))
+                        _obstacle = detect_obstacle_from_observed(_observed)
                         if _obstacle and _obstacle.requires_human_input:
                             if self.memory_service:
                                 try:
@@ -1308,6 +1324,18 @@ class Brain:
                     logger.warning(f"Obstacle detection error (non-fatal): {_oe}")
 
                 status = "SUCCESS" if "Error" not in str(observation) else "FAILED"
+
+                # ── Verifier step (Task #154 Step 3) ────────────────────────────────────
+                # Explicit post-action check that the tool call's expected effect actually
+                # occurred, using the Observer's structured state computed above. The
+                # result is appended to `execution_history` (so the planner's next turn
+                # sees it) and surfaced on the graph's `validation_result` field for any
+                # critic/planning logic that reads state directly.
+                _validation: ValidationResult = verify_action(
+                    tool_call["name"], tool_call["args"], status, _observed
+                )
+                if not _validation.passed:
+                    observation = str(observation) + _validation.to_prompt_note()
 
                 # Clean observation for logs (remove large base64 data)
                 clean_obs = re.sub(r'\[SCREENSHOT\].*?\[/SCREENSHOT\]', '[Image Data]', str(observation), flags=re.DOTALL)
@@ -1385,9 +1413,20 @@ class Brain:
                 # Carry the real ToolExecutionLog.id along so the graph-output
                 # handling below can persist genuine DB ids into Message.tool_calls
                 # instead of minting a disconnected uuid4() per entry.
-                execution_history.append({"tool": tool_call["name"], "status": status, "result": llm_observation[:500], "id": _db_log_id})
-            
-            return {"messages": new_messages, "execution_history": execution_history}
+                execution_history.append({
+                    "tool": tool_call["name"],
+                    "status": status,
+                    "result": llm_observation[:500],
+                    "id": _db_log_id,
+                    "validation": _validation.to_dict(),
+                })
+                _last_validation_result = _validation.to_dict()
+
+            return {
+                "messages": new_messages,
+                "execution_history": execution_history,
+                "validation_result": _last_validation_result,
+            }
 
         # Define the graph
         workflow = StateGraph(AgentState)
@@ -1923,9 +1962,6 @@ class Brain:
                     all_tools = await mcp_manager.get_tools()
                 else:
                     raise
-            if self.search_tool: 
-                all_tools = list(all_tools) + [self.search_tool]
-            
             logger.info(f"Discovered {len(all_tools)} tools for execution.")
 
             # Check whether the bridge fell back from Camoufox to Chrome and notify the user
@@ -2347,12 +2383,18 @@ class Brain:
 
                         # Re-discover tools from the fresh session
                         all_tools = await mcp_manager.get_tools()
-                        if self.search_tool:
-                            all_tools = list(all_tools) + [self.search_tool]
 
                         logger.info(f"Running Critic to revise strategy for attempt {retry_count + 1}...")
                         critic_input_message = f"The previous execution attempt failed with error: {last_error}. Please analyze the current page state and provide a refined strategy to achieve the goal: {task_summary}. Confirmed inputs: {json.dumps(confirmed_inputs)}"
-                        revised_strategy = await self.atag_processor.run_critic(user_message, critic_input_message, last_error)
+                        # Deterministic pre-classification (Task #154 Step 4): a cheap
+                        # pattern-match hint for mechanically-detectable failure types
+                        # (timeout/crash/session-expiry/permission/etc.) so the LLM
+                        # critic spends its reasoning on the revised strategy instead
+                        # of re-deriving what the raw error text already answers.
+                        _failure_hint = format_hint(classify_failure(last_error))
+                        revised_strategy = await self.atag_processor.run_critic(
+                            user_message, critic_input_message, last_error, failure_hint=_failure_hint
+                        )
                         
                         initial_execution_message = HumanMessage(content=revised_strategy)
                         await asyncio.sleep(2)

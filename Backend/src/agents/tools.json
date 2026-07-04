@@ -1,0 +1,52 @@
+{
+  "$schema": "Documents the MCP-sourced tool contracts callable by the browser agent. This is a REVIEWABLE ARTIFACT, not a file loaded at runtime — the live, authoritative tool list is always whatever MCPToolManager.get_tools() discovers (built-in browser-use bridge server in Backend/src/agents/browser_use_bridge.py, plus any server declared in Backend/src/agents/mcp_servers.json). If a tool is renamed/added/removed in the MCP server, update this file to match — it must never drift into being a second, hardcoded tool registry that code depends on.",
+  "sourcing_policy": "MCP-only. No @tool/StructuredTool definitions exist outside this registry (enforced by removing the standalone Tavily tool in Task #154 Step 1).",
+  "tool_filter_mechanism": "Backend/src/agents/spec_loader.py:filter_tools — glob pattern(s) in an agent spec's `tool_filter` frontmatter field matched against live tool names. Browser agent uses tool_filter: \"*\" (all discovered tools).",
+  "error_handling": "Tool exceptions are caught in Backend/src/services/brain.py:_call_tool and turned into an `Error executing tool: <message>` observation string rather than propagating; this drives the SUCCESS/FAILED status and the Verifier's BLOCKING classification.",
+  "tools": {
+    "browser_navigate": {
+      "description": "Navigate the active page to a URL.",
+      "parameters": { "url": "string (required)" },
+      "validation": "Verifier (src/services/verifier.py) checks the resulting ObservedState.url's host against the requested target host; a mismatch is surfaced as a WARNING (informational — may be a legitimate redirect), not a hard failure.",
+      "error_codes": ["Error executing tool: <navigation error>", "browser closed/crashed mid-navigation -> BROWSER_CRASH recovery branch"],
+      "rate_limits": "None enforced by the tool itself; site-side rate limiting surfaces as a TRANSIENT_BLOCK recovery branch."
+    },
+    "browser_click": {
+      "description": "Click an element by index (from browser_get_state) or coordinates.",
+      "parameters": { "index": "int (optional)", "x": "int (optional)", "y": "int (optional)" },
+      "validation": "Verifier flags BLOCKING if the observation shows a CAPTCHA/OTP/error signal immediately after the click; flags INFO if the page is still loading (confirm effect next turn).",
+      "error_codes": ["no such element", "element not found -> MISSING_ELEMENT recovery branch"]
+    },
+    "browser_type": {
+      "description": "Type text into the currently focused (or specified) input element.",
+      "parameters": { "index": "int (optional)", "text": "string (required)" },
+      "validation": "Same as browser_click. Secret values (passwords/OTP codes) are redacted before this call's args/output are persisted — see obstacle_handler.py:_redact_secret_values_in_text.",
+      "permissions": "Never called with credentials outside CONFIRMED INPUTS per browser.agent.md Safety Rules."
+    },
+    "browser_get_state": {
+      "description": "Returns the current interactive-element summary and page text used to build ObservedState.",
+      "parameters": {},
+      "validation": "Feeds directly into src/services/observer.py:observe() — this is the primary source of ObservedState.raw_text."
+    },
+    "browser_screenshot": { "description": "Capture a screenshot of the current viewport.", "parameters": {} },
+    "browser_scroll": { "description": "Scroll the page or a scrollable container.", "parameters": { "direction": "string", "amount": "int (optional)" } },
+    "browser_go_back": { "description": "Navigate back in browser history.", "parameters": {} },
+    "browser_get_html": { "description": "Return the raw HTML of the current page (sanitized before reaching the LLM — see _sanitize_browser_observation).", "parameters": {} },
+    "browser_extract_content": { "description": "Extract structured content/text matching a query from the current page.", "parameters": { "query": "string" } },
+    "browser_list_tabs": { "description": "List open browser tabs.", "parameters": {} },
+    "browser_switch_tab": { "description": "Switch the active tab.", "parameters": { "tab_id": "string" } },
+    "browser_close_tab": { "description": "Close a specific tab.", "parameters": { "tab_id": "string" } },
+    "browser_close": { "description": "Close the active page.", "parameters": {} },
+    "browser_close_session": { "description": "Close the entire browser session; triggers session cleanup in brain.py._call_tool.", "parameters": {} },
+    "browser_close_all": { "description": "Close all sessions/tabs.", "parameters": {} },
+    "browser_search_google": { "description": "Run a Google search and return results.", "parameters": { "query": "string" } },
+    "browser_key_press": { "description": "Press a keyboard key or combination on the currently focused element.", "parameters": { "key": "string" } },
+    "browser_hover": { "description": "Move the mouse to an element or pixel coordinates without clicking.", "parameters": { "index": "int (optional)", "x": "int (optional)", "y": "int (optional)" } },
+    "browser_wait": { "description": "Pause execution for a specified number of milliseconds (used after typing/clicking to let autocomplete/validation settle).", "parameters": { "ms": "int" } },
+    "browser_drag": { "description": "Click-and-drag from one set of pixel coordinates to another.", "parameters": { "from_x": "int", "from_y": "int", "to_x": "int", "to_y": "int" } }
+  },
+  "extra_mcp_servers": {
+    "description": "Any server declared in Backend/src/agents/mcp_servers.json is merged into the live tool list automatically; its tools are unnamed here by design since the list is dynamic and site-specific. See Backend/src/agents/mcp_servers.example.json for the declaration format.",
+    "conflict_policy": "A user-declared server cannot redefine a built-in server name; the built-in config takes precedence (Backend/src/agents/mcp_agent.py)."
+  }
+}
