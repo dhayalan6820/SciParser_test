@@ -1100,12 +1100,15 @@ class Brain:
                     thought_text = "\n".join(lines[:6]).strip()
                     if thought_text:
                         await self.stream_manager.broadcast_thought(chat_id, thought_text)
-                
-                if clean_content:
-                    # Update Task 2 Details (Main Chat)
-                    if update_ui_func:
-                        await update_ui_func(1, "in-progress", details=clean_content, token_usage=token_usage, cost=cost)
-                
+
+            # Persist token usage/cost for every LLM call, even tool-call-only
+            # responses with empty content (previously only logged when
+            # response.content was truthy, silently undercounting usage/cost
+            # for calls that produced only a tool call).
+            if update_ui_func:
+                _details = clean_content if response.content and clean_content else None
+                await update_ui_func(1, "in-progress", details=_details, token_usage=token_usage, cost=cost)
+
             return {"messages": [response]}
 
         # Define the function to carry out tool interactions
