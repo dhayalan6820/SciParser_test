@@ -56,6 +56,9 @@ import {
   Shield,
   Settings,
   BarChart3,
+  ThumbsUp,
+  ThumbsDown,
+  Share2,
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import Plan, { Task } from "./agent-plan";
@@ -1379,8 +1382,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
         <div
           className={cn(
-            "group relative flex gap-4 max-w-[85%] transition-all duration-300",
-            isUser ? "flex-row-reverse" : "flex-row",
+            "group relative flex flex-col gap-2 max-w-[85%] transition-all duration-300",
+            isUser ? "items-end" : "items-start",
           )}
         >
           {/* Selection Checkbox Overlay */}
@@ -1397,7 +1400,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             </div>
           )}
 
-          {/* Avatar */}
+          {/* Avatar (above bubble) */}
           <div
             className={cn(
               "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-lg transition-transform duration-300 group-hover:scale-110",
@@ -1414,7 +1417,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           </div>
 
           {/* Message Bubble */}
-          <div className="flex flex-col gap-2 min-w-0">
+          <div className="flex flex-col gap-2 min-w-0 w-full">
             <div
               className={cn(
                 "px-5 py-3.5 rounded-2xl shadow-sm border transition-all duration-200",
@@ -1435,6 +1438,48 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 {renderFormattedContent(msg.content, isUser)}
               </div>
             </div>
+
+            {/* Action row (AI responses only) */}
+            {!isUser && (
+              <div className="flex items-center gap-1 px-1">
+                <button
+                  type="button"
+                  title="Regenerate"
+                  className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  title="Good response"
+                  className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  <ThumbsUp className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  title="Bad response"
+                  className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  <ThumbsDown className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  title="Copy"
+                  onClick={() => navigator.clipboard.writeText(msg.content)}
+                  className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  title="Share"
+                  className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
 
             {/* Inline screenshots */}
             {!isUser && msg.screenshots && msg.screenshots.length > 0 && (
