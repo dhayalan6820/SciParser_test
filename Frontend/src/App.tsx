@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import { sciparserApi, User, consumeSuspensionMessage } from "./api";
 import { apiUrl } from "./config";
 import { useTheme } from "./contexts/ThemeContext";
+import { LayoutDashboard } from "lucide-react";
 
 const customBezier: [number, number, number, number] = [0.43, 0.13, 0.23, 0.96];
 
@@ -164,9 +165,10 @@ export default function App() {
             {currentUser?.role === "admin" && (
               <button
                 onClick={() => setViewAsUser(false)}
-                className="fixed top-3 right-3 z-[60] flex items-center gap-1.5 text-xs font-medium rounded-full border border-indigo-200 dark:border-indigo-900 bg-white/90 dark:bg-slate-900/90 backdrop-blur text-indigo-600 dark:text-indigo-400 px-3 py-1.5 shadow-md hover:bg-indigo-50 dark:hover:bg-indigo-500/10"
+                title="Back to Admin"
+                className="fixed top-3 right-3 z-[60] flex h-10 w-10 items-center justify-center rounded-[12px] border border-border bg-card/90 backdrop-blur text-muted-foreground shadow-md transition-all hover:bg-muted hover:text-foreground active:scale-90"
               >
-                Back to Admin
+                <LayoutDashboard className="h-5 w-5" />
               </button>
             )}
             <ChatPage

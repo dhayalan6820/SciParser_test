@@ -187,6 +187,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
   // Usage modal state
   const [showUsageModal, setShowUsageModal] = React.useState(false);
+  const [isProfileExpanded, setIsProfileExpanded] = React.useState(false);
   const [usageData, setUsageData] = React.useState<
     import("../../api").ConversationTokenUsage[] | null
   >(null);
@@ -2763,59 +2764,45 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 </div>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="mt-4 flex items-center justify-center gap-2">
                 <button
                   onClick={() => handleSwitchView("chat")}
+                  title="AI Chat Core"
                   className={cn(
-                    "flex items-center justify-between rounded-[14px] border px-3 py-3 text-left transition-all duration-200",
+                    "flex h-11 w-11 items-center justify-center rounded-[14px] border transition-all duration-200",
                     currentView === "chat"
-                      ? "border-[#22D3EE]/35 bg-gradient-to-r from-[#10B981]/20 to-[#22D3EE]/15 text-foreground shadow-[0_0_24px_rgba(34,211,238,0.12)]"
+                      ? "border-[#22D3EE]/35 bg-gradient-to-b from-[#10B981]/20 to-[#22D3EE]/15 text-foreground shadow-[0_0_24px_rgba(34,211,238,0.12)]"
                       : "border-border bg-muted/20 text-muted-foreground hover:border-[#22D3EE]/25 hover:bg-muted hover:text-foreground",
                   )}
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <MessageSquare className="h-4 w-4 shrink-0" />
-                    <span className="truncate text-sm font-semibold">
-                      AI Chat Core
-                    </span>
-                  </div>
-                  <img src={atomIcon} alt="SciParser" className="h-6 w-6 object-contain shrink-0" />
+                  <MessageSquare className="h-5 w-5" />
                 </button>
 
                 <button
                   onClick={() => handleSwitchView("schedules")}
+                  title="Automation"
                   className={cn(
-                    "flex items-center justify-between rounded-[14px] border px-3 py-3 text-left transition-all duration-200",
+                    "relative flex h-11 w-11 items-center justify-center rounded-[14px] border transition-all duration-200",
                     currentView === "schedules"
-                      ? "border-[#22D3EE]/35 bg-gradient-to-r from-[#10B981]/20 to-[#22D3EE]/15 text-foreground shadow-[0_0_24px_rgba(34,211,238,0.12)]"
+                      ? "border-[#22D3EE]/35 bg-gradient-to-b from-[#10B981]/20 to-[#22D3EE]/15 text-foreground shadow-[0_0_24px_rgba(34,211,238,0.12)]"
                       : "border-border bg-muted/20 text-muted-foreground hover:border-[#22D3EE]/25 hover:bg-muted hover:text-foreground",
                   )}
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Calendar className="h-4 w-4 shrink-0" />
-                    <span className="truncate text-sm font-semibold">
-                      Automation
-                    </span>
-                  </div>
-                  <div className="h-2 w-2 rounded-full bg-[#22D3EE]" />
+                  <Calendar className="h-5 w-5" />
+                  <div className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#22D3EE]" />
                 </button>
 
                 <button
                   onClick={() => handleSwitchView("settings")}
+                  title="Settings"
                   className={cn(
-                    "col-span-2 flex items-center justify-between rounded-[14px] border px-3 py-3 text-left transition-all duration-200",
+                    "flex h-11 w-11 items-center justify-center rounded-[14px] border transition-all duration-200",
                     currentView === "settings"
-                      ? "border-violet-500/35 bg-gradient-to-r from-violet-500/20 to-violet-600/15 text-foreground shadow-[0_0_24px_rgba(167,139,250,0.12)]"
+                      ? "border-violet-500/35 bg-gradient-to-b from-violet-500/20 to-violet-600/15 text-foreground shadow-[0_0_24px_rgba(167,139,250,0.12)]"
                       : "border-border bg-muted/20 text-muted-foreground hover:border-violet-500/25 hover:bg-muted hover:text-foreground",
                   )}
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Settings className="h-4 w-4 shrink-0" />
-                    <span className="truncate text-sm font-semibold">
-                      Settings
-                    </span>
-                  </div>
-                  <Shield className="h-3.5 w-3.5 shrink-0 text-violet-400/60" />
+                  <Settings className="h-5 w-5" />
                 </button>
               </div>
             </div>
@@ -2920,71 +2907,97 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           <div className="relative z-10 px-4 pb-4 pt-2">
             <div className="rounded-[16px] border border-border bg-muted/30 px-4 py-3 backdrop-blur-xl shadow-[0_14px_40px_rgba(0,0,0,0.24)]">
               <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#10B981] text-white font-black shadow-[0_0_24px_rgba(16,185,129,0.38)]">
+                <button
+                  onClick={() => setIsProfileExpanded((v) => !v)}
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#10B981] text-white font-black shadow-[0_0_24px_rgba(16,185,129,0.38)]">
                     {userProfile?.username.slice(0, 2).toUpperCase()}
                   </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-foreground">
-                      {userProfile?.username}
-                    </p>
-                    <p className="truncate text-[11px] text-muted-foreground">
-                      {userProfile?.email}
-                    </p>
-                  </div>
-                </div>
-                <button className="rounded-lg border border-border bg-card p-2 text-muted-foreground transition-colors hover:border-[#22D3EE]/25 hover:text-foreground">
-                  <ChevronDown className="h-4 w-4" />
+                  {isProfileExpanded && (
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-foreground">
+                        {userProfile?.username}
+                      </p>
+                      <p className="truncate text-[11px] text-muted-foreground">
+                        {userProfile?.email}
+                      </p>
+                    </div>
+                  )}
+                </button>
+                <button
+                  onClick={() => setIsProfileExpanded((v) => !v)}
+                  title={isProfileExpanded ? "Collapse profile" : "Expand profile"}
+                  className="rounded-lg border border-border bg-card p-2 text-muted-foreground transition-colors hover:border-[#22D3EE]/25 hover:text-foreground"
+                >
+                  <ChevronDown
+                    className={cn(
+                      "h-4 w-4 transition-transform duration-200",
+                      isProfileExpanded && "rotate-180",
+                    )}
+                  />
                 </button>
               </div>
 
-              {userProfile?.credit_balance !== undefined && (
-                <div
-                  className={cn(
-                    "mt-3 flex items-center justify-between rounded-[10px] border px-3 py-1.5 text-[11px] font-medium",
-                    userProfile.credit_balance <= 0
-                      ? "border-red-500/30 bg-red-500/10 text-red-400"
-                      : "border-border bg-card text-muted-foreground"
-                  )}
-                >
-                  <span>Credits</span>
-                  <span className="font-semibold text-foreground">
-                    {userProfile.credit_balance.toFixed(2)}
-                  </span>
-                </div>
-              )}
+              <AnimatePresence initial={false}>
+                {isProfileExpanded && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    {userProfile?.credit_balance !== undefined && (
+                      <div
+                        className={cn(
+                          "mt-3 flex items-center justify-between rounded-[10px] border px-3 py-1.5 text-[11px] font-medium",
+                          userProfile.credit_balance <= 0
+                            ? "border-red-500/30 bg-red-500/10 text-red-400"
+                            : "border-border bg-card text-muted-foreground"
+                        )}
+                      >
+                        <span>Credits</span>
+                        <span className="font-semibold text-foreground">
+                          {userProfile.credit_balance.toFixed(2)}
+                        </span>
+                      </div>
+                    )}
 
-              <div className="mt-4 flex items-center justify-between gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={openUsageModal}
-                  title="Usage"
-                  className="h-10 w-10 rounded-[12px] border border-border bg-card text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-90"
-                >
-                  <BarChart3 className="w-5 h-5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={toggleTheme}
-                  className="h-10 w-10 rounded-[12px] border border-border bg-card text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-90"
-                >
-                  {theme === "dark" ? (
-                    <Sun className="w-5 h-5" />
-                  ) : (
-                    <Moon className="w-5 h-5" />
-                  )}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleLogout}
-                  className="h-10 w-10 rounded-[12px] border border-border bg-card text-red-400 transition-all hover:bg-muted hover:text-red-300 active:scale-90"
-                >
-                  <LogOut className="w-5 h-5" />
-                </Button>
-              </div>
+                    <div className="mt-3 flex items-center justify-between gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={openUsageModal}
+                        title="Usage"
+                        className="h-10 w-10 rounded-[12px] border border-border bg-card text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-90"
+                      >
+                        <BarChart3 className="w-5 h-5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={toggleTheme}
+                        className="h-10 w-10 rounded-[12px] border border-border bg-card text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-90"
+                      >
+                        {theme === "dark" ? (
+                          <Sun className="w-5 h-5" />
+                        ) : (
+                          <Moon className="w-5 h-5" />
+                        )}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleLogout}
+                        className="h-10 w-10 rounded-[12px] border border-border bg-card text-red-400 transition-all hover:bg-muted hover:text-red-300 active:scale-90"
+                      >
+                        <LogOut className="w-5 h-5" />
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
 
