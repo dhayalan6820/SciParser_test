@@ -120,7 +120,7 @@ const Signup1 = ({
               required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="flex h-10 w-full rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="flex h-10 w-full rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
             />
           </div>
 
@@ -136,7 +136,7 @@ const Signup1 = ({
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                className="flex h-10 w-full rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
             </div>
           )}
@@ -152,7 +152,7 @@ const Signup1 = ({
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="flex h-10 w-full rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="flex h-10 w-full rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
             />
           </div>
 
@@ -171,7 +171,7 @@ const Signup1 = ({
           {/* Action Button */}
           <Button 
             type="submit" 
-            className="w-full h-10 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md text-sm shadow-sm transition-colors mt-2 cursor-pointer"
+            className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-md text-sm shadow-sm transition-colors mt-2 cursor-pointer"
             disabled={loading}
           >
             {loading ? (
@@ -217,7 +217,7 @@ const Signup1 = ({
           <button
             type="button"
             onClick={onToggleMode}
-            className="text-indigo-400 dark:text-indigo-300 font-semibold hover:underline bg-transparent border-0 cursor-pointer p-0"
+            className="text-emerald-400 dark:text-emerald-300 font-semibold hover:underline bg-transparent border-0 cursor-pointer p-0"
           >
             {isLoginMode ? "Create an account" : "Login"}
           </button>
