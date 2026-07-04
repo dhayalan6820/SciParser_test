@@ -8,7 +8,12 @@ import pytest
 from src.services.observer import observe, ObservedState
 from src.services.verifier import verify_action, ValidationResult
 from src.services.obstacle_handler import detect_obstacle_from_observed
-from src.services.recovery import classify_failure, format_hint
+from src.services.recovery import (
+    classify_failure,
+    format_hint,
+    get_classification_stats,
+    reset_classification_stats,
+)
 from src.agents import spec_loader
 
 
@@ -176,6 +181,46 @@ def test_format_hint_includes_failure_type_when_classified():
     hint = format_hint("TIMEOUT")
     assert "TIMEOUT" in hint
     assert "DETERMINISTIC PRE-CLASSIFICATION HINT" in hint
+
+
+# ---------------------------------------------------------------------------
+# Recovery classification tracking (per-domain fallback stats)
+# ---------------------------------------------------------------------------
+
+def test_classify_failure_tracks_classified_count_per_domain():
+    reset_classification_stats()
+    observed = ObservedState(raw_text="", url="https://shop.example.com/checkout")
+    classify_failure("request timed out after 30s", observed)
+    stats = get_classification_stats()
+    assert stats["shop.example.com"] == {"classified": 1, "unclassified": 0}
+
+
+def test_classify_failure_tracks_unclassified_count_per_domain():
+    reset_classification_stats()
+    observed = ObservedState(raw_text="", url="https://weird-site.example.com/flow")
+    classify_failure("The agent could not complete the requested comparison.", observed)
+    stats = get_classification_stats()
+    assert stats["weird-site.example.com"] == {"classified": 0, "unclassified": 1}
+
+
+def test_classify_failure_falls_back_to_url_in_error_text_when_no_observed_state():
+    reset_classification_stats()
+    classify_failure("403 Forbidden: access denied at https://api.example.org/orders")
+    stats = get_classification_stats()
+    assert stats["api.example.org"] == {"classified": 1, "unclassified": 0}
+
+
+def test_classify_failure_uses_unknown_domain_when_no_url_available():
+    reset_classification_stats()
+    classify_failure("timed out")
+    stats = get_classification_stats()
+    assert stats["unknown"] == {"classified": 1, "unclassified": 0}
+
+
+def test_reset_classification_stats_clears_counters():
+    classify_failure("timed out")
+    reset_classification_stats()
+    assert get_classification_stats() == {}
 
 
 # ---------------------------------------------------------------------------

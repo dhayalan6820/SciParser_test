@@ -75,3 +75,49 @@ FAILURE_TYPE: <one of the eleven types above>
 REVISED PROMPT: <the complete, updated execution instructions, or — for
 MISSING_INPUT/SITE_UNSUPPORTED — an explanation of what to tell the user>
 ```
+
+## Tracking unclassified failures
+
+`classify_failure()` returns `None` whenever none of the **[auto]** branches'
+regexes match — that failure falls through to the LLM critic with no
+`DETERMINISTIC PRE-CLASSIFICATION HINT` line. This is expected for
+`WRONG_PLAN`/`MISSING_INPUT`/`SITE_UNSUPPORTED` (they require judgment,
+not pattern matching), but a *rising* fall-through rate for one domain is a
+signal that site is surfacing a new failure text pattern the auto branches
+don't know about yet.
+
+Every call to `classify_failure()` updates an in-memory per-domain counter
+(`{"classified": n, "unclassified": n}`), keyed by the domain parsed from
+`ObservedState.url` (falling back to a URL found in the raw error text, or
+`"unknown"` if neither is present). Each unclassified call also emits an
+`INFO` log line (`recovery.classify_failure: no mechanical branch matched for
+domain=...`) so you can grep runtime logs for a specific domain, or watch for
+a domain whose `unclassified` count climbs relative to `classified`.
+Call `src.services.recovery.get_classification_stats()` to read a snapshot of
+the counters (e.g. from a debug endpoint or a periodic log summary) — this is
+process-lifetime, in-memory only, not persisted across restarts.
+
+### Process for adding a new branch
+
+1. **Spot the pattern.** Grep logs for `no mechanical branch matched for
+   domain=<the domain in question>` and pull the accompanying `last_error` /
+   `observed.raw_text` values (visible in the surrounding execution log
+   entries) to see the actual failure text the site produced.
+2. **Decide auto vs. judgment.** If the text has an unambiguous, mechanically
+   detectable signature (a specific error string, HTTP status, or URL
+   pattern), it's a candidate for a new **[auto]** branch or an addition to
+   an existing branch's pattern list. If it genuinely requires reasoning
+   about intent (e.g. "is this actually the right page for the mission?"),
+   leave it to the LLM critic — don't force a regex onto ambiguous text.
+3. **Add the pattern(s)** to the relevant `_<NAME>_PATTERNS` list in
+   `recovery.py` (or a new list + branch if it's a genuinely new failure
+   type), keeping the "most specific first" ordering in `classify_failure`.
+4. **Add a test case** in `Backend/tests/test_observer_verifier_recovery.py`
+   asserting the new/updated pattern classifies as expected.
+5. **Update this document** (`recovery.md`) and the "Recovery Protocol"
+   section of `browser.agent.md` in lockstep — they must stay in sync, and
+   the `FAILURE_TYPES` tuple / output format's "one of the N types above"
+   count in both places must match if a new type was added.
+6. **Verify the fall-through count drops** for that domain in subsequent
+   runs (via `get_classification_stats()` or the logs) to confirm the new
+   branch is actually catching the pattern.

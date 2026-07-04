@@ -21,10 +21,75 @@ picking the revised strategy.
 """
 from __future__ import annotations
 
+import logging
 import re
-from typing import Optional
+from collections import defaultdict
+from typing import Dict, Optional
+from urllib.parse import urlparse
 
 from src.services.observer import ObservedState
+
+logger = logging.getLogger(__name__)
+
+# Per-domain counters tracking how often `classify_failure` finds a
+# mechanical match vs. falls through to `None` (generic LLM critic path).
+# In-memory only — this is a lightweight operational signal (see the
+# "Extending the tree" section of `Backend/src/agents/specs/recovery.md`),
+# not a persisted metric. It resets on process restart, which is fine: the
+# question it answers ("is a NEW site pattern showing up right now")
+# is inherently about the current run/deployment, not long-term history.
+_UNKNOWN_DOMAIN = "unknown"
+_classification_stats: Dict[str, Dict[str, int]] = defaultdict(lambda: {"classified": 0, "unclassified": 0})
+
+
+def _extract_domain(error_msg: str, observed: Optional[ObservedState]) -> str:
+    """Best-effort domain extraction so fallback-rate can be broken down by
+    site. Prefers the parsed `ObservedState.url` (most reliable); falls back
+    to scanning the raw error text for a URL; defaults to "unknown" when
+    neither yields a host (e.g. a bare tool error with no page context)."""
+    candidates = []
+    if observed is not None and observed.url:
+        candidates.append(observed.url)
+    url_match = re.search(r"https?://[^\s\"'>)]+", str(error_msg or ""))
+    if url_match:
+        candidates.append(url_match.group(0))
+
+    for candidate in candidates:
+        try:
+            host = urlparse(candidate).netloc
+        except ValueError:
+            continue
+        if host:
+            return host.lower()
+    return _UNKNOWN_DOMAIN
+
+
+def _record_classification(domain: str, matched: bool) -> None:
+    stats = _classification_stats[domain]
+    if matched:
+        stats["classified"] += 1
+    else:
+        stats["unclassified"] += 1
+        logger.info(
+            "recovery.classify_failure: no mechanical branch matched for domain=%s "
+            "(falls through to generic LLM critic) — unclassified=%d/%d for this domain "
+            "this run. See 'Extending the tree' in Backend/src/agents/specs/recovery.md "
+            "if this keeps recurring for the same domain/pattern.",
+            domain, stats["unclassified"], stats["unclassified"] + stats["classified"],
+        )
+
+
+def get_classification_stats() -> Dict[str, Dict[str, int]]:
+    """Snapshot of per-domain classify/fall-through counts accumulated this
+    process's lifetime. Useful for a debug endpoint or periodic log summary;
+    not persisted across restarts."""
+    return {domain: dict(counts) for domain, counts in _classification_stats.items()}
+
+
+def reset_classification_stats() -> None:
+    """Clears the in-memory counters. Exists mainly for test isolation."""
+    _classification_stats.clear()
+
 
 # Ordered most-specific-first: the first matching branch wins.
 FAILURE_TYPES = (
@@ -90,23 +155,27 @@ def classify_failure(error_msg: str, observed: Optional[ObservedState] = None) -
     if observed is not None:
         text = f"{text}\n{observed.raw_text}"
 
+    domain = _extract_domain(error_msg, observed)
+    result: Optional[str] = None
     if _any_match(text, _CRASH_PATTERNS):
-        return "BROWSER_CRASH"
-    if _any_match(text, _SESSION_EXPIRED_PATTERNS):
-        return "SESSION_EXPIRED"
-    if _any_match(text, _TIMEOUT_PATTERNS):
-        return "TIMEOUT"
-    if _any_match(text, _PERMISSION_PATTERNS):
-        return "PERMISSION_DENIED"
-    if observed is not None and observed.url and _any_match(text, _WRONG_PAGE_PATTERNS):
-        return "WRONG_PAGE"
-    if _any_match(text, _MISSING_ELEMENT_PATTERNS):
-        return "MISSING_ELEMENT"
-    if _any_match(text, _WRONG_PAGE_PATTERNS):
-        return "WRONG_PAGE"
-    if _any_match(text, _TRANSIENT_PATTERNS):
-        return "TRANSIENT_BLOCK"
-    return None
+        result = "BROWSER_CRASH"
+    elif _any_match(text, _SESSION_EXPIRED_PATTERNS):
+        result = "SESSION_EXPIRED"
+    elif _any_match(text, _TIMEOUT_PATTERNS):
+        result = "TIMEOUT"
+    elif _any_match(text, _PERMISSION_PATTERNS):
+        result = "PERMISSION_DENIED"
+    elif observed is not None and observed.url and _any_match(text, _WRONG_PAGE_PATTERNS):
+        result = "WRONG_PAGE"
+    elif _any_match(text, _MISSING_ELEMENT_PATTERNS):
+        result = "MISSING_ELEMENT"
+    elif _any_match(text, _WRONG_PAGE_PATTERNS):
+        result = "WRONG_PAGE"
+    elif _any_match(text, _TRANSIENT_PATTERNS):
+        result = "TRANSIENT_BLOCK"
+
+    _record_classification(domain, matched=result is not None)
+    return result
 
 
 def format_hint(failure_type: Optional[str]) -> str:
