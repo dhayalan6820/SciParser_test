@@ -276,6 +276,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const browserPanelRef = React.useRef<HTMLDivElement>(null);
   const [resizingPanel, setResizingPanel] = React.useState<"browser" | null>(null);
   const [isAtBottom, setIsAtBottom] = React.useState(true);
+  // Shows the floating "Scroll down" button once the user has scrolled up
+  // away from the bottom of the chat, so new messages don't force-scroll them.
+  const [showScrollDownButton, setShowScrollDownButton] = React.useState(false);
 
   // Handle tool logs auto-scroll
   const handleToolLogsScroll = () => {
@@ -517,6 +520,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   // Re-enable auto-scroll whenever the active thread changes (thread switch or new chat)
   React.useEffect(() => {
     userScrolledUpRef.current = false;
+    setShowScrollDownButton(false);
   }, [activeThreadId]);
 
   // Detect when user manually scrolls — pause auto-scroll while they read up
@@ -526,11 +530,27 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     // Re-enable auto-scroll once user scrolls back within 80 px of the bottom
     userScrolledUpRef.current = distFromBottom > 80;
+    setShowScrollDownButton(userScrolledUpRef.current);
+  }, []);
+
+  const scrollChatToBottom = React.useCallback(() => {
+    userScrolledUpRef.current = false;
+    setShowScrollDownButton(false);
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
   }, []);
 
   React.useEffect(() => {
-    // Don't hijack the scroll position while the user is reading up
-    if (userScrolledUpRef.current) return;
+    // Don't hijack the scroll position while the user is reading up —
+    // just let them know new content arrived via the "Scroll down" button.
+    if (userScrolledUpRef.current) {
+      setShowScrollDownButton(true);
+      return;
+    }
     if (scrollRef.current) {
       // Use requestAnimationFrame to ensure DOM has updated
       requestAnimationFrame(() => {
@@ -3323,7 +3343,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               )}
 
               {/* Messages Container */}
-              <div className="flex-1 flex flex-row overflow-hidden">
+              <div className="flex-1 flex flex-row overflow-hidden relative">
                 <div
                   ref={scrollRef}
                   onScroll={handleChatScroll}
@@ -3420,6 +3440,20 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     </>
                   )}
                 </div>
+
+                {/* Floating "Scroll down" button — shown only while the user
+                    has scrolled away from the bottom, so new messages never
+                    force-scroll them while they're reading up. */}
+                {showScrollDownButton && (
+                  <button
+                    type="button"
+                    onClick={scrollChatToBottom}
+                    className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-500/20 transition-all duration-200 animate-in fade-in slide-in-from-bottom-2"
+                  >
+                    <ChevronDown className="w-3.5 h-3.5" />
+                    Scroll down
+                  </button>
+                )}
 
               </div>
 
