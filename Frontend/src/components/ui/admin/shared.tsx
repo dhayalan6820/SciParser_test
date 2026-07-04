@@ -112,7 +112,7 @@ export const KPICard: React.FC<{
     >
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
             {icon}
           </span>
           {label}
@@ -156,7 +156,7 @@ export const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     IN_PROGRESS: "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
     RUNNING: "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
     PENDING: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
-    ACTIVE: "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400",
+    ACTIVE: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
     SUSPENDED: "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400",
   };
   return (

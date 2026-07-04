@@ -241,7 +241,7 @@ export const OverviewTab: React.FC = () => {
               }}
               onFocus={() => setShowUserSuggestions(true)}
               onBlur={() => setTimeout(() => setShowUserSuggestions(false), 150)}
-              className="pl-8 pr-3 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-800 bg-transparent w-52 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="pl-8 pr-3 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-800 bg-transparent w-52 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               aria-label="Filter by user"
             />
             {showUserSuggestions && userSuggestions.length > 0 && (
@@ -264,7 +264,7 @@ export const OverviewTab: React.FC = () => {
           {selectedUser && (
             <button
               onClick={() => setAnalyticsUser(selectedUser)}
-              className="flex items-center gap-1.5 text-xs font-medium rounded-md border border-indigo-200 dark:border-indigo-900 text-indigo-600 dark:text-indigo-400 px-2 py-1.5 hover:bg-indigo-50 dark:hover:bg-indigo-500/10"
+              className="flex items-center gap-1.5 text-xs font-medium rounded-md border border-emerald-200 dark:border-emerald-900 text-emerald-600 dark:text-emerald-400 px-2 py-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-500/10"
             >
               <BarChart3 className="h-3.5 w-3.5" /> View analytics for {selectedUser.username}
             </button>
@@ -272,7 +272,7 @@ export const OverviewTab: React.FC = () => {
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            className="text-sm rounded-md border border-slate-200 dark:border-slate-800 bg-transparent px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="text-sm rounded-md border border-slate-200 dark:border-slate-800 bg-transparent px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
           >
             {ACTIVITY_TYPE_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -284,7 +284,7 @@ export const OverviewTab: React.FC = () => {
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="text-sm rounded-md border border-slate-200 dark:border-slate-800 bg-transparent px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="text-sm rounded-md border border-slate-200 dark:border-slate-800 bg-transparent px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             aria-label="Start date"
           />
           <span className="text-xs text-muted-foreground">to</span>
@@ -292,7 +292,7 @@ export const OverviewTab: React.FC = () => {
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="text-sm rounded-md border border-slate-200 dark:border-slate-800 bg-transparent px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="text-sm rounded-md border border-slate-200 dark:border-slate-800 bg-transparent px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             aria-label="End date"
           />
           {hasActiveFilters && (
@@ -319,7 +319,7 @@ export const OverviewTab: React.FC = () => {
                 transition={{ delay: idx * 0.03 }}
                 className="ml-4"
               >
-                <span className="absolute -left-[7px] flex h-3.5 w-3.5 items-center justify-center rounded-full bg-indigo-500 ring-4 ring-white dark:ring-slate-900" />
+                <span className="absolute -left-[7px] flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500 ring-4 ring-white dark:ring-slate-900" />
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-2">
                     <span className="text-muted-foreground mt-0.5">{ACTIVITY_ICONS[item.type] || <Clock className="h-3.5 w-3.5" />}</span>
@@ -331,7 +331,7 @@ export const OverviewTab: React.FC = () => {
                           type="button"
                           onClick={() => viewAnalyticsForRow(item)}
                           disabled={rowAnalyticsLoadingId === item.user_id}
-                          className="mt-1 flex items-center gap-1 text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50"
+                          className="mt-1 flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 hover:underline disabled:opacity-50"
                         >
                           <BarChart3 className="h-3 w-3" />
                           {rowAnalyticsLoadingId === item.user_id

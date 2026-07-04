@@ -325,7 +325,7 @@ export const AgentMonitoringTab: React.FC = () => {
                 <ol className="relative border-l border-slate-200 dark:border-slate-700 ml-2 space-y-4">
                   {timeline.stages.map((s) => (
                     <li key={s.id} className="ml-4">
-                      <span className="absolute -left-[5px] mt-1.5 h-2.5 w-2.5 rounded-full bg-indigo-500" />
+                      <span className="absolute -left-[5px] mt-1.5 h-2.5 w-2.5 rounded-full bg-emerald-500" />
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">{s.stage_name}</span>
                         <StatusBadge status={s.status} />

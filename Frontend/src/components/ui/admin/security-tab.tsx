@@ -65,14 +65,14 @@ export const SecurityTab: React.FC = () => {
             placeholder="Filter by user..."
             value={userInput}
             onChange={(e) => setUserInput(e.target.value)}
-            className="pl-8 pr-3 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-800 bg-transparent w-44 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="pl-8 pr-3 py-1.5 text-sm rounded-md border border-slate-200 dark:border-slate-800 bg-transparent w-44 focus:outline-none focus:ring-1 focus:ring-emerald-500"
           />
         </div>
         <input
           type="date"
           value={startDate}
           onChange={(e) => setStartDate(e.target.value)}
-          className="text-sm rounded-md border border-slate-200 dark:border-slate-800 bg-transparent px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="text-sm rounded-md border border-slate-200 dark:border-slate-800 bg-transparent px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
           aria-label="Start date"
         />
         <span className="text-xs text-muted-foreground">to</span>
@@ -80,13 +80,13 @@ export const SecurityTab: React.FC = () => {
           type="date"
           value={endDate}
           onChange={(e) => setEndDate(e.target.value)}
-          className="text-sm rounded-md border border-slate-200 dark:border-slate-800 bg-transparent px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="text-sm rounded-md border border-slate-200 dark:border-slate-800 bg-transparent px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
           aria-label="End date"
         />
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="text-sm rounded-md border border-slate-200 dark:border-slate-800 bg-transparent px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="text-sm rounded-md border border-slate-200 dark:border-slate-800 bg-transparent px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
           aria-label="Section filter"
         >
           <option value="">All sections</option>

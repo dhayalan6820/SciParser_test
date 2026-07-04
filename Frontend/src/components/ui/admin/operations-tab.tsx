@@ -82,7 +82,7 @@ export const OperationsTab: React.FC = () => {
           label="Success Rate"
           value={`${metrics.success_rate}%`}
         />
-        <StatCard icon={<Cpu className="h-4 w-4 text-indigo-500" />} label="Total Tokens" value={metrics.total_tokens.toLocaleString()} />
+        <StatCard icon={<Cpu className="h-4 w-4 text-emerald-500" />} label="Total Tokens" value={metrics.total_tokens.toLocaleString()} />
         <StatCard icon={<DollarSign className="h-4 w-4 text-amber-500" />} label="Total Cost" value={`$${metrics.total_cost.toFixed(2)}`} />
       </div>
 
