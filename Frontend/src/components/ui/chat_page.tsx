@@ -2,7 +2,7 @@
 import * as React from "react";
 import logoLight from "@/assets/logo-light.png";
 import logoDark from "@/assets/logo-dark.png";
-import atomIcon from "@/assets/atom-icon.png";
+import atomIcon from "@/assets/ai-loader-icon.png";
 import { Signup1 } from "./signup-1";
 import { Button } from "./button";
 import { sciparserApi, ChatMessage, UploadedFile, User, handleSuspendedSession } from "../../api";
