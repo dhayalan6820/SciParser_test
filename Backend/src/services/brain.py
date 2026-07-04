@@ -69,6 +69,69 @@ SUMMARIZE_HISTORY_TOKEN_THRESHOLD = 60000
 # tokens) to reduce the size of the heaviest "Navigate ..." steps.
 MAX_OBSERVATION_CHARS_FOR_LLM = 12000
 
+# How many of the MOST RECENT tool-result messages are kept verbatim in the
+# LLM message chain. Older tool messages are collapsed to a short pointer —
+# their outcome is already preserved (up to 500 chars each) in the
+# "EXECUTION MEMORY" block that call_model injects every turn, so keeping
+# their full, often-large raw observation text around too is pure
+# duplication that gets re-sent on every subsequent LLM call for the rest
+# of the run.
+NUM_RECENT_TOOL_MESSAGES_TO_KEEP_FULL = 6
+
+# Placeholder swapped in for a collapsed older tool message. Kept short and
+# explicit so the model knows to rely on the EXECUTION MEMORY summary
+# instead of expecting the original raw content here.
+_COLLAPSED_TOOL_MESSAGE_PLACEHOLDER = (
+    "[Older tool result collapsed to save tokens — see EXECUTION MEMORY in "
+    "the TASK CONTEXT message for a short summary of this step's outcome.]"
+)
+
+
+def _compress_observation_for_llm(text: str, max_chars: int) -> str:
+    """Shrinks a tool observation before it enters LLM history.
+
+    Raw page/accessibility-tree dumps are frequently dominated by repeated
+    blank lines and long runs of identical lines (e.g. repeated menu items,
+    empty table rows). Collapsing that duplication first means the character
+    budget below is spent on unique, decision-relevant content instead of
+    being burned on literal repetition — a flat `text[:max_chars]` cutoff
+    would otherwise just as likely truncate mid-way through useful content
+    while all the earlier noise is preserved verbatim.
+
+    Only truncates (with an explicit marker) if still over budget after
+    compression, so no content is silently dropped without a signal to the
+    model that something was cut.
+    """
+    if not text:
+        return text
+
+    # Collapse runs of 3+ blank lines down to a single blank line.
+    compressed = re.sub(r'\n{3,}', '\n\n', text)
+
+    # De-duplicate consecutive identical (non-blank) lines, keeping the first
+    # occurrence and a short note of how many repeats were omitted.
+    lines = compressed.split('\n')
+    deduped: List[str] = []
+    prev_stripped: Optional[str] = None
+    repeat_count = 0
+    for line in lines:
+        stripped = line.strip()
+        if stripped and stripped == prev_stripped:
+            repeat_count += 1
+            continue
+        if repeat_count > 0:
+            deduped.append(f"...[{repeat_count} more identical line(s) omitted]...")
+            repeat_count = 0
+        deduped.append(line)
+        prev_stripped = stripped
+    if repeat_count > 0:
+        deduped.append(f"...[{repeat_count} more identical line(s) omitted]...")
+    compressed = '\n'.join(deduped)
+
+    if len(compressed) > max_chars:
+        compressed = compressed[:max_chars] + "... [TRUNCATED DUE TO SIZE TO PREVENT CRASH]"
+    return compressed
+
 
 def _build_browser_static_prompt() -> str:
     """Builds the Browser agent's static system prompt from browser.agent.md.
@@ -931,22 +994,36 @@ class Brain:
             # --- DEAD CODE MARKER END ---
 
             # Strip any stale SystemMessages from LangGraph state, then prepend the
-            # cached static system message.  Inject dynamic context as a prefix on the
-            # LAST HumanMessage so the current task description is always adjacent to
-            # the mission objective that was just submitted.  Injecting into raw_messages[0]
-            # (the oldest message) caused the context to overwrite the first message while
-            # leaving the new mission objective unmodified at the end of the chain.
+            # cached static system message. The growing TASK CONTEXT (memory summary
+            # gets longer every turn) is appended as a trailing message instead of
+            # being spliced into an earlier HumanMessage in place. Mutating an
+            # earlier message's content on every call made that message differ from
+            # the previous call's version of it, which broke the LLM provider's
+            # prefix cache for every message that followed it too — the entire
+            # history had to be re-processed as "new" tokens each turn. Appending a
+            # fresh trailing message instead keeps everything before it byte-for-byte
+            # identical to the prior call, so only the new tail is uncached.
             raw_messages = [m for m in messages if not isinstance(m, SystemMessage)]
-            last_human_idx = next(
-                (i for i in range(len(raw_messages) - 1, -1, -1)
-                 if isinstance(raw_messages[i], HumanMessage)),
-                None
+
+            # Older tool results are already captured (up to 500 chars each) in the
+            # EXECUTION MEMORY block below, so keeping their full raw text in the
+            # message chain too is pure duplication that gets re-sent on every
+            # subsequent LLM call for the rest of the run. Collapse all but the most
+            # recent few tool messages to a short placeholder.
+            tool_msg_indices = [i for i, m in enumerate(raw_messages) if isinstance(m, ToolMessage)]
+            if len(tool_msg_indices) > NUM_RECENT_TOOL_MESSAGES_TO_KEEP_FULL:
+                for i in tool_msg_indices[:-NUM_RECENT_TOOL_MESSAGES_TO_KEEP_FULL]:
+                    original = raw_messages[i]
+                    if isinstance(original.content, str) and len(original.content) > len(_COLLAPSED_TOOL_MESSAGE_PLACEHOLDER):
+                        raw_messages[i] = ToolMessage(
+                            content=_COLLAPSED_TOOL_MESSAGE_PLACEHOLDER,
+                            tool_call_id=original.tool_call_id,
+                        )
+
+            context_msg = HumanMessage(
+                content=f"## TASK CONTEXT\n{dynamic_context}\n\n---\n\nContinue working toward the goal above using the conversation so far."
             )
-            if last_human_idx is not None:
-                raw_messages[last_human_idx] = HumanMessage(
-                    content=f"## TASK CONTEXT\n{dynamic_context}\n\n---\n\n{raw_messages[last_human_idx].content}"
-                )
-            current_messages = [static_sys_msg] + raw_messages
+            current_messages = [static_sys_msg] + raw_messages + [context_msg]
 
             # Token Management & Summarization.
             # Previously this only triggered at 600k estimated tokens — close to the
@@ -1267,10 +1344,10 @@ class Brain:
                     tool_output=_safe_tool_output # Increased limit but kept clean
                 )
 
-                # --- Truncate observation for LLM history to prevent token overflow ---
-                llm_observation = str(observation)
-                if len(llm_observation) > MAX_OBSERVATION_CHARS_FOR_LLM:
-                    llm_observation = llm_observation[:MAX_OBSERVATION_CHARS_FOR_LLM] + "... [TRUNCATED DUE TO SIZE TO PREVENT CRASH]"
+                # --- Compress/truncate observation for LLM history to prevent token overflow ---
+                # Dedupe/collapse noisy repetition first so the char budget is spent
+                # on unique content, then fall back to a hard cutoff if still too big.
+                llm_observation = _compress_observation_for_llm(str(observation), MAX_OBSERVATION_CHARS_FOR_LLM)
 
                 # --- NEW: Explicit cleanup if browser was closed ---
                 if tool_call["name"] in ["browser_close_session", "browser_close_all"] and status == "SUCCESS":
