@@ -3,6 +3,8 @@ import { Button } from "../button";
 import { Input } from "../input";
 import { sciparserApi, User } from "../../../api";
 import { cn } from "../../../../lib/utils";
+import { formatRelativeTime } from "./shared";
+import { UserAnalyticsPanel } from "./user-analytics-panel";
 import {
   Search,
   Loader2,
@@ -16,6 +18,7 @@ import {
   Pencil,
   X,
   Save,
+  BarChart3,
 } from "lucide-react";
 
 const PAGE_SIZE = 10;
@@ -31,6 +34,7 @@ export const UsersTab: React.FC<{ currentUsername?: string }> = ({ currentUserna
   const [busyUserId, setBusyUserId] = React.useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null);
   const [editingUser, setEditingUser] = React.useState<User | null>(null);
+  const [analyticsUser, setAnalyticsUser] = React.useState<User | null>(null);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -105,6 +109,9 @@ export const UsersTab: React.FC<{ currentUsername?: string }> = ({ currentUserna
               <th className="px-4 py-3 font-medium">Email</th>
               <th className="px-4 py-3 font-medium">Role</th>
               <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 font-medium">Last Active</th>
+              <th className="px-4 py-3 font-medium">Success Rate</th>
+              <th className="px-4 py-3 font-medium">Total Cost</th>
               <th className="px-4 py-3 font-medium">Joined</th>
               <th className="px-4 py-3 font-medium text-right">Actions</th>
             </tr>
@@ -112,20 +119,20 @@ export const UsersTab: React.FC<{ currentUsername?: string }> = ({ currentUserna
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
                   <Loader2 className="h-5 w-5 animate-spin inline-block mr-2" />
                   Loading users...
                 </td>
               </tr>
             ) : error ? (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-red-500">
+                <td colSpan={9} className="px-4 py-10 text-center text-red-500">
                   {error}
                 </td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
                   No users found.
                 </td>
               </tr>
@@ -168,6 +175,15 @@ export const UsersTab: React.FC<{ currentUsername?: string }> = ({ currentUserna
                       </span>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
+                      {formatRelativeTime(u.last_active)}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {u.success_rate !== undefined ? `${u.success_rate}%` : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {u.total_cost !== undefined ? `$${u.total_cost.toFixed(4)}` : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
                       {new Date(u.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-3">
@@ -176,6 +192,15 @@ export const UsersTab: React.FC<{ currentUsername?: string }> = ({ currentUserna
                           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                         ) : (
                           <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setAnalyticsUser(u)}
+                              className="h-7 px-2 text-xs gap-1"
+                            >
+                              <BarChart3 className="h-3 w-3" />
+                              View Analytics
+                            </Button>
                             <Button
                               variant="outline"
                               size="sm"
@@ -295,6 +320,10 @@ export const UsersTab: React.FC<{ currentUsername?: string }> = ({ currentUserna
             await loadUsers(page, search);
           }}
         />
+      )}
+
+      {analyticsUser && (
+        <UserAnalyticsPanel user={analyticsUser} onClose={() => setAnalyticsUser(null)} />
       )}
     </div>
   );

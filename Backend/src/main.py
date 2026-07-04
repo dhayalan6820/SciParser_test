@@ -38,7 +38,7 @@ from src.schemas.schema import (
     AdminOverviewResponse, AdminActivityResponse, AdminAgentRunsResponse,
     AdminAutomationsResponse, AdminBrowserSessionsResponse, AdminUsageResponse,
     AdminSecurityResponse, AdminAgentRunTimelineResponse, AdminAgentActionResponse,
-    AdminAnalyticsResponse, OperationsLogListResponse
+    AdminAnalyticsResponse, OperationsLogListResponse, AdminUserAnalyticsResponse
 )
 from src.utils.logger import logger
 from src.services.brain import brain
@@ -686,6 +686,15 @@ async def admin_delete_user(
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
     return await ChatService.admin_delete_user(db, user_id, admin_user)
+
+@app.get("/sciparser/v1/admin/users/{user_id}/analytics", response_model=AdminUserAnalyticsResponse)
+async def admin_user_analytics(
+    user_id: str,
+    days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_user_analytics(db, user_id, days=days)
 
 @app.get("/sciparser/v1/admin/metrics/operations", response_model=OperationsMetricsResponse)
 async def admin_operations_metrics(

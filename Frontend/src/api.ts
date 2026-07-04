@@ -661,6 +661,17 @@ export const sciparserApi = {
     return res.json() as Promise<User>;
   },
 
+  adminGetUserAnalytics: async (userId: string, days: number = 30) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/users/${userId}/analytics?days=${days}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<AdminUserAnalytics>;
+  },
+
   adminDeleteUser: async (userId: string) => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
@@ -928,6 +939,38 @@ export interface User {
   status: "active" | "suspended";
   created_at: string;
   updated_at: string;
+  last_active?: string | null;
+  total_runs?: number;
+  success_rate?: number;
+  total_cost?: number;
+  automation_count?: number;
+}
+
+export interface AdminUserAnalytics {
+  user_id: string;
+  username: string;
+  email: string;
+  days: number;
+  total_tokens: number;
+  total_cost: number;
+  total_runs: number;
+  success_count: number;
+  failed_count: number;
+  success_rate: number;
+  daily_usage: Array<{ date: string; tokens: number; cost: number }>;
+  status_breakdown: Array<{ status: string; count: number }>;
+  activity: {
+    last_active?: string | null;
+    total_sessions: number;
+    total_messages: number;
+    recent_logins: Array<{ created_at: string | null }>;
+  };
+  automations: {
+    total: number;
+    active: number;
+    success_rate: number;
+    items: AdminAutomation[];
+  };
 }
 
 export interface OperationsMetrics {

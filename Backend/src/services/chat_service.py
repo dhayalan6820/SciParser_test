@@ -146,8 +146,11 @@ class ChatService:
     async def admin_list_users(
         db: AsyncSession, page: int = 1, page_size: int = 20, search: Optional[str] = None
     ) -> dict:
-        """List users with pagination and optional username/email search."""
+        """List users with pagination and optional username/email search, plus lightweight
+        per-user analytics (last active, success rate, total cost, automation count) for the
+        admin Users table — computed with two small batched queries, never one-per-row."""
         from sqlalchemy import func, or_
+        from src.database.chat_db import AgentExecutionLog
 
         stmt = select(User)
         count_stmt = select(func.count()).select_from(User)
@@ -161,7 +164,64 @@ class ChatService:
         stmt = stmt.order_by(User.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
         result = await db.execute(stmt)
         users = result.scalars().all()
-        return {"users": users, "total": total, "page": page, "page_size": page_size}
+
+        user_ids = [u.user_id for u in users]
+        run_metrics: dict = {}
+        last_active_map: dict = {}
+        automation_map: dict = {}
+        if user_ids:
+            logs = (
+                await db.execute(select(AgentExecutionLog).where(AgentExecutionLog.user_id.in_(user_ids)))
+            ).scalars().all()
+            for l in logs:
+                m = run_metrics.setdefault(l.user_id, {"total_runs": 0, "success": 0, "cost": 0.0})
+                m["total_runs"] += 1
+                if (l.status or "").upper() in ("COMPLETED", "SUCCESS", "DONE"):
+                    m["success"] += 1
+                try:
+                    m["cost"] += float(l.cost) if l.cost else 0.0
+                except Exception:
+                    pass
+
+            last_active_rows = (
+                await db.execute(
+                    select(Message.user_id, func.max(Message.created_at))
+                    .where(Message.user_id.in_(user_ids))
+                    .group_by(Message.user_id)
+                )
+            ).all()
+            last_active_map = dict(last_active_rows)
+
+            automation_rows = (
+                await db.execute(
+                    select(Schedule.user_id, func.count())
+                    .where(Schedule.user_id.in_(user_ids))
+                    .group_by(Schedule.user_id)
+                )
+            ).all()
+            automation_map = dict(automation_rows)
+
+        users_out = []
+        for u in users:
+            m = run_metrics.get(u.user_id, {"total_runs": 0, "success": 0, "cost": 0.0})
+            total_runs = m["total_runs"]
+            success_rate = round((m["success"] / total_runs) * 100, 2) if total_runs else 0.0
+            users_out.append({
+                "user_id": u.user_id,
+                "username": u.username,
+                "email": u.email,
+                "role": u.role,
+                "status": u.status,
+                "created_at": u.created_at,
+                "updated_at": u.updated_at,
+                "last_active": last_active_map.get(u.user_id),
+                "total_runs": total_runs,
+                "success_rate": success_rate,
+                "total_cost": round(m["cost"], 4),
+                "automation_count": automation_map.get(u.user_id, 0),
+            })
+
+        return {"users": users_out, "total": total, "page": page, "page_size": page_size}
 
     @staticmethod
     async def admin_get_user(db: AsyncSession, user_id: str) -> User:
@@ -1167,6 +1227,156 @@ class ChatService:
             "total_success": total_success,
             "total_failed": total_failed,
             "overall_success_rate": overall_success_rate,
+        }
+
+    # ── Admin: per-user analytics drill-down ────────────────────────────────
+    @staticmethod
+    async def admin_get_user_analytics(db: AsyncSession, user_id: str, days: int = 30) -> dict:
+        """Full analytics drill-down for a single user: usage/cost time series, success/fail
+        breakdown, activity (sessions/messages/logins), and automation usage — all computed
+        from real recorded data, mirroring the shape of the system-wide admin analytics."""
+        from src.database.chat_db import AgentExecutionLog, LoginEvent
+
+        user = await ChatService.admin_get_user(db, user_id)
+
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+        logs = (
+            await db.execute(
+                select(AgentExecutionLog).where(
+                    AgentExecutionLog.user_id == user_id, AgentExecutionLog.created_at >= since
+                )
+            )
+        ).scalars().all()
+
+        total_tokens = 0
+        total_cost = 0.0
+        daily: dict = {}
+        status_counts: dict = {}
+        success_count = 0
+        failed_count = 0
+
+        for l in logs:
+            usage = ChatService._parse_token_usage(l.token_usage)
+            tokens = int(usage.get("total") or usage.get("total_tokens") or (int(usage.get("input") or 0) + int(usage.get("output") or 0)))
+            total_tokens += tokens
+            try:
+                cost = float(l.cost) if l.cost else 0.0
+            except Exception:
+                cost = 0.0
+            total_cost += cost
+
+            day_key = l.created_at.strftime("%Y-%m-%d") if l.created_at else "unknown"
+            entry = daily.setdefault(day_key, {"date": day_key, "tokens": 0, "cost": 0.0})
+            entry["tokens"] += tokens
+            entry["cost"] += cost
+
+            status_upper = (l.status or "UNKNOWN").upper()
+            status_counts[status_upper] = status_counts.get(status_upper, 0) + 1
+            if status_upper in ("COMPLETED", "SUCCESS", "DONE"):
+                success_count += 1
+            elif status_upper in ("FAILED", "ERROR"):
+                failed_count += 1
+
+        total_runs = len(logs)
+        success_rate = round((success_count / total_runs) * 100, 2) if total_runs else 0.0
+        daily_usage = sorted(
+            [{"date": d["date"], "tokens": d["tokens"], "cost": round(d["cost"], 4)} for d in daily.values()],
+            key=lambda d: d["date"],
+        )
+        status_breakdown = [{"status": k, "count": v} for k, v in sorted(status_counts.items())]
+
+        # ── Activity ────────────────────────────────────────────────────
+        session_count = (
+            await db.execute(select(func.count()).select_from(ChatSession).where(ChatSession.user_id == user_id))
+        ).scalar() or 0
+        message_count = (
+            await db.execute(select(func.count()).select_from(Message).where(Message.user_id == user_id))
+        ).scalar() or 0
+        last_message_ts = (
+            await db.execute(select(func.max(Message.created_at)).where(Message.user_id == user_id))
+        ).scalar()
+        recent_login_rows = (
+            await db.execute(
+                select(LoginEvent)
+                .where(LoginEvent.user_id == user_id, LoginEvent.success == True)
+                .order_by(LoginEvent.created_at.desc())
+                .limit(10)
+            )
+        ).scalars().all()
+        recent_logins = [
+            {"created_at": le.created_at.isoformat() if le.created_at else None}
+            for le in recent_login_rows
+        ]
+
+        # ── Automations ─────────────────────────────────────────────────
+        schedules = (await db.execute(select(Schedule).where(Schedule.user_id == user_id))).scalars().all()
+        schedule_ids = [s.schedule_id for s in schedules]
+        runs = []
+        if schedule_ids:
+            runs = (
+                await db.execute(select(ScheduleRun).where(ScheduleRun.schedule_id.in_(schedule_ids)))
+            ).scalars().all()
+
+        runs_by_schedule: dict = {}
+        for r in runs:
+            runs_by_schedule.setdefault(r.schedule_id, []).append(r)
+
+        automation_items = []
+        total_automation_runs = 0
+        total_automation_success = 0
+        active_automations = 0
+        for s in schedules:
+            s_runs = runs_by_schedule.get(s.schedule_id, [])
+            s_total = len(s_runs)
+            s_success = sum(1 for r in s_runs if r.status == "COMPLETED")
+            s_failed = sum(1 for r in s_runs if r.status == "FAILED")
+            s_rate = round((s_success / s_total) * 100, 2) if s_total else 0.0
+            total_automation_runs += s_total
+            total_automation_success += s_success
+            if s.status not in ("completed", "cancelled", "failed"):
+                active_automations += 1
+            automation_items.append({
+                "schedule_id": s.schedule_id,
+                "title": s.title,
+                "status": s.status,
+                "schedule_type": s.schedule_type,
+                "last_run": s.last_run,
+                "next_run": s.next_run,
+                "total_runs": s_total,
+                "success_runs": s_success,
+                "failed_runs": s_failed,
+                "success_rate": s_rate,
+            })
+
+        automation_success_rate = (
+            round((total_automation_success / total_automation_runs) * 100, 2) if total_automation_runs else 0.0
+        )
+
+        return {
+            "user_id": user.user_id,
+            "username": user.username,
+            "email": user.email,
+            "days": days,
+            "total_tokens": total_tokens,
+            "total_cost": round(total_cost, 4),
+            "total_runs": total_runs,
+            "success_count": success_count,
+            "failed_count": failed_count,
+            "success_rate": success_rate,
+            "daily_usage": daily_usage,
+            "status_breakdown": status_breakdown,
+            "activity": {
+                "last_active": last_message_ts,
+                "total_sessions": session_count,
+                "total_messages": message_count,
+                "recent_logins": recent_logins,
+            },
+            "automations": {
+                "total": len(schedules),
+                "active": active_automations,
+                "success_rate": automation_success_rate,
+                "items": automation_items,
+            },
         }
 
     @staticmethod

@@ -53,11 +53,72 @@ class AdminUpdateUserRequest(BaseModel):
     email: Optional[EmailStr] = None
 
 
+class AdminAutomationSummary(BaseModel):
+    schedule_id: str
+    title: Optional[str] = None
+    status: str
+    schedule_type: str
+    last_run: Optional[datetime] = None
+    next_run: Optional[datetime] = None
+    total_runs: int
+    success_runs: int
+    failed_runs: int
+    success_rate: float
+
+
+class AdminUserListItem(UserResponse):
+    """UserResponse plus lightweight per-user analytics for the admin Users table."""
+    last_active: Optional[datetime] = None
+    total_runs: int = 0
+    success_rate: float = 0.0
+    total_cost: float = 0.0
+    automation_count: int = 0
+
+
 class AdminUserListResponse(BaseModel):
-    users: List[UserResponse]
+    users: List[AdminUserListItem]
     total: int
     page: int
     page_size: int
+
+
+class AdminUserAnalyticsUsagePoint(BaseModel):
+    date: str
+    tokens: int
+    cost: float
+
+
+class AdminUserAnalyticsActivity(BaseModel):
+    last_active: Optional[datetime] = None
+    total_sessions: int = 0
+    total_messages: int = 0
+    recent_logins: List[Dict[str, Any]] = []
+
+
+class AdminUserAnalyticsAutomations(BaseModel):
+    total: int = 0
+    active: int = 0
+    success_rate: float = 0.0
+    items: List[AdminAutomationSummary] = []
+
+
+class AdminUserAnalyticsResponse(BaseModel):
+    """Full drill-down analytics for a single user, covering usage/cost, success rate,
+    activity, and automation usage — all computed from real recorded data."""
+    user_id: str
+    username: str
+    email: str
+    days: int
+    total_tokens: int
+    total_cost: float
+    total_runs: int
+    success_count: int
+    failed_count: int
+    success_rate: float
+    daily_usage: List[AdminUserAnalyticsUsagePoint]
+    status_breakdown: List[Dict[str, Any]]
+    activity: AdminUserAnalyticsActivity
+    automations: AdminUserAnalyticsAutomations
 
 
 class OperationsMetricsResponse(BaseModel):
@@ -122,19 +183,6 @@ class AdminAgentRunsResponse(BaseModel):
     failed_count: int
     completed_count: int
     avg_runtime_seconds: float
-
-
-class AdminAutomationSummary(BaseModel):
-    schedule_id: str
-    title: Optional[str] = None
-    status: str
-    schedule_type: str
-    last_run: Optional[datetime] = None
-    next_run: Optional[datetime] = None
-    total_runs: int
-    success_runs: int
-    failed_runs: int
-    success_rate: float
 
 
 class AdminAutomationsResponse(BaseModel):
