@@ -1322,6 +1322,17 @@ class Brain:
         if not self.initialized:
             await self.initialize()
 
+        # Clear any stale cooperative-cancel flag for this chat before starting a
+        # brand new run. `stop_process` sets this flag synchronously, but the
+        # previously-cancelled task's own cleanup (closing the browser, joining
+        # the screenshot stream task with up to a 15s timeout — see the
+        # `finally` block in `process_message`) can still be in flight when the
+        # user immediately retries. Without this, the new task's very first
+        # cooperative-cancel checkpoint would see the still-set flag from the
+        # OLD run and incorrectly abort the NEW run instantly with
+        # "Process stopped by user" before it does any work.
+        self.cancelled_chats.discard(chat_id)
+
         # Create a task for the message processing to allow cancellation
         task = asyncio.create_task(self.process_message(user_id, user_message_content, chat_id))
         self.active_tasks[chat_id] = task
