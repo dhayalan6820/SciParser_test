@@ -1444,14 +1444,36 @@ async def _is_user_suspended(user_id: str) -> bool:
         status = result.scalar_one_or_none()
         return status == "suspended"
 
-async def _watch_suspension(websocket: WebSocket, user_id: str):
+async def _watch_suspension(
+    websocket: WebSocket,
+    user_id: str,
+    *,
+    _poll_trigger: asyncio.Event = None,
+    _on_checked=None,
+):
     """Background task run alongside an open websocket's receive loop. Closes the
     socket the moment the user is suspended instead of waiting for their next
-    request or reconnect attempt."""
+    request or reconnect attempt.
+
+    `_poll_trigger` and `_on_checked` are test-only seams: when `_poll_trigger`
+    is provided, a check is performed only when the caller sets the event
+    (instead of waiting `SUSPENSION_CHECK_INTERVAL_SECONDS`), and `_on_checked`
+    is invoked after each check. This lets tests drive/observe poll cycles
+    deterministically instead of racing real wall-clock sleeps/timeouts, and
+    avoids any tight-loop DB contention. Production call sites never pass
+    these, so behavior there is unchanged.
+    """
     try:
         while True:
-            await asyncio.sleep(SUSPENSION_CHECK_INTERVAL_SECONDS)
-            if await _is_user_suspended(user_id):
+            if _poll_trigger is not None:
+                await _poll_trigger.wait()
+                _poll_trigger.clear()
+            else:
+                await asyncio.sleep(SUSPENSION_CHECK_INTERVAL_SECONDS)
+            suspended = await _is_user_suspended(user_id)
+            if _on_checked is not None:
+                _on_checked(suspended)
+            if suspended:
                 try:
                     await websocket.send_json({"type": "suspended", "error": SUSPENDED_MESSAGE})
                 except Exception:

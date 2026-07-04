@@ -70,10 +70,14 @@ async def test_is_user_suspended_reflects_current_db_status(sqlite_session_facto
 
 @pytest.mark.asyncio
 async def test_watch_suspension_closes_socket_once_user_is_suspended(sqlite_session_factory, monkeypatch):
+    """Drives `_watch_suspension`'s poll loop deterministically via the
+    `_check_interval`/`_on_checked` test seams instead of racing real
+    wall-clock sleeps/timeouts. This avoids flakiness under CI load, where
+    scheduling delays or DB contention could otherwise blow past a tight
+    real-time timeout even though the watcher logic itself is correct."""
     import src.main as main_module
 
     monkeypatch.setattr(main_module, "AsyncSessionLocal", sqlite_session_factory)
-    monkeypatch.setattr(main_module, "SUSPENSION_CHECK_INTERVAL_SECONDS", 0.01)
 
     user = _make_user(status="active")
     async with sqlite_session_factory() as session:
@@ -81,11 +85,30 @@ async def test_watch_suspension_closes_socket_once_user_is_suspended(sqlite_sess
         await session.commit()
 
     ws = _FakeWebSocket()
-    watcher = asyncio.create_task(main_module._watch_suspension(ws, user.user_id))
+    poll_trigger = asyncio.Event()
+    checked = asyncio.Event()
+    check_results = []
+
+    def _on_checked(suspended):
+        check_results.append(suspended)
+        checked.set()
+
+    watcher = asyncio.create_task(
+        main_module._watch_suspension(
+            ws, user.user_id, _poll_trigger=poll_trigger, _on_checked=_on_checked
+        )
+    )
+
+    async def _trigger_and_wait_for_check():
+        checked.clear()
+        poll_trigger.set()
+        await asyncio.wait_for(checked.wait(), timeout=10)
 
     # Give the watcher a couple of poll cycles while the user is still active —
     # it must not close the connection.
-    await asyncio.sleep(0.03)
+    await _trigger_and_wait_for_check()
+    await _trigger_and_wait_for_check()
+    assert check_results == [False, False]
     assert ws.closed_with is None
     assert ws.sent == []
 
@@ -96,8 +119,10 @@ async def test_watch_suspension_closes_socket_once_user_is_suspended(sqlite_sess
         db_user.status = "suspended"
         await session.commit()
 
-    await asyncio.wait_for(watcher, timeout=1)
+    poll_trigger.set()
+    await asyncio.wait_for(watcher, timeout=10)
 
+    assert check_results[-1] is True
     assert ws.closed_with == main_module.SUSPENDED_CLOSE_CODE
     assert len(ws.sent) == 1
     assert ws.sent[0]["type"] == "suspended"
