@@ -1609,7 +1609,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             key={bIdx}
             className={cn(
               "font-extrabold",
-              isUser ? "text-white" : "text-white dark:text-white",
+              isUser ? "text-white" : "text-foreground",
             )}
           >
             {bPart.slice(2, -2)}
@@ -1626,7 +1626,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 "px-1.5 py-0.5 mx-0.5 rounded font-mono text-[13px] font-bold",
                 isUser
                   ? "bg-white/20 text-white"
-                  : "bg-white/90 text-sky-500 dark:bg-white/90 dark:text-sky-600",
+                  : "bg-sky-500/10 text-sky-600 dark:bg-white/10 dark:text-sky-400",
               )}
             >
               {iPart.slice(1, -1)}
