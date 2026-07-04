@@ -15,3 +15,4 @@
 - [Chat endpoint double error-code prefix](chat-endpoint-double-error-prefix.md) — /chat/message's catch-all re-wraps its own HTTPException, so error details show as "500: <msg>"; pre-existing/cosmetic, don't fix in isolation
 - [Credit deduction timing](credit-deduction-timing.md) — token-based credit billing sums AgentExecutionLog.token_usage once in a run's `finally` block, not per exit path; script-generation sub-flow not yet billed
 - [In-place message mutation breaks prefix caching](mutating-message-breaks-prefix-cache.md) — rewriting an earlier LLM message's content every turn invalidates provider caching for the entire history after it; append new context instead
+- [Domain-keyed episodic memory confounds A/B runs](episodic-memory-ab-confound.md) — MemoryEpisodic/Semantic are keyed by domain not chat_id; prior runs on the same domain change agent behavior/step count in later runs unless cleared first
