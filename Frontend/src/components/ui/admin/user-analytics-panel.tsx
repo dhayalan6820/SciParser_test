@@ -109,15 +109,15 @@ export const UserAnalyticsPanel: React.FC<{ user: User; onClose: () => void }> =
                       <AreaChart data={data.daily_usage}>
                         <defs>
                           <linearGradient id="userTokensGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#6366f1" stopOpacity={0.4} />
-                            <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                            <stop offset="0%" stopColor="#10b981" stopOpacity={0.4} />
+                            <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
                         <XAxis dataKey="date" tick={{ fontSize: 10, fill: textColor }} axisLine={false} tickLine={false} />
                         <YAxis tick={{ fontSize: 10, fill: textColor }} axisLine={false} tickLine={false} />
                         <Tooltip contentStyle={tooltipStyle} />
-                        <Area type="monotone" dataKey="tokens" name="Tokens" stroke="#6366f1" fill="url(#userTokensGrad)" strokeWidth={2} />
+                        <Area type="monotone" dataKey="tokens" name="Tokens" stroke="#10b981" fill="url(#userTokensGrad)" strokeWidth={2} />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>

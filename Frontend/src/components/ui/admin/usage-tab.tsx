@@ -72,8 +72,8 @@ export const UsageTab: React.FC = () => {
               <AreaChart data={usage.daily_usage}>
                 <defs>
                   <linearGradient id="promptGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#6366f1" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#10b981" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="completionGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#22c55e" stopOpacity={0.4} />
@@ -91,7 +91,7 @@ export const UsageTab: React.FC = () => {
                     fontSize: 12,
                   }}
                 />
-                <Area type="monotone" dataKey="prompt_tokens" name="Prompt" stroke="#6366f1" fill="url(#promptGrad)" strokeWidth={2} />
+                <Area type="monotone" dataKey="prompt_tokens" name="Prompt" stroke="#10b981" fill="url(#promptGrad)" strokeWidth={2} />
                 <Area type="monotone" dataKey="completion_tokens" name="Completion" stroke="#22c55e" fill="url(#completionGrad)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>

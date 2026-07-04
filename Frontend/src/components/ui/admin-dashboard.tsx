@@ -107,7 +107,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
           className={cn(
             "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left",
             tab === item.id
-              ? "bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+              ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
               : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-foreground"
           )}
         >
@@ -123,7 +123,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
       {/* Desktop sidebar */}
       <aside className="hidden md:flex md:flex-col w-64 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-4">
         <div className="flex items-center gap-2 px-2 mb-6">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500 text-white">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 dark:bg-black text-emerald-400 border border-emerald-500/30">
             <Shield className="h-4.5 w-4.5" />
           </span>
           <div>
@@ -177,7 +177,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
             >
               <div className="flex items-center justify-between mb-6 px-2">
                 <div className="flex items-center gap-2">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500 text-white">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 dark:bg-black text-emerald-400 border border-emerald-500/30">
                     <Shield className="h-4.5 w-4.5" />
                   </span>
                   <h1 className="text-sm font-semibold">Admin Dashboard</h1>

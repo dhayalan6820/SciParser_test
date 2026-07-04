@@ -182,7 +182,7 @@ export const OverviewTab: React.FC = () => {
           value={overview.total_runs.toLocaleString()}
           change={overview.total_runs_change}
           sparkline={overview.runs_sparkline}
-          sparklineColor="#6366f1"
+          sparklineColor="#10b981"
         />
         <KPICard
           index={2}

@@ -66,7 +66,7 @@ export function formatRelativeTime(iso: string | null | undefined): string {
   return date.toLocaleDateString();
 }
 
-export const Sparkline: React.FC<{ data: number[]; color?: string }> = ({ data, color = "#6366f1" }) => {
+export const Sparkline: React.FC<{ data: number[]; color?: string }> = ({ data, color = "#10b981" }) => {
   const chartData = data.map((v, i) => ({ i, v }));
   return (
     <div className="h-10 w-24">
@@ -100,7 +100,7 @@ export const KPICard: React.FC<{
   sparkline?: number[];
   sparklineColor?: string;
   index?: number;
-}> = ({ icon, label, value, change, sparkline, sparklineColor = "#6366f1", index = 0 }) => {
+}> = ({ icon, label, value, change, sparkline, sparklineColor = "#10b981", index = 0 }) => {
   const isPositive = (change ?? 0) > 0;
   const isNeutral = change === undefined || change === 0;
   return (
