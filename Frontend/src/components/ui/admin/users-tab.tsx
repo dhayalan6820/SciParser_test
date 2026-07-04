@@ -19,6 +19,7 @@ import {
   X,
   Save,
   BarChart3,
+  Coins,
 } from "lucide-react";
 
 const PAGE_SIZE = 10;
@@ -35,6 +36,7 @@ export const UsersTab: React.FC<{ currentUsername?: string }> = ({ currentUserna
   const [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null);
   const [editingUser, setEditingUser] = React.useState<User | null>(null);
   const [analyticsUser, setAnalyticsUser] = React.useState<User | null>(null);
+  const [creditsUser, setCreditsUser] = React.useState<User | null>(null);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -112,6 +114,7 @@ export const UsersTab: React.FC<{ currentUsername?: string }> = ({ currentUserna
               <th className="px-4 py-3 font-medium whitespace-nowrap">Last Active</th>
               <th className="px-4 py-3 font-medium whitespace-nowrap">Success Rate</th>
               <th className="px-4 py-3 font-medium whitespace-nowrap">Total Cost</th>
+              <th className="px-4 py-3 font-medium whitespace-nowrap">Credits</th>
               <th className="px-4 py-3 font-medium whitespace-nowrap">Joined</th>
               <th className="px-4 py-3 font-medium text-right whitespace-nowrap">Actions</th>
             </tr>
@@ -119,20 +122,20 @@ export const UsersTab: React.FC<{ currentUsername?: string }> = ({ currentUserna
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">
                   <Loader2 className="h-5 w-5 animate-spin inline-block mr-2" />
                   Loading users...
                 </td>
               </tr>
             ) : error ? (
               <tr>
-                <td colSpan={9} className="px-4 py-10 text-center text-red-500">
+                <td colSpan={10} className="px-4 py-10 text-center text-red-500">
                   {error}
                 </td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">
                   No users found.
                 </td>
               </tr>
@@ -183,6 +186,16 @@ export const UsersTab: React.FC<{ currentUsername?: string }> = ({ currentUserna
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                       {u.total_cost !== undefined ? `$${u.total_cost.toFixed(4)}` : "—"}
                     </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span
+                        className={cn(
+                          "font-medium",
+                          (u.credit_balance ?? 0) <= 0 ? "text-red-500" : "text-foreground"
+                        )}
+                      >
+                        {(u.credit_balance ?? 0).toFixed(2)}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                       {new Date(u.created_at).toLocaleDateString()}
                     </td>
@@ -209,6 +222,15 @@ export const UsersTab: React.FC<{ currentUsername?: string }> = ({ currentUserna
                             >
                               <Pencil className="h-3 w-3" />
                               Edit
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setCreditsUser(u)}
+                              className="h-7 px-2 text-xs gap-1"
+                            >
+                              <Coins className="h-3 w-3" />
+                              Credits
                             </Button>
                             {u.status === "active" ? (
                               <Button
@@ -325,6 +347,146 @@ export const UsersTab: React.FC<{ currentUsername?: string }> = ({ currentUserna
       {analyticsUser && (
         <UserAnalyticsPanel user={analyticsUser} onClose={() => setAnalyticsUser(null)} />
       )}
+
+      {creditsUser && (
+        <CreditsModal
+          user={creditsUser}
+          onClose={() => setCreditsUser(null)}
+          onSaved={async () => {
+            setCreditsUser(null);
+            await loadUsers(page, search);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+const CreditsModal: React.FC<{ user: User; onClose: () => void; onSaved: () => void }> = ({
+  user,
+  onClose,
+  onSaved,
+}) => {
+  const [absoluteValue, setAbsoluteValue] = React.useState(String(user.credit_balance ?? 0));
+  const [deltaValue, setDeltaValue] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const handleSetAbsolute = async () => {
+    const num = parseFloat(absoluteValue);
+    if (Number.isNaN(num)) {
+      setError("Enter a valid number");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await sciparserApi.adminSetUserCredits(user.user_id, { credits: num });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update credits");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleApplyDelta = async (sign: 1 | -1) => {
+    const num = parseFloat(deltaValue);
+    if (Number.isNaN(num) || num <= 0) {
+      setError("Enter a positive amount to add or deduct");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await sciparserApi.adminSetUserCredits(user.user_id, { delta: sign * num });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update credits");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-sm rounded-lg border border-slate-200 dark:border-slate-800 bg-background p-5 space-y-4 shadow-xl">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold">Manage credits — {user.username}</h3>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="text-xs text-muted-foreground">
+          Current balance:{" "}
+          <span className="font-medium text-foreground">{(user.credit_balance ?? 0).toFixed(2)}</span>
+        </div>
+
+        {error && (
+          <div className="flex items-center gap-2 p-2.5 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/40 rounded-lg text-red-600 dark:text-red-400 text-xs">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+            {error}
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Set exact balance</label>
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                step="0.01"
+                value={absoluteValue}
+                onChange={(e) => setAbsoluteValue(e.target.value)}
+                disabled={saving}
+              />
+              <Button size="sm" onClick={handleSetAbsolute} disabled={saving} className="shrink-0">
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Set"}
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Add or deduct credits</label>
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="Amount"
+                value={deltaValue}
+                onChange={(e) => setDeltaValue(e.target.value)}
+                disabled={saving}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleApplyDelta(1)}
+                disabled={saving}
+                className="shrink-0"
+              >
+                + Add
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleApplyDelta(-1)}
+                disabled={saving}
+                className="shrink-0"
+              >
+                − Deduct
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end pt-1">
+          <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>
+            Close
+          </Button>
+        </div>
+      </div>
     </div>
   );
 };

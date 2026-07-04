@@ -61,6 +61,11 @@ async def init_database():
             await conn.execute(text(
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active'"
             ))
+            # Task #146: usage credits. Existing users get the same 5.0 default as
+            # new signups so nothing breaks for current accounts after this ships.
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS credit_balance DOUBLE PRECISION NOT NULL DEFAULT 5.0"
+            ))
             # Task #127 (post-review fix): admin user deletion must cascade to a
             # user's owned rows instead of failing on FK constraints. messages.user_id
             # and chat_sessions.user_id were created without ON DELETE CASCADE;

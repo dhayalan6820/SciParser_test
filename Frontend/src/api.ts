@@ -672,6 +672,33 @@ export const sciparserApi = {
     return res.json() as Promise<AdminUserAnalytics>;
   },
 
+  adminSetUserCredits: async (userId: string, data: { credits?: number; delta?: number }) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/users/${userId}/credits`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: formattedToken },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as any).detail || "Failed to update credits");
+    }
+    return res.json() as Promise<User>;
+  },
+
+  getMyConversationUsage: async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/chat/usage/conversations`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<ConversationTokenUsage[]>;
+  },
+
   adminDeleteUser: async (userId: string) => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
@@ -944,6 +971,15 @@ export interface User {
   success_rate?: number;
   total_cost?: number;
   automation_count?: number;
+  credit_balance?: number;
+}
+
+export interface ConversationTokenUsage {
+  chat_id: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  total_cost: number;
 }
 
 export interface AdminUserAnalytics {
@@ -971,6 +1007,8 @@ export interface AdminUserAnalytics {
     success_rate: number;
     items: AdminAutomation[];
   };
+  credit_balance: number;
+  conversations: ConversationTokenUsage[];
 }
 
 export interface OperationsMetrics {

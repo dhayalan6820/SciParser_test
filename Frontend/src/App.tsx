@@ -33,6 +33,9 @@ export default function App() {
   const [isLoginMode, setIsLoginMode] = React.useState(true);  // ← Add this line
   const [currentUser, setCurrentUser] = React.useState<User | null>(null);
   const [isCheckingRole, setIsCheckingRole] = React.useState(false);
+  // Lets an admin temporarily leave the Admin Dashboard and use the same
+  // Chat/Schedule experience regular users get, then jump back.
+  const [viewAsUser, setViewAsUser] = React.useState(false);
   // Separate from `hasError` (which drives the full-page NotFound view for
   // app/server-level failures) so a failed sign-in attempt just shows an
   // inline message on the login form instead of navigating away from it.
@@ -145,18 +148,33 @@ export default function App() {
           <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
           </div>
-        ) : isLoggedIn && currentUser?.role === "admin" ? (
+        ) : isLoggedIn && currentUser?.role === "admin" && !viewAsUser ? (
           <AdminDashboard
             currentUser={currentUser}
             onLogout={() => {
               sciparserApi.logout();
               setIsLoggedIn(false);
               setCurrentUser(null);
+              setViewAsUser(false);
             }}
+            onOpenUserView={() => setViewAsUser(true)}
           />
         ) : isLoggedIn ? (
-          <div className="w-screen h-screen flex flex-col font-sans selection:bg-indigo-500 selection:text-white overflow-hidden bg-background text-foreground transition-colors duration-300">
-            <ChatPage onLoginStateChange={(status) => setIsLoggedIn(!!status)} />
+          <div className="relative w-screen h-screen flex flex-col font-sans selection:bg-indigo-500 selection:text-white overflow-hidden bg-background text-foreground transition-colors duration-300">
+            {currentUser?.role === "admin" && (
+              <button
+                onClick={() => setViewAsUser(false)}
+                className="fixed top-3 right-3 z-[60] flex items-center gap-1.5 text-xs font-medium rounded-full border border-indigo-200 dark:border-indigo-900 bg-white/90 dark:bg-slate-900/90 backdrop-blur text-indigo-600 dark:text-indigo-400 px-3 py-1.5 shadow-md hover:bg-indigo-50 dark:hover:bg-indigo-500/10"
+              >
+                Back to Admin
+              </button>
+            )}
+            <ChatPage
+              onLoginStateChange={(status) => {
+                setIsLoggedIn(!!status);
+                if (!status) setViewAsUser(false);
+              }}
+            />
           </div>
         ) : (
           <div className="h-full overflow-y-auto bg-background text-foreground flex flex-col items-center justify-center p-4 sm:p-6 font-sans selection:bg-indigo-500 selection:text-white transition-colors duration-300">

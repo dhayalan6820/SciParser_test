@@ -38,7 +38,8 @@ from src.schemas.schema import (
     AdminOverviewResponse, AdminActivityResponse, AdminAgentRunsResponse,
     AdminAutomationsResponse, AdminBrowserSessionsResponse, AdminUsageResponse,
     AdminSecurityResponse, AdminAgentRunTimelineResponse, AdminAgentActionResponse,
-    AdminAnalyticsResponse, OperationsLogListResponse, AdminUserAnalyticsResponse
+    AdminAnalyticsResponse, OperationsLogListResponse, AdminUserAnalyticsResponse,
+    AdminSetCreditsRequest, ConversationTokenUsage
 )
 from src.utils.logger import logger
 from src.services.brain import brain
@@ -695,6 +696,22 @@ async def admin_user_analytics(
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
     return await ChatService.admin_get_user_analytics(db, user_id, days=days)
+
+@app.patch("/sciparser/v1/admin/users/{user_id}/credits", response_model=UserResponse)
+async def admin_set_user_credits(
+    user_id: str,
+    req: AdminSetCreditsRequest,
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_set_user_credits(db, user_id, credits=req.credits, delta=req.delta)
+
+@app.get("/sciparser/v1/chat/usage/conversations", response_model=List[ConversationTokenUsage])
+async def get_my_conversation_usage(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(ChatService.get_current_user),
+):
+    return await ChatService.get_user_conversation_usage(db, current_user.user_id)
 
 @app.get("/sciparser/v1/admin/metrics/operations", response_model=OperationsMetricsResponse)
 async def admin_operations_metrics(

@@ -26,7 +26,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
 # Database and Utilities
-from src.database.chat_db import AsyncSessionLocal, Message, ChatSession, AgentExecutionLog, ToolExecutionLog
+from src.database.chat_db import AsyncSessionLocal, Message, ChatSession, AgentExecutionLog, ToolExecutionLog, User
 from src.utils.logger import logger
 from src import config
 from src.agents.mcp_agent import MCPToolManager
@@ -143,6 +143,27 @@ class DatabaseManager:
                 return log.id
             except Exception as e:
                 logger.error(f"Error logging tool execution: {e}")
+
+    async def get_user_credit_balance(self, user_id: str) -> float:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(User.credit_balance).where(User.user_id == user_id))
+            val = result.scalar_one_or_none()
+            return float(val) if val is not None else 0.0
+
+    async def deduct_credits(self, user_id: str, amount: float):
+        """Deduct actual usage cost (in credits, 1 credit == $1) from a user's
+        balance after a run. Never goes below zero. No-op for non-positive amounts."""
+        if not amount or amount <= 0:
+            return
+        async with AsyncSessionLocal() as db:
+            try:
+                result = await db.execute(select(User).where(User.user_id == user_id))
+                user = result.scalar_one_or_none()
+                if user:
+                    user.credit_balance = round(max(0.0, (user.credit_balance or 0.0) - amount), 6)
+                    await db.commit()
+            except Exception as e:
+                logger.error(f"Error deducting credits for user {user_id}: {e}")
 
     async def get_or_create_chat_session(self, user_id: str, chat_id: str) -> ChatSession:
         async with AsyncSessionLocal() as db:
@@ -1390,7 +1411,15 @@ class Brain:
                 "success": False, 
                 "message": "You have reached the limit of 2 parallel automation tasks. Please wait for one to finish."
             }
-        
+
+        # Task #146: block usage once a user's credit balance is exhausted.
+        credit_balance = await self.db_manager.get_user_credit_balance(user_id)
+        if credit_balance <= 0:
+            return {
+                "success": False,
+                "message": "You're out of credits. Please contact an admin to top up your balance before continuing."
+            }
+
         self.session_manager.add_active_chat(user_id, chat_id)
 
         current_plan = [
@@ -2319,6 +2348,21 @@ class Brain:
             self.session_manager.remove_active_chat(user_id, chat_id)
             self.active_tasks.pop(chat_id, None)
             self.active_plans.pop(chat_id, None)
+
+            # Task #146: deduct this run's actual token cost from the user's
+            # credit balance. Uses the AgentExecutionLog rows written above
+            # (via update_ui) since those already carry the real per-stage cost.
+            if '_agent_log_ids' in locals() and _agent_log_ids:
+                try:
+                    async with AsyncSessionLocal() as _db:
+                        _res = await _db.execute(
+                            select(AgentExecutionLog.cost).where(AgentExecutionLog.id.in_(_agent_log_ids))
+                        )
+                        _run_cost = sum(float(c) for c in _res.scalars().all() if c)
+                    if _run_cost > 0:
+                        await self.db_manager.deduct_credits(user_id, _run_cost)
+                except Exception as _credit_err:
+                    logger.warning(f"[Credits] Failed to deduct usage cost for user {user_id}: {_credit_err}")
             # Always clear the cooperative-cancel flag so the next message in this
             # thread isn't immediately killed (handles the CancelledError path where
             # the discard above was never reached)

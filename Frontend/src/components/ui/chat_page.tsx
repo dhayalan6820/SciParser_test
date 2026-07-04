@@ -55,6 +55,7 @@ import {
   Copy,
   Shield,
   Settings,
+  BarChart3,
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import Plan, { Task } from "./agent-plan";
@@ -71,6 +72,7 @@ interface UserProfile {
   email: string;
   created_at: string;
   updated_at: string;
+  credit_balance?: number;
 }
 
 interface Thread {
@@ -182,6 +184,36 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const [currentView, setCurrentView] = React.useState<"chat" | "schedules" | "settings">(
     "chat",
   );
+
+  // Usage modal state
+  const [showUsageModal, setShowUsageModal] = React.useState(false);
+  const [usageData, setUsageData] = React.useState<
+    import("../../api").ConversationTokenUsage[] | null
+  >(null);
+  const [usageLoading, setUsageLoading] = React.useState(false);
+  const [usageError, setUsageError] = React.useState<string | null>(null);
+
+  const chatTitleById = React.useMemo(() => {
+    const map: Record<string, string> = {};
+    threads.forEach((t) => {
+      map[t.id] = t.title || "Untitled chat";
+    });
+    return map;
+  }, [threads]);
+
+  const openUsageModal = async () => {
+    setShowUsageModal(true);
+    setUsageLoading(true);
+    setUsageError(null);
+    try {
+      const data = await sciparserApi.getMyConversationUsage();
+      setUsageData(data);
+    } catch (err: any) {
+      setUsageError(err?.message || "Failed to load usage");
+    } finally {
+      setUsageLoading(false);
+    }
+  };
 
   // Scheduler State
   const [isSchedulerOpen, setIsSchedulerOpen] = React.useState(false);
@@ -850,6 +882,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         email: user.email,
         created_at: user.created_at,
         updated_at: user.updated_at,
+        credit_balance: user.credit_balance,
       });
 
       onLoginStateChange?.(true);
@@ -2905,7 +2938,32 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 </button>
               </div>
 
+              {userProfile?.credit_balance !== undefined && (
+                <div
+                  className={cn(
+                    "mt-3 flex items-center justify-between rounded-[10px] border px-3 py-1.5 text-[11px] font-medium",
+                    userProfile.credit_balance <= 0
+                      ? "border-red-500/30 bg-red-500/10 text-red-400"
+                      : "border-border bg-card text-muted-foreground"
+                  )}
+                >
+                  <span>Credits</span>
+                  <span className="font-semibold text-foreground">
+                    {userProfile.credit_balance.toFixed(2)}
+                  </span>
+                </div>
+              )}
+
               <div className="mt-4 flex items-center justify-between gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={openUsageModal}
+                  title="Usage"
+                  className="h-10 w-10 rounded-[12px] border border-border bg-card text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-90"
+                >
+                  <BarChart3 className="w-5 h-5" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -2929,6 +2987,78 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               </div>
             </div>
           </div>
+
+          {/* Usage Modal */}
+          {showUsageModal && (
+            <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/65 backdrop-blur-sm p-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                className="w-full max-w-lg rounded-[20px] border border-border bg-card p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
+              >
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5 text-[#10B981]" />
+                    Usage by conversation
+                  </h3>
+                  <button
+                    onClick={() => setShowUsageModal(false)}
+                    className="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <XIcon className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {userProfile?.credit_balance !== undefined && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Remaining credit balance:{" "}
+                    <span className="font-semibold text-foreground">
+                      {userProfile.credit_balance.toFixed(2)}
+                    </span>
+                  </p>
+                )}
+
+                <div className="mt-4 max-h-[50vh] space-y-2 overflow-y-auto pr-1">
+                  {usageLoading && (
+                    <p className="py-8 text-center text-sm text-muted-foreground">
+                      Loading usage…
+                    </p>
+                  )}
+                  {!usageLoading && usageError && (
+                    <p className="py-8 text-center text-sm text-red-400">
+                      {usageError}
+                    </p>
+                  )}
+                  {!usageLoading && !usageError && usageData?.length === 0 && (
+                    <p className="py-8 text-center text-sm text-muted-foreground">
+                      No usage recorded yet.
+                    </p>
+                  )}
+                  {!usageLoading &&
+                    !usageError &&
+                    usageData?.map((u) => (
+                      <div
+                        key={u.chat_id}
+                        className="flex items-center justify-between rounded-[12px] border border-border bg-muted/30 px-4 py-3"
+                      >
+                        <div className="min-w-0 pr-3">
+                          <p className="truncate text-sm font-semibold text-foreground">
+                            {chatTitleById[u.chat_id] || "Untitled chat"}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {u.total_tokens.toLocaleString()} tokens ({u.input_tokens.toLocaleString()} in /{" "}
+                            {u.output_tokens.toLocaleString()} out)
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-semibold text-foreground">
+                          ${u.total_cost.toFixed(4)}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </motion.div>
+            </div>
+          )}
 
           {/* Delete Chat Confirmation Modal */}
           {deletingThreadId && (

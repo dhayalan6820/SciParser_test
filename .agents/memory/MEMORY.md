@@ -12,3 +12,4 @@
 - [Browser-engine observation text shapes](browser-engine-observation-shapes.md) — camoufox and browser_use/Chrome render interactive-element text totally differently; regexes must be verified against each, not assumed
 - [Admin role bootstrap & routing](admin-role-bootstrap-routing.md) — first user auto-promoted to admin on migration; frontend routes by role fetched from /me post-login, no separate admin app/router needed
 - [asyncpg rejects sslmode param](asyncpg-sslmode-param.md) — ad-hoc scripts using Replit's DATABASE_URL directly must strip `sslmode` before create_async_engine or asyncpg throws TypeError
+- [Chat endpoint double error-code prefix](chat-endpoint-double-error-prefix.md) — /chat/message's catch-all re-wraps its own HTTPException, so error details show as "500: <msg>"; pre-existing/cosmetic, don't fix in isolation

@@ -219,9 +219,65 @@ class ChatService:
                 "success_rate": success_rate,
                 "total_cost": round(m["cost"], 4),
                 "automation_count": automation_map.get(u.user_id, 0),
+                "credit_balance": round(float(u.credit_balance or 0.0), 4),
             })
 
         return {"users": users_out, "total": total, "page": page, "page_size": page_size}
+
+    # ── Admin: credit management (Task #146) ────────────────────────────
+    @staticmethod
+    async def admin_set_user_credits(
+        db: AsyncSession, user_id: str, credits: Optional[float] = None, delta: Optional[float] = None
+    ) -> User:
+        """Set a user's credit balance to an absolute value, or apply a +/- delta.
+        Exactly one of `credits`/`delta` must be provided. Balance is clamped at 0."""
+        if credits is None and delta is None:
+            raise HTTPException(status_code=400, detail="Provide either 'credits' or 'delta'")
+        if credits is not None and delta is not None:
+            raise HTTPException(status_code=400, detail="Provide only one of 'credits' or 'delta', not both")
+
+        user = await ChatService.admin_get_user(db, user_id)
+        if credits is not None:
+            user.credit_balance = round(max(0.0, float(credits)), 4)
+        else:
+            user.credit_balance = round(max(0.0, float(user.credit_balance or 0.0) + float(delta)), 4)
+        user.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(user)
+        return user
+
+    # ── Per-conversation token/cost aggregation (Task #146) ─────────────
+    @staticmethod
+    async def get_user_conversation_usage(db: AsyncSession, user_id: str) -> List[dict]:
+        """Aggregate real per-message token usage/cost grouped by chat_id, so both the
+        chat sidebar and admin analytics can show a per-conversation running total."""
+        stmt = select(Message).where(Message.user_id == user_id, Message.role == "ai")
+        result = await db.execute(stmt)
+        messages = result.scalars().all()
+
+        totals: dict = {}
+        for m in messages:
+            usage = ChatService._parse_token_usage(m.token_usage)
+            input_tokens = int(usage.get("input") or usage.get("input_tokens") or 0)
+            output_tokens = int(usage.get("output") or usage.get("output_tokens") or 0)
+            total_tokens = int(usage.get("total") or usage.get("total_tokens") or (input_tokens + output_tokens))
+            try:
+                cost = float(m.cost) if m.cost else 0.0
+            except Exception:
+                cost = 0.0
+
+            entry = totals.setdefault(m.chat_id, {
+                "chat_id": m.chat_id, "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "total_cost": 0.0
+            })
+            entry["input_tokens"] += input_tokens
+            entry["output_tokens"] += output_tokens
+            entry["total_tokens"] += total_tokens
+            entry["total_cost"] += cost
+
+        for entry in totals.values():
+            entry["total_cost"] = round(entry["total_cost"], 4)
+
+        return list(totals.values())
 
     @staticmethod
     async def admin_get_user(db: AsyncSession, user_id: str) -> User:
@@ -1352,6 +1408,8 @@ class ChatService:
             round((total_automation_success / total_automation_runs) * 100, 2) if total_automation_runs else 0.0
         )
 
+        conversations = await ChatService.get_user_conversation_usage(db, user_id)
+
         return {
             "user_id": user.user_id,
             "username": user.username,
@@ -1377,6 +1435,8 @@ class ChatService:
                 "success_rate": automation_success_rate,
                 "items": automation_items,
             },
+            "credit_balance": round(float(user.credit_balance or 0.0), 4),
+            "conversations": conversations,
         }
 
     @staticmethod

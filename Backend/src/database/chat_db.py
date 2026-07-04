@@ -74,6 +74,9 @@ class User(Base):
     browser_engine = Column(String(50), nullable=True, default=None)
     role = Column(String(20), nullable=False, default="user", server_default="user")
     status = Column(String(20), nullable=False, default="active", server_default="active")
+    # Task #146: admin-managed usage credits. 1 credit == $1 of the same
+    # cost-per-token pricing already used for cost calculation/reporting.
+    credit_balance = Column(Float, nullable=False, default=5.0, server_default="5.0")
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 

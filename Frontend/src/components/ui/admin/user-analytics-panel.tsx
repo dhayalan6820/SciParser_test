@@ -1,7 +1,7 @@
 import * as React from "react";
 import { sciparserApi, AdminUserAnalytics, User } from "../../../api";
 import { KPICard, Panel, EmptyState, LoadingState, StatusBadge, formatRelativeTime } from "./shared";
-import { X, DollarSign, Gauge, Activity, Zap, ListChecks } from "lucide-react";
+import { X, DollarSign, Gauge, Activity, Zap, ListChecks, Coins } from "lucide-react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -97,6 +97,7 @@ export const UserAnalyticsPanel: React.FC<{ user: User; onClose: () => void }> =
                 <KPICard index={1} icon={<DollarSign className="h-4 w-4" />} label="Total Cost" value={`$${data.total_cost.toFixed(4)}`} />
                 <KPICard index={2} icon={<Gauge className="h-4 w-4" />} label="Success Rate" value={`${data.success_rate}%`} />
                 <KPICard index={3} icon={<Activity className="h-4 w-4" />} label="Total Runs" value={data.total_runs.toLocaleString()} />
+                <KPICard index={4} icon={<Coins className="h-4 w-4" />} label="Credit Balance" value={data.credit_balance.toFixed(2)} />
               </div>
 
               <Panel title="Usage & Cost" subtitle={`Tokens and cost per day over the last ${data.days} days`}>
@@ -167,6 +168,32 @@ export const UserAnalyticsPanel: React.FC<{ user: User; onClose: () => void }> =
                       </li>
                     ))}
                   </ul>
+                )}
+              </Panel>
+
+              <Panel title="Conversations" subtitle="Per-conversation token usage and cost, most expensive first">
+                {data.conversations.length === 0 ? (
+                  <EmptyState label="No conversations with recorded usage yet." />
+                ) : (
+                  <div className="space-y-2">
+                    {[...data.conversations]
+                      .sort((a, b) => b.total_cost - a.total_cost)
+                      .map((c) => (
+                        <div
+                          key={c.chat_id}
+                          className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2 text-xs"
+                        >
+                          <div>
+                            <div className="font-medium">{c.chat_id.replace(/^thread-/, "").slice(0, 8)}</div>
+                            <div className="text-muted-foreground mt-0.5">
+                              {c.total_tokens.toLocaleString()} tokens ({c.input_tokens.toLocaleString()} in /{" "}
+                              {c.output_tokens.toLocaleString()} out)
+                            </div>
+                          </div>
+                          <div className="font-medium">${c.total_cost.toFixed(4)}</div>
+                        </div>
+                      ))}
+                  </div>
                 )}
               </Panel>
 

@@ -19,6 +19,7 @@ import {
   Coins,
   Menu,
   X,
+  MessageSquare,
 } from "lucide-react";
 import { UsersTab } from "./admin/users-tab";
 import { OperationsTab } from "./admin/operations-tab";
@@ -33,6 +34,7 @@ import { SecurityTab } from "./admin/security-tab";
 interface AdminDashboardProps {
   currentUser: { username: string; email: string } | null;
   onLogout: () => void;
+  onOpenUserView?: () => void;
 }
 
 type Tab =
@@ -63,7 +65,7 @@ const TAB_LABELS: Record<Tab, string> = NAV_ITEMS.reduce(
   {} as Record<Tab, string>
 );
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onLogout }) => {
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onLogout, onOpenUserView }) => {
   const { theme, toggleTheme } = useTheme();
   const [tab, setTab] = React.useState<Tab>("overview");
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
@@ -131,6 +133,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         </div>
         <NavList />
         <div className="mt-auto pt-4 border-t border-slate-200 dark:border-slate-800 space-y-2">
+          {onOpenUserView && (
+            <Button variant="outline" size="sm" onClick={onOpenUserView} className="gap-1.5 w-full justify-start">
+              <MessageSquare className="h-4 w-4" />
+              Chat &amp; Schedules
+            </Button>
+          )}
           {currentUser && (
             <div className="px-2 text-xs">
               <p className="font-medium truncate">{currentUser.username}</p>
@@ -179,6 +187,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
                 </button>
               </div>
               <NavList onNavigate={() => setMobileNavOpen(false)} />
+              {onOpenUserView && (
+                <div className="mt-auto pt-4 border-t border-slate-200 dark:border-slate-800">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      onOpenUserView();
+                      setMobileNavOpen(false);
+                    }}
+                    className="gap-1.5 w-full justify-start"
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                    Chat &amp; Schedules
+                  </Button>
+                </div>
+              )}
             </motion.aside>
           </>
         )}

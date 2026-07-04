@@ -40,6 +40,7 @@ class UserResponse(BaseModel):
     email: str
     role: str = "user"
     status: str = "active"
+    credit_balance: float = 5.0
     created_at: datetime 
     updated_at: datetime 
 
@@ -51,6 +52,20 @@ class AdminUpdateUserRequest(BaseModel):
     status: Optional[Literal["active", "suspended"]] = None
     username: Optional[str] = None
     email: Optional[EmailStr] = None
+
+
+class AdminSetCreditsRequest(BaseModel):
+    """Either set an absolute balance or apply a +/- delta (exactly one)."""
+    credits: Optional[float] = None
+    delta: Optional[float] = None
+
+
+class ConversationTokenUsage(BaseModel):
+    chat_id: str
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    total_cost: float = 0.0
 
 
 class AdminAutomationSummary(BaseModel):
@@ -119,6 +134,8 @@ class AdminUserAnalyticsResponse(BaseModel):
     status_breakdown: List[Dict[str, Any]]
     activity: AdminUserAnalyticsActivity
     automations: AdminUserAnalyticsAutomations
+    credit_balance: float = 0.0
+    conversations: List[ConversationTokenUsage] = []
 
 
 class OperationsMetricsResponse(BaseModel):
