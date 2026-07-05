@@ -582,6 +582,70 @@ class ChatService:
 
         return [ChatService._serialize_operations_log(log, users_by_id) for log in logs]
 
+    # ── Admin: application logs (info/warning/error lines) ────────────────
+    @staticmethod
+    def _serialize_app_log(log) -> dict:
+        return {
+            "id": log.id,
+            "timestamp": log.timestamp.isoformat() if log.timestamp else "",
+            "level": log.level,
+            "logger_name": log.logger_name,
+            "message": log.message,
+            "module": log.module,
+            "func_name": log.func_name,
+            "line_no": log.line_no,
+        }
+
+    @staticmethod
+    async def admin_get_app_logs(
+        db: AsyncSession,
+        page: int = 1,
+        page_size: int = 50,
+        level: Optional[str] = None,
+        search: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> dict:
+        """Paginated, filterable view of app_logs rows so admins can inspect
+        application logs without needing direct database access."""
+        from src.database.chat_db import AppLog
+
+        conditions = []
+        if level:
+            conditions.append(func.upper(AppLog.level) == level.upper())
+        if search:
+            conditions.append(AppLog.message.ilike(f"%{search}%"))
+        if start_date:
+            try:
+                start_dt = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+                conditions.append(AppLog.timestamp >= start_dt)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid start_date, expected YYYY-MM-DD")
+        if end_date:
+            try:
+                end_dt = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc) + timedelta(days=1)
+                conditions.append(AppLog.timestamp < end_dt)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid end_date, expected YYYY-MM-DD")
+
+        stmt = select(AppLog)
+        if conditions:
+            stmt = stmt.where(*conditions)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await db.execute(count_stmt)).scalar() or 0
+
+        stmt = stmt.order_by(AppLog.timestamp.desc()).offset((page - 1) * page_size).limit(page_size)
+        result = await db.execute(stmt)
+        logs = result.scalars().all()
+
+        return {
+            "logs": [ChatService._serialize_app_log(log) for log in logs],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+
     @staticmethod
     def _parse_token_usage(raw: Optional[str]) -> dict:
         """Best-effort parse of the JSON token_usage blob stored on AgentExecutionLog rows."""

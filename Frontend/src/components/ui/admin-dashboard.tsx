@@ -20,6 +20,7 @@ import {
   Menu,
   X,
   MessageSquare,
+  ScrollText,
 } from "lucide-react";
 import { UsersTab } from "./admin/users-tab";
 import { OperationsTab } from "./admin/operations-tab";
@@ -30,6 +31,7 @@ import { AutomationMonitoringTab } from "./admin/automation-monitoring-tab";
 import { BrowserSessionsTab } from "./admin/browser-sessions-tab";
 import { UsageTab } from "./admin/usage-tab";
 import { SecurityTab } from "./admin/security-tab";
+import { LogsTab } from "./admin/logs-tab";
 
 interface AdminDashboardProps {
   currentUser: { username: string; email: string } | null;
@@ -46,7 +48,8 @@ type Tab =
   | "automations"
   | "browser-sessions"
   | "usage"
-  | "security";
+  | "security"
+  | "logs";
 
 const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "overview", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" /> },
@@ -58,6 +61,7 @@ const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "browser-sessions", label: "Browser Sessions", icon: <Globe className="h-4 w-4" /> },
   { id: "usage", label: "Usage", icon: <Coins className="h-4 w-4" /> },
   { id: "security", label: "Security", icon: <ShieldAlert className="h-4 w-4" /> },
+  { id: "logs", label: "Logs", icon: <ScrollText className="h-4 w-4" /> },
 ];
 
 const TAB_LABELS: Record<Tab, string> = NAV_ITEMS.reduce(
@@ -90,6 +94,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         return <UsageTab />;
       case "security":
         return <SecurityTab />;
+      case "logs":
+        return <LogsTab />;
       default:
         return null;
     }

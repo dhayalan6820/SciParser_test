@@ -910,6 +910,19 @@ export const sciparserApi = {
     return res.json() as Promise<AdminSecurity>;
   },
 
+  // Admin: Application Logs (info/warning/error lines)
+  adminGetAppLogs: async (filters: AppLogFilters) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const params = buildAppLogParams(filters);
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/logs?${params.toString()}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<AppLogListResponse>;
+  },
+
   // Admin: Operations Logs (filter/audit)
   adminGetOperationsLogs: async (filters: OperationsLogFilters) => {
     const token = localStorage.getItem("access_token");
@@ -947,6 +960,17 @@ export const sciparserApi = {
     URL.revokeObjectURL(url);
   },
 };
+
+function buildAppLogParams(filters: AppLogFilters): URLSearchParams {
+  const params = new URLSearchParams();
+  if (filters.page) params.set("page", String(filters.page));
+  if (filters.pageSize) params.set("page_size", String(filters.pageSize));
+  if (filters.level) params.set("level", filters.level);
+  if (filters.search) params.set("search", filters.search);
+  if (filters.startDate) params.set("start_date", filters.startDate);
+  if (filters.endDate) params.set("end_date", filters.endDate);
+  return params;
+}
 
 function buildOperationsLogParams(filters: OperationsLogFilters): URLSearchParams {
   const params = new URLSearchParams();
@@ -1189,6 +1213,33 @@ export interface AdminAnalytics {
   total_failed: number;
   overall_success_rate: number;
 }
+export interface AppLogFilters {
+  page?: number;
+  pageSize?: number;
+  level?: string;
+  search?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface AppLogEntry {
+  id: number;
+  timestamp: string;
+  level: string;
+  logger_name: string;
+  message: string;
+  module: string | null;
+  func_name: string | null;
+  line_no: number | null;
+}
+
+export interface AppLogListResponse {
+  logs: AppLogEntry[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export interface OperationsLogFilters {
   page?: number;
   pageSize?: number;

@@ -283,6 +283,24 @@ class OperationsLogListResponse(BaseModel):
     page: int
     page_size: int
 
+class AppLogEntry(BaseModel):
+    id: int
+    timestamp: str
+    level: str
+    logger_name: str
+    message: str
+    module: Optional[str] = None
+    func_name: Optional[str] = None
+    line_no: Optional[int] = None
+
+
+class AppLogListResponse(BaseModel):
+    logs: List[AppLogEntry]
+    total: int
+    page: int
+    page_size: int
+
+
 class BackendChatMessage(BaseModel):
     id: Optional[str] = None # Added to match frontend 'id'
     log_id: Optional[str] = None # Changed to Optional to prevent validation failure

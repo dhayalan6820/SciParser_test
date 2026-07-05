@@ -39,7 +39,7 @@ from src.schemas.schema import (
     AdminAutomationsResponse, AdminBrowserSessionsResponse, AdminUsageResponse,
     AdminSecurityResponse, AdminAgentRunTimelineResponse, AdminAgentActionResponse,
     AdminAnalyticsResponse, OperationsLogListResponse, AdminUserAnalyticsResponse,
-    AdminSetCreditsRequest, ConversationTokenUsage
+    AdminSetCreditsRequest, ConversationTokenUsage, AppLogListResponse
 )
 from src.utils.logger import logger
 from src.services.brain import brain
@@ -767,6 +767,22 @@ async def admin_operations_metrics(
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
     return await ChatService.admin_get_operations_metrics(db, days=days)
+
+@app.get("/sciparser/v1/admin/logs", response_model=AppLogListResponse)
+async def admin_app_logs(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    level: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_app_logs(
+        db, page=page, page_size=page_size, level=level, search=search,
+        start_date=start_date, end_date=end_date,
+    )
 
 @app.get("/sciparser/v1/admin/operations/logs", response_model=OperationsLogListResponse)
 async def admin_operations_logs(
