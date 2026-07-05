@@ -608,6 +608,60 @@ export const sciparserApi = {
     return res.json() as Promise<{ status: string; exit_ip: string }>;
   },
 
+  // FloppyData API key
+  setFloppyDataKey: async (apiKey: string) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/settings/floppydata`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: formattedToken },
+      body: JSON.stringify({ api_key: apiKey }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Failed to save FloppyData API key");
+    }
+    return res.json() as Promise<{ status: string; api_key_masked: string }>;
+  },
+
+  deleteFloppyDataKey: async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/settings/floppydata`, {
+      method: "DELETE",
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  getFloppyDataKeyStatus: async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/settings/floppydata`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<{ active: boolean; api_key_masked: string | null }>;
+  },
+
+  getFloppyDataBalance: async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/settings/floppydata/balance`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Failed to fetch FloppyData balance");
+    }
+    return res.json();
+  },
+
   // Browser Engine
   getBrowserEngine: async () => {
     const token = localStorage.getItem("access_token");

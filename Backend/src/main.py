@@ -1866,6 +1866,88 @@ async def test_proxy(req: Dict[str, Any], current_user: User = Depends(ChatServi
         raise HTTPException(status_code=400, detail=f"Proxy test failed: {exc}")
 
 
+def _mask_api_key(key: str) -> str:
+    """Return an API key with all but the last 4 characters replaced by *."""
+    if not key:
+        return key
+    if len(key) <= 4:
+        return "*" * len(key)
+    return "*" * (len(key) - 4) + key[-4:]
+
+
+@app.post("/sciparser/v1/settings/floppydata")
+async def set_floppydata_key(req: Dict[str, Any], current_user: User = Depends(ChatService.get_current_user), db: AsyncSession = Depends(get_db)):
+    """Store the user's FloppyData API key (persisted to DB, not a server-wide secret)."""
+    api_key = (req.get("api_key") or "").strip()
+    if not api_key:
+        raise HTTPException(status_code=400, detail="api_key is required")
+    result = await db.execute(select(User).where(User.user_id == current_user.user_id))
+    db_user = result.scalar_one_or_none()
+    if db_user:
+        db_user.floppydata_api_key = api_key
+        await db.commit()
+    session = brain.session_manager.get_session(current_user.user_id)
+    session["floppydata_api_key"] = api_key
+    return {"status": "saved", "api_key_masked": _mask_api_key(api_key)}
+
+
+@app.delete("/sciparser/v1/settings/floppydata")
+async def delete_floppydata_key(current_user: User = Depends(ChatService.get_current_user), db: AsyncSession = Depends(get_db)):
+    """Remove the user's stored FloppyData API key."""
+    result = await db.execute(select(User).where(User.user_id == current_user.user_id))
+    db_user = result.scalar_one_or_none()
+    if db_user:
+        db_user.floppydata_api_key = None
+        await db.commit()
+    session = brain.session_manager.get_session(current_user.user_id)
+    session["floppydata_api_key"] = None
+    return {"status": "removed"}
+
+
+@app.get("/sciparser/v1/settings/floppydata")
+async def get_floppydata_key_status(current_user: User = Depends(ChatService.get_current_user), db: AsyncSession = Depends(get_db)):
+    """Return whether a FloppyData API key is configured (masked, never the raw value)."""
+    session = brain.session_manager.get_session(current_user.user_id)
+    api_key = session.get("floppydata_api_key")
+    if api_key is None:
+        result = await db.execute(select(User).where(User.user_id == current_user.user_id))
+        db_user = result.scalar_one_or_none()
+        if db_user and db_user.floppydata_api_key:
+            api_key = db_user.floppydata_api_key
+            session["floppydata_api_key"] = api_key
+    masked = _mask_api_key(api_key) if api_key else None
+    return {"active": bool(api_key), "api_key_masked": masked}
+
+
+@app.get("/sciparser/v1/settings/floppydata/balance")
+async def get_floppydata_balance(current_user: User = Depends(ChatService.get_current_user), db: AsyncSession = Depends(get_db)):
+    """Fetch the account balance from FloppyData using the user's stored API key."""
+    session = brain.session_manager.get_session(current_user.user_id)
+    api_key = session.get("floppydata_api_key")
+    if api_key is None:
+        result = await db.execute(select(User).where(User.user_id == current_user.user_id))
+        db_user = result.scalar_one_or_none()
+        if db_user and db_user.floppydata_api_key:
+            api_key = db_user.floppydata_api_key
+            session["floppydata_api_key"] = api_key
+    if not api_key:
+        raise HTTPException(status_code=400, detail="No FloppyData API key saved yet")
+    try:
+        async with _httpx.AsyncClient(timeout=config.HTTP_CLIENT_TIMEOUT_SECONDS) as client:
+            resp = await client.get(
+                "https://api.floppydata.net/v2/account/balances",
+                headers={"X-Api-Key": api_key},
+            )
+        if resp.status_code == 401:
+            raise HTTPException(status_code=400, detail="FloppyData rejected this API key (unauthorized)")
+        resp.raise_for_status()
+        return resp.json()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to fetch FloppyData balance: {exc}")
+
+
 @app.get("/sciparser/v1/settings/browser-engine")
 async def get_browser_engine(current_user: User = Depends(ChatService.get_current_user), db: AsyncSession = Depends(get_db)):
     """Return the user's preferred browser engine (camoufox or chrome)."""

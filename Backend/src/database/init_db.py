@@ -22,6 +22,9 @@ async def init_database():
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS proxy_url TEXT"
             ))
             await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS floppydata_api_key TEXT"
+            ))
+            await conn.execute(text(
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS browser_engine VARCHAR(50) DEFAULT NULL"
             ))
             # Reset rows that were seeded with the migration default so env-var override

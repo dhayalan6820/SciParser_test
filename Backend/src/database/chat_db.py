@@ -71,6 +71,7 @@ class User(Base):
     email = Column(String(100), unique=True, nullable=False, index=True)
     hashed_password = Column(String(255), nullable=False)
     proxy_url = Column(Text, nullable=True)
+    floppydata_api_key = Column(Text, nullable=True)
     browser_engine = Column(String(50), nullable=True, default=None)
     role = Column(String(20), nullable=False, default="user", server_default="user")
     status = Column(String(20), nullable=False, default="active", server_default="active")
