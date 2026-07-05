@@ -73,6 +73,18 @@ SUMMARIZE_HISTORY_TOKEN_THRESHOLD = 60000
 # tokens) to reduce the size of the heaviest "Navigate ..." steps.
 MAX_OBSERVATION_CHARS_FOR_LLM = 12000
 
+# Hard ceiling on LangGraph super-steps (agent -> tools -> agent -> ...) for a
+# single run. This is a backstop, not the primary loop control — normal runs
+# are already bounded by domain-specific guards (max_retries=3 for recovery
+# attempts, obstacle escalation after 2 attempts). Without an explicit limit
+# here, the graph falls back to LangGraph's implicit default (25), which is
+# an accidental cap rather than a deliberate one tied to our own retry
+# budget, and could silently change across LangGraph versions. Set generously
+# above the expected worst case (long multi-page tasks with a couple of
+# recoveries) so it only trips on a genuine runaway loop, not a legitimate
+# long task.
+GRAPH_RECURSION_LIMIT = 100
+
 # How many of the MOST RECENT tool-result messages are kept verbatim in the
 # LLM message chain. Older tool messages are collapsed to a short pointer —
 # their outcome is already preserved (up to 500 chars each) in the
@@ -1454,8 +1466,14 @@ class Brain:
         app = workflow.compile(checkpointer=self.checkpointer)
         
         try:
-            # Execute the graph with a thread_id for persistence
-            config = {"configurable": {"thread_id": chat_id}}
+            # Execute the graph with a thread_id for persistence, and an
+            # explicit recursion_limit as a backstop against runaway
+            # agent<->tools loops that slip past our domain-specific retry
+            # guards (see GRAPH_RECURSION_LIMIT for rationale).
+            config = {
+                "configurable": {"thread_id": chat_id},
+                "recursion_limit": GRAPH_RECURSION_LIMIT,
+            }
             final_state = await app.ainvoke(graph_input, config=config)
             return final_state
         finally:
