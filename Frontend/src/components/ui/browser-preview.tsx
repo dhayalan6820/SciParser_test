@@ -534,11 +534,14 @@ export function BrowserPreview({
 
           {/* ── Live activity notification — friendly, at-a-glance summary of the
               agent's most recent tool action, shown just below the preview
-              image while the browser is active. This intentionally mirrors
+              image only while a run is actually in progress (isAiTyping).
+              Gating on isAiTyping (not just isActive/panel-open) prevents the
+              strip from showing stale activity once a run has finished but
+              the preview panel is still open. This intentionally mirrors
               only the LATEST entry from `toolLogs`; the full history stays in
               the separate Tool Log popup above. */}
           <AnimatePresence mode="wait">
-            {isActive && frame && latestToolLog && (
+            {isActive && frame && isAiTyping && latestToolLog && (
               <motion.div
                 key={latestToolLog.id}
                 initial={{ opacity: 0, y: 6 }}
