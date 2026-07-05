@@ -124,6 +124,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [voiceEnabled, setVoiceEnabled] = React.useState(false);
   const [isAiTyping, setIsAiTyping] = React.useState(false);
+  const [isCancellingStep, setIsCancellingStep] = React.useState(false);
   const [currentPlan, setCurrentPlan] = React.useState<Task[] | null>(null);
   const [toolLogs, setToolLogs] = React.useState<any[]>([]);
   const [aiThinking, setAiThinking] = React.useState<string | null>(null);
@@ -1292,6 +1293,48 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       setIsAiTyping(false);
     } catch (e) {
       console.error("Failed to stop process:", e);
+    }
+  };
+
+  // Cancels a single step that has been running well past the "still
+  // working" threshold (see browser-preview.tsx's hard-stall notification).
+  // The backend only exposes whole-run cancellation today, so this stops the
+  // active run the same way the "Stop" button does — but it captures which
+  // step was actually stuck first so the tool log / chat clearly explain
+  // *what* got cancelled, rather than leaving that step frozen at
+  // "IN_PROGRESS" forever with no visible resolution.
+  const handleCancelStuckStep = async () => {
+    if (!activeThreadId || isCancellingStep) return;
+    const stuckLog = toolLogs.length > 0 ? toolLogs[toolLogs.length - 1] : null;
+    setIsCancellingStep(true);
+    try {
+      await sciparserApi.stopChatProcess(activeThreadId);
+
+      if (stuckLog && stuckLog.status === "IN_PROGRESS") {
+        setToolLogs((prev) =>
+          prev.map((log) =>
+            log.id === stuckLog.id
+              ? { ...log, status: "FAILED", error_message: "Cancelled by user — step was taking too long." }
+              : log,
+          ),
+        );
+      }
+
+      const cancelMsg: ChatMessage = {
+        id: uuidv4(),
+        role: "assistant",
+        content: stuckLog?.tool_name
+          ? `⛔ Cancelled a stuck step (${stuckLog.tool_name}) and stopped the run.`
+          : "⛔ Cancelled the stuck step and stopped the run.",
+        timestamp: new Date().toISOString(),
+        form: undefined,
+      };
+      setMessages((prev) => [...prev, cancelMsg]);
+      setIsAiTyping(false);
+    } catch (e) {
+      console.error("Failed to cancel stuck step:", e);
+    } finally {
+      setIsCancellingStep(false);
     }
   };
 
@@ -3543,6 +3586,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     }}
                     onClearLogs={() => setToolLogs([])}
                     browserEngine={activeBrowserEngine}
+                    onCancelStep={handleCancelStuckStep}
+                    isCancellingStep={isCancellingStep}
                   />
                 </div>
               </>

@@ -92,6 +92,8 @@ interface BrowserPreviewProps {
   onClearLogs?: () => void;
   browserEngine?: "camoufox" | "chrome" | null;
   onCloseBrowser?: () => void;
+  onCancelStep?: () => void;
+  isCancellingStep?: boolean;
 }
 
 export function BrowserPreview({ 
@@ -108,6 +110,8 @@ export function BrowserPreview({
   onClearLogs,
   browserEngine,
   onCloseBrowser,
+  onCancelStep,
+  isCancellingStep = false,
 }: BrowserPreviewProps) {
   const [isFullSize, setIsFullSize]       = useState(false);
   const [zoom, setZoom]                   = useState(100);
@@ -136,6 +140,12 @@ export function BrowserPreview({
   // looking identical to a fast, normal in-progress state.
   const SLOW_STEP_THRESHOLD_MS = 8000;
 
+  // Threshold beyond which an IN_PROGRESS step is treated as hard-stalled
+  // rather than merely slow — at this point the timer alone isn't enough
+  // feedback, so the notification also offers a way to cancel the run
+  // instead of leaving the user only able to watch or abandon it entirely.
+  const HARD_STALL_THRESHOLD_MS = 30000;
+
   // Tick every second while the latest step is still running so the elapsed
   // timer stays live. Only runs while there's an actual IN_PROGRESS entry to
   // avoid a background interval when the panel is idle/finished.
@@ -153,6 +163,7 @@ export function BrowserPreview({
     return Math.max(0, nowTick - started);
   })();
   const isLatestStepSlow = latestStepElapsedMs >= SLOW_STEP_THRESHOLD_MS;
+  const isLatestStepStalled = latestStepElapsedMs >= HARD_STALL_THRESHOLD_MS;
   const formatElapsed = (ms: number) => {
     const totalSeconds = Math.floor(ms / 1000);
     const minutes = Math.floor(totalSeconds / 60);
@@ -621,10 +632,46 @@ export function BrowserPreview({
                 </span>
                 {latestToolLog.status === 'IN_PROGRESS' && isLatestStepSlow && (
                   <span className="ml-auto flex items-center gap-1.5 shrink-0 pl-2">
-                    <span className="text-[9px] font-bold uppercase tracking-widest text-amber-400/90">Still working</span>
-                    <span className="text-[10px] font-bold tabular-nums text-amber-400/90 bg-amber-400/10 border border-amber-400/20 rounded px-1.5 py-0.5">
+                    <span
+                      className={cn(
+                        "text-[9px] font-bold uppercase tracking-widest",
+                        isLatestStepStalled ? "text-red-400/90" : "text-amber-400/90",
+                      )}
+                    >
+                      {isLatestStepStalled ? "Stuck" : "Still working"}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-[10px] font-bold tabular-nums rounded px-1.5 py-0.5 border",
+                        isLatestStepStalled
+                          ? "text-red-400/90 bg-red-400/10 border-red-400/20"
+                          : "text-amber-400/90 bg-amber-400/10 border-amber-400/20",
+                      )}
+                    >
                       {formatElapsed(latestStepElapsedMs)}
                     </span>
+                    {/* Once a step has been running well beyond the "still
+                        working" threshold, it's reasonable to suspect it's
+                        actually stuck rather than just slow — offer a direct
+                        way to cancel instead of leaving the user only able to
+                        watch the timer or abandon the whole session. */}
+                    {isLatestStepStalled && onCancelStep && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={isCancellingStep}
+                        onClick={onCancelStep}
+                        className="h-6 px-2 text-[9px] font-black uppercase tracking-widest text-red-500 hover:text-red-600 hover:bg-red-500/10 gap-1 shrink-0"
+                      >
+                        {isCancellingStep ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <X className="h-3 w-3" />
+                        )}
+                        {isCancellingStep ? "Cancelling…" : "Cancel step"}
+                      </Button>
+                    )}
                   </span>
                 )}
               </motion.div>
