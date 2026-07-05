@@ -18,6 +18,41 @@ interface MousePos {
   vpH: number;
 }
 
+// Maps raw MCP tool names to short, friendly phrases for the live activity
+// notification. Matched by substring (not exact) since tool names vary
+// slightly between MCP servers (e.g. `browser_navigate` vs `navigate_to`).
+// Order matters — more specific patterns are checked before generic ones.
+const TOOL_LABEL_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /navigate|goto|open_url/i, label: 'Browser navigated' },
+  { pattern: /screenshot|snapshot|capture/i, label: 'Capturing screenshot' },
+  { pattern: /key_press|press_key|keyboard/i, label: 'Pressing key' },
+  { pattern: /hover/i, label: 'Hovering element' },
+  { pattern: /scroll/i, label: 'Scrolling page' },
+  { pattern: /select|dropdown|option/i, label: 'Selecting option' },
+  { pattern: /type|fill|input_text|input/i, label: 'Typing text' },
+  { pattern: /click|tap|button/i, label: 'Button clicked' },
+  { pattern: /wait/i, label: 'Waiting for page' },
+  { pattern: /extract|read_text|get_text|content/i, label: 'Reading page content' },
+  { pattern: /find|locate|check_element|query|inspect/i, label: 'Checking element' },
+  { pattern: /close|quit|shutdown/i, label: 'Closing browser' },
+  { pattern: /back|forward|history/i, label: 'Changing page' },
+];
+
+/** Turn `browser_navigate` / `browser-navigate` into "Browser navigate" as a last-resort fallback. */
+function humanizeToolName(toolName: string): string {
+  const words = toolName.replace(/^browser[_-]/i, '').split(/[_-]/).filter(Boolean);
+  if (words.length === 0) return 'Working';
+  return words
+    .map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+    .join(' ');
+}
+
+function getFriendlyToolLabel(toolName?: string | null): string {
+  if (!toolName) return 'Working…';
+  const match = TOOL_LABEL_PATTERNS.find(({ pattern }) => pattern.test(toolName));
+  return match ? match.label : humanizeToolName(toolName);
+}
+
 interface BrowserPreviewProps {
   frame: string | null;
   isActive: boolean;
@@ -61,6 +96,13 @@ export function BrowserPreview({
   const logsEndRef    = useRef<HTMLDivElement>(null);
   const popupRef      = useRef<HTMLDivElement>(null);
   const viewportRef   = useRef<HTMLDivElement>(null);
+
+  // Latest tool activity for the friendly notification strip below the
+  // preview image. New entries are always pushed to the end of `toolLogs`
+  // (see chat_page.tsx's tool_start/tool_output handling), so the last item
+  // is always the most recent action — whether still running or finished.
+  const latestToolLog = toolLogs.length > 0 ? toolLogs[toolLogs.length - 1] : null;
+  const latestActivityLabel = getFriendlyToolLabel(latestToolLog?.tool_name);
 
   // Recompute cursor pixel position whenever mousePos, zoom, or viewport size changes
   useEffect(() => {
@@ -488,7 +530,38 @@ export function BrowserPreview({
                 </Button>
               </div>
             </div>
-          ) : (
+          ) : null}
+
+          {/* ── Live activity notification — friendly, at-a-glance summary of the
+              agent's most recent tool action, shown just below the preview
+              image while the browser is active. This intentionally mirrors
+              only the LATEST entry from `toolLogs`; the full history stays in
+              the separate Tool Log popup above. */}
+          <AnimatePresence mode="wait">
+            {isActive && frame && latestToolLog && (
+              <motion.div
+                key={latestToolLog.id}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+                className="shrink-0 px-4 py-2 border-t border-border bg-card/60 backdrop-blur-sm flex items-center gap-2"
+              >
+                {latestToolLog.status === 'IN_PROGRESS' ? (
+                  <Loader2 className="h-3 w-3 text-sky-400 animate-spin shrink-0" />
+                ) : latestToolLog.status === 'FAILED' ? (
+                  <AlertCircle className="h-3 w-3 text-amber-400 shrink-0" />
+                ) : (
+                  <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
+                )}
+                <span className="text-[11px] font-semibold text-foreground/80 truncate">
+                  {latestActivityLabel}
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {!frame && (
             <div className="flex-1 flex flex-col items-center justify-center gap-5 text-muted-foreground/30">
               <div className="relative">
                 <Loader2 className="h-10 w-10 text-sky-400 animate-spin" />
