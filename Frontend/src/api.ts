@@ -923,6 +923,30 @@ export const sciparserApi = {
     return res.json() as Promise<AppLogListResponse>;
   },
 
+  adminExportAppLogs: async (filters: AppLogFilters, format: "csv" | "json") => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const params = buildAppLogParams(filters);
+    params.set("format", format);
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/logs/export?${params.toString()}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename=([^;]+)/);
+    const filename = match ? match[1].trim() : `app_logs_export.${format}`;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  },
+
   // Admin: Operations Logs (filter/audit)
   adminGetOperationsLogs: async (filters: OperationsLogFilters) => {
     const token = localStorage.getItem("access_token");

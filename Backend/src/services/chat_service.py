@@ -647,6 +647,45 @@ class ChatService:
         }
 
     @staticmethod
+    async def admin_export_app_logs(
+        db: AsyncSession,
+        level: Optional[str] = None,
+        search: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        max_rows: int = 20000,
+    ) -> List[dict]:
+        """Return every matching app_logs row (capped) for CSV/JSON export."""
+        from src.database.chat_db import AppLog
+
+        conditions = []
+        if level:
+            conditions.append(func.upper(AppLog.level) == level.upper())
+        if search:
+            conditions.append(AppLog.message.ilike(f"%{search}%"))
+        if start_date:
+            try:
+                start_dt = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+                conditions.append(AppLog.timestamp >= start_dt)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid start_date, expected YYYY-MM-DD")
+        if end_date:
+            try:
+                end_dt = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc) + timedelta(days=1)
+                conditions.append(AppLog.timestamp < end_dt)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid end_date, expected YYYY-MM-DD")
+
+        stmt = select(AppLog)
+        if conditions:
+            stmt = stmt.where(*conditions)
+        stmt = stmt.order_by(AppLog.timestamp.desc()).limit(max_rows)
+        result = await db.execute(stmt)
+        logs = result.scalars().all()
+
+        return [ChatService._serialize_app_log(log) for log in logs]
+
+    @staticmethod
     def _parse_token_usage(raw: Optional[str]) -> dict:
         """Best-effort parse of the JSON token_usage blob stored on AgentExecutionLog rows."""
         if not raw:

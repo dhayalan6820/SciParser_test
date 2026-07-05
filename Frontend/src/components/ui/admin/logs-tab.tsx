@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Filter,
   ScrollText,
+  Download,
 } from "lucide-react";
 
 const LOG_PAGE_SIZE = 50;
@@ -33,6 +34,9 @@ export const LogsTab: React.FC = () => {
   const [search, setSearch] = React.useState("");
   const [startDate, setStartDate] = React.useState("");
   const [endDate, setEndDate] = React.useState("");
+
+  const [exporting, setExporting] = React.useState<"csv" | "json" | null>(null);
+  const [exportError, setExportError] = React.useState<string | null>(null);
 
   const totalPages = Math.max(1, Math.ceil(total / LOG_PAGE_SIZE));
 
@@ -93,6 +97,18 @@ export const LogsTab: React.FC = () => {
     loadLogs(1, { level: "", search: "", startDate: "", endDate: "" });
   };
 
+  const handleExport = async (format: "csv" | "json") => {
+    setExporting(format);
+    setExportError(null);
+    try {
+      await sciparserApi.adminExportAppLogs(buildFilters(1), format);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setExporting(null);
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
@@ -106,6 +122,28 @@ export const LogsTab: React.FC = () => {
           <h3 className="text-sm font-medium flex items-center gap-1.5">
             <Filter className="h-4 w-4" /> Recent Log Lines
           </h3>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={exporting !== null}
+              onClick={() => handleExport("csv")}
+            >
+              {exporting === "csv" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              Export CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={exporting !== null}
+              onClick={() => handleExport("json")}
+            >
+              {exporting === "json" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              Export JSON
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
@@ -133,6 +171,7 @@ export const LogsTab: React.FC = () => {
         <div className="flex items-center gap-2">
           <Button size="sm" onClick={applyFilters}>Apply Filters</Button>
           <Button size="sm" variant="outline" onClick={clearFilters}>Clear</Button>
+          {exportError && <span className="text-xs text-red-500">{exportError}</span>}
         </div>
 
         {loading ? (
