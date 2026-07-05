@@ -118,6 +118,7 @@ export function BrowserPreview({
   const [autoScroll, setAutoScroll]       = useState(true);
   const [clickPulse, setClickPulse]       = useState(false);
   const [cursorPx, setCursorPx]           = useState<{ x: number; y: number } | null>(null);
+  const [nowTick, setNowTick]             = useState(() => Date.now());
   const logsEndRef    = useRef<HTMLDivElement>(null);
   const popupRef      = useRef<HTMLDivElement>(null);
   const viewportRef   = useRef<HTMLDivElement>(null);
@@ -129,6 +130,35 @@ export function BrowserPreview({
   const latestToolLog = toolLogs.length > 0 ? toolLogs[toolLogs.length - 1] : null;
   const latestActivityLabel = getFriendlyToolLabel(latestToolLog?.tool_name);
   const latestActivityTarget = getToolTargetDetail(latestToolLog?.tool_name, latestToolLog?.tool_input);
+
+  // Threshold beyond which an IN_PROGRESS step is considered "taking longer
+  // than usual" and should surface elapsed time / stuck messaging instead of
+  // looking identical to a fast, normal in-progress state.
+  const SLOW_STEP_THRESHOLD_MS = 8000;
+
+  // Tick every second while the latest step is still running so the elapsed
+  // timer stays live. Only runs while there's an actual IN_PROGRESS entry to
+  // avoid a background interval when the panel is idle/finished.
+  useEffect(() => {
+    if (latestToolLog?.status !== 'IN_PROGRESS') return;
+    setNowTick(Date.now());
+    const interval = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [latestToolLog?.id, latestToolLog?.status]);
+
+  const latestStepElapsedMs = (() => {
+    if (latestToolLog?.status !== 'IN_PROGRESS' || !latestToolLog?.created_at) return 0;
+    const started = new Date(latestToolLog.created_at).getTime();
+    if (Number.isNaN(started)) return 0;
+    return Math.max(0, nowTick - started);
+  })();
+  const isLatestStepSlow = latestStepElapsedMs >= SLOW_STEP_THRESHOLD_MS;
+  const formatElapsed = (ms: number) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return minutes > 0 ? `${minutes}:${String(seconds).padStart(2, '0')}` : `${seconds}s`;
+  };
 
   // Recompute cursor pixel position whenever mousePos, zoom, or viewport size changes
   useEffect(() => {
@@ -577,7 +607,7 @@ export function BrowserPreview({
                 className="shrink-0 px-4 py-2 border-t border-border bg-card/60 backdrop-blur-sm flex items-center gap-2"
               >
                 {latestToolLog.status === 'IN_PROGRESS' ? (
-                  <Loader2 className="h-3 w-3 text-sky-400 animate-spin shrink-0" />
+                  <Loader2 className={cn("h-3 w-3 shrink-0 animate-spin", isLatestStepSlow ? "text-amber-400" : "text-sky-400")} />
                 ) : latestToolLog.status === 'FAILED' ? (
                   <AlertCircle className="h-3 w-3 text-amber-400 shrink-0" />
                 ) : (
@@ -589,6 +619,14 @@ export function BrowserPreview({
                     <span className="font-normal text-foreground/60"> — {latestActivityTarget}</span>
                   )}
                 </span>
+                {latestToolLog.status === 'IN_PROGRESS' && isLatestStepSlow && (
+                  <span className="ml-auto flex items-center gap-1.5 shrink-0 pl-2">
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-amber-400/90">Still working</span>
+                    <span className="text-[10px] font-bold tabular-nums text-amber-400/90 bg-amber-400/10 border border-amber-400/20 rounded px-1.5 py-0.5">
+                      {formatElapsed(latestStepElapsedMs)}
+                    </span>
+                  </span>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
