@@ -53,6 +53,31 @@ function getFriendlyToolLabel(toolName?: string | null): string {
   return match ? match.label : humanizeToolName(toolName);
 }
 
+// Pulls a short, human-readable target snippet (e.g. a button's text, a
+// field's label, or the URL being navigated to) out of a tool call's raw
+// arguments. Different MCP servers name these fields differently, so we try
+// a prioritized list of common keys rather than a single fixed shape.
+// Typing/selecting actions prioritize the *field* identifier over the typed
+// value, since the value itself (e.g. a password) isn't a useful "target".
+function getToolTargetDetail(toolName?: string | null, toolInput?: unknown): string | null {
+  if (!toolInput || typeof toolInput !== 'object') return null;
+  const input = toolInput as Record<string, unknown>;
+
+  const isTypingOrSelecting = !!toolName && /type|fill|input_text|input|select|dropdown|option/i.test(toolName);
+  const keysByPriority = isTypingOrSelecting
+    ? ['label', 'field', 'field_name', 'placeholder', 'name', 'aria_label', 'element_text', 'selector', 'element']
+    : ['text', 'button_text', 'label', 'element_text', 'aria_label', 'name', 'placeholder', 'selector', 'element', 'url'];
+
+  for (const key of keysByPriority) {
+    const value = input[key];
+    if (typeof value === 'string' && value.trim()) {
+      const trimmed = value.trim();
+      return trimmed.length > 40 ? `${trimmed.slice(0, 40)}…` : trimmed;
+    }
+  }
+  return null;
+}
+
 interface BrowserPreviewProps {
   frame: string | null;
   isActive: boolean;
@@ -103,6 +128,7 @@ export function BrowserPreview({
   // is always the most recent action — whether still running or finished.
   const latestToolLog = toolLogs.length > 0 ? toolLogs[toolLogs.length - 1] : null;
   const latestActivityLabel = getFriendlyToolLabel(latestToolLog?.tool_name);
+  const latestActivityTarget = getToolTargetDetail(latestToolLog?.tool_name, latestToolLog?.tool_input);
 
   // Recompute cursor pixel position whenever mousePos, zoom, or viewport size changes
   useEffect(() => {
@@ -559,6 +585,9 @@ export function BrowserPreview({
                 )}
                 <span className="text-[11px] font-semibold text-foreground/80 truncate">
                   {latestActivityLabel}
+                  {latestActivityTarget && (
+                    <span className="font-normal text-foreground/60"> — {latestActivityTarget}</span>
+                  )}
                 </span>
               </motion.div>
             )}
