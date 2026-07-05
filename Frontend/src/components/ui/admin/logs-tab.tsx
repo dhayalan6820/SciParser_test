@@ -11,9 +11,11 @@ import {
   Filter,
   ScrollText,
   Download,
+  Radio,
 } from "lucide-react";
 
 const LOG_PAGE_SIZE = 50;
+const LIVE_REFRESH_INTERVAL_MS = 7000;
 
 const LEVEL_STYLES: Record<string, string> = {
   ERROR: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400",
@@ -37,6 +39,8 @@ export const LogsTab: React.FC = () => {
 
   const [exporting, setExporting] = React.useState<"csv" | "json" | null>(null);
   const [exportError, setExportError] = React.useState<string | null>(null);
+
+  const [liveMode, setLiveMode] = React.useState(false);
 
   const totalPages = Math.max(1, Math.ceil(total / LOG_PAGE_SIZE));
 
@@ -83,6 +87,29 @@ export const LogsTab: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
+  // Auto-refresh while "Live" mode is on. Only polls while the admin is on
+  // the first page, so scrolling into older pages doesn't get disrupted by
+  // incoming rows.
+  React.useEffect(() => {
+    if (!liveMode || page !== 1) return;
+    const intervalId = window.setInterval(() => {
+      loadLogs(1);
+    }, LIVE_REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(intervalId);
+  }, [liveMode, page, loadLogs]);
+
+  // Live mode is only meant to reflect the current level/search filters.
+  // If the admin changes the date range (a bigger, more disruptive filter
+  // change) turn it off so results don't jump unexpectedly.
+  const prevDateFiltersRef = React.useRef({ startDate, endDate });
+  React.useEffect(() => {
+    const prev = prevDateFiltersRef.current;
+    if (prev.startDate !== startDate || prev.endDate !== endDate) {
+      setLiveMode(false);
+    }
+    prevDateFiltersRef.current = { startDate, endDate };
+  }, [startDate, endDate]);
+
   const applyFilters = () => {
     setPage(1);
     loadLogs(1);
@@ -123,6 +150,22 @@ export const LogsTab: React.FC = () => {
             <Filter className="h-4 w-4" /> Recent Log Lines
           </h3>
           <div className="flex items-center gap-2">
+            <Button
+              variant={liveMode ? "default" : "outline"}
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setLiveMode((v) => !v)}
+              title={
+                page !== 1
+                  ? "Live refresh only runs on the first page"
+                  : liveMode
+                  ? "Stop auto-refreshing logs"
+                  : "Auto-refresh logs every few seconds"
+              }
+            >
+              <Radio className={cn("h-3.5 w-3.5", liveMode && page === 1 && "animate-pulse")} />
+              {liveMode ? "Live" : "Go Live"}
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -168,10 +211,15 @@ export const LogsTab: React.FC = () => {
           <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="text-sm" />
           <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="text-sm" />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button size="sm" onClick={applyFilters}>Apply Filters</Button>
           <Button size="sm" variant="outline" onClick={clearFilters}>Clear</Button>
           {exportError && <span className="text-xs text-red-500">{exportError}</span>}
+          {liveMode && page !== 1 && (
+            <span className="text-xs text-amber-600 dark:text-amber-400">
+              Live refresh paused while viewing page {page}
+            </span>
+          )}
         </div>
 
         {loading ? (
