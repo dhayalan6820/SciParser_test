@@ -359,26 +359,36 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile,
             {/* Input area */}
             <div className="px-5 py-4 space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Proxy URL</label>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Proxy URL or curl command</label>
                 <div className="relative">
-                  <input
-                    type={proxyInputVisible ? "text" : "password"}
-                    value={proxyInput}
-                    onChange={(e) => { setProxyInput(e.target.value); setProxyError(null); }}
-                    onKeyDown={(e) => e.key === "Enter" && handleSaveProxy()}
-                    placeholder={proxyActive ? "Enter new URL to replace…" : "http://user:pass@proxy.host.com:port"}
-                    className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20 pr-10 font-mono transition-colors"
-                  />
+                  {proxyInputVisible ? (
+                    <textarea
+                      value={proxyInput}
+                      onChange={(e) => { setProxyInput(e.target.value); setProxyError(null); }}
+                      placeholder={proxyActive ? "Enter new URL or curl command to replace…" : "http://user:pass@proxy.host.com:port\nor: curl -x http://user:pass@host:port https://ipinfo.io"}
+                      rows={proxyInput.trim().toLowerCase().startsWith("curl") ? 3 : 1}
+                      className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20 pr-10 font-mono transition-colors resize-none"
+                    />
+                  ) : (
+                    <input
+                      type="password"
+                      value={proxyInput}
+                      onChange={(e) => { setProxyInput(e.target.value); setProxyError(null); }}
+                      onKeyDown={(e) => e.key === "Enter" && handleSaveProxy()}
+                      placeholder={proxyActive ? "Enter new URL to replace…" : "http://user:pass@proxy.host.com:port"}
+                      className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20 pr-10 font-mono transition-colors"
+                    />
+                  )}
                   <button
                     type="button"
                     onClick={() => setProxyInputVisible((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                    className="absolute right-3 top-3 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
                   >
                     {proxyInputVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
                 <p className="text-[11px] text-muted-foreground/60">
-                  Credentials are stored encrypted in the database and never logged.
+                  Paste a proxy URL (<code className="text-violet-400/80">http://user:pass@host:port</code>) or a full <code className="text-violet-400/80">curl -x ...</code> command — we'll extract the proxy automatically. Credentials are stored encrypted in the database and never logged.
                 </p>
               </div>
 

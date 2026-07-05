@@ -1783,13 +1783,58 @@ def _mask_proxy_url(proxy_url: str) -> str:
     return proxy_url
 
 
+def _extract_proxy_url_from_input(raw: str) -> str:
+    """Accept either a plain proxy URL or a `curl -x ...` command and return a usable proxy URL.
+
+    Supports common curl forms:
+      curl -x http://user:pass@host:port https://ipinfo.io
+      curl --proxy http://host:port -U user:pass https://ipinfo.io
+    """
+    from urllib.parse import urlparse as _urlparse
+
+    text = raw.strip()
+    if not text:
+        return text
+    if not re.match(r'^curl\b', text, re.IGNORECASE):
+        return text
+
+    flag_match = re.search(r'(?:-x|--proxy)\s+(?:"([^"]+)"|\'([^\']+)\'|(\S+))', text)
+    if not flag_match:
+        raise ValueError("Could not find a -x/--proxy flag in the curl command")
+    proxy_val = next(g for g in flag_match.groups() if g)
+
+    if "://" not in proxy_val:
+        proxy_val = "http://" + proxy_val
+
+    user_match = re.search(r'(?:-U|--proxy-user)\s+(?:"([^"]+)"|\'([^\']+)\'|(\S+))', text)
+    if user_match:
+        cred = next(g for g in user_match.groups() if g)
+        parsed = _urlparse(proxy_val)
+        if not parsed.username:
+            scheme = parsed.scheme or "http"
+            netloc = f"{cred}@{parsed.hostname}"
+            if parsed.port:
+                netloc += f":{parsed.port}"
+            proxy_val = f"{scheme}://{netloc}"
+
+    return proxy_val
+
+
 @app.post("/sciparser/v1/settings/proxy")
 async def set_proxy(req: Dict[str, Any], current_user: User = Depends(ChatService.get_current_user), db: AsyncSession = Depends(get_db)):
-    """Store a residential proxy URL for the current user's browser sessions (persisted to DB)."""
+    """Store a residential proxy URL for the current user's browser sessions (persisted to DB).
+
+    Accepts either a plain `http://user:pass@host:port` URL or a full `curl -x ...` command,
+    in which case the proxy URL (and `-U user:pass` credentials, if separate) are extracted.
+    """
     from urllib.parse import urlparse as _urlparse
-    proxy_url = (req.get("proxy_url") or "").strip()
-    if not proxy_url:
+    raw_input = (req.get("proxy_url") or "").strip()
+    if not raw_input:
         raise HTTPException(status_code=400, detail="proxy_url is required")
+    try:
+        proxy_url = _extract_proxy_url_from_input(raw_input)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     _parsed = _urlparse(proxy_url)
     if _parsed.scheme not in ("http", "https"):
         raise HTTPException(status_code=400, detail="proxy_url must use http or https scheme")
@@ -1850,13 +1895,17 @@ async def get_proxy_status(current_user: User = Depends(ChatService.get_current_
 
 @app.post("/sciparser/v1/settings/proxy/test")
 async def test_proxy(req: Dict[str, Any], current_user: User = Depends(ChatService.get_current_user)):
-    """Test a proxy URL by routing a request to an IP-check service through it."""
+    """Test a proxy URL (or curl -x command) by routing a request to an IP-check service through it."""
     proxy_url = (req.get("proxy_url") or "").strip()
     if not proxy_url:
         session = brain.session_manager.get_session(current_user.user_id)
         proxy_url = session.get("proxy_url") or ""
     if not proxy_url:
         raise HTTPException(status_code=400, detail="No proxy_url provided or saved")
+    try:
+        proxy_url = _extract_proxy_url_from_input(proxy_url)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     try:
         async with _httpx.AsyncClient(proxy=proxy_url, timeout=config.PROXY_TEST_TIMEOUT_SECONDS) as client:
             resp = await client.get(config.IP_CHECK_URL)
