@@ -16,6 +16,7 @@
 - [Credit deduction timing](credit-deduction-timing.md) — token-based credit billing sums AgentExecutionLog.token_usage once in a run's `finally` block, not per exit path; script-generation sub-flow not yet billed
 - [In-place message mutation breaks prefix caching](mutating-message-breaks-prefix-cache.md) — rewriting an earlier LLM message's content every turn invalidates provider caching for the entire history after it; append new context instead
 - [Domain-keyed episodic memory confounds A/B runs](episodic-memory-ab-confound.md) — MemoryEpisodic/Semantic are keyed by domain not chat_id; prior runs on the same domain change agent behavior/step count in later runs unless cleared first
+- [Uvicorn dictConfig closes pre-existing logging handlers](uvicorn-dictconfig-closes-handlers.md) — custom log handlers attached before uvicorn.run() get silently shut down by uvicorn's own logging.config.dictConfig() call
 - [MCP-only tool audits — what counts as a "tool"](mcp-only-tool-boundary.md) — scope "no non-MCP tools" audits to bind_tools/@tool/StructuredTool, not every function sharing a vendor name
 - [Recovery classifier fallback tracking](recovery-classifier-fallback-tracking.md) — deterministic pre-classifiers should log+count their None/fallback rate per key (e.g. domain) so drift is observable without new infra
 - [Verifying prompt-bloat risk without live LLM runs](verifying-prompt-bloat-offline.md) — when an API key/quota blocks a live run, reproduce the exact per-step pipeline offline and measure char/time deltas directly

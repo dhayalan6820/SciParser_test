@@ -609,6 +609,27 @@ async def _run_schedule_task(schedule_id: str, run_id: str) -> None:
     })
 
 
+async def _purge_old_app_logs() -> None:
+    """
+    Retention housekeeping for the `app_logs` table (Task #170): general
+    application logs are now persisted to the database instead of a
+    rotating file, so they need their own periodic purge to avoid
+    unbounded growth (a rotating file capped this automatically before).
+    Keeps the last 14 days of log rows.
+    """
+    from src.database.chat_db import AppLog
+    from sqlalchemy import delete
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=14)
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(delete(AppLog).where(AppLog.timestamp < cutoff))
+            await db.commit()
+            if result.rowcount:
+                logger.info(f"Purged {result.rowcount} app_logs row(s) older than 14 days.")
+    except Exception as e:
+        logger.error(f"_purge_old_app_logs error: {e}")
+
+
 async def _load_and_schedule_all() -> None:
     """Load all non-manual active schedules from DB and register APScheduler jobs."""
     from src.database.chat_db import Schedule as ScheduleModel
@@ -639,6 +660,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to initialize brain during startup: {e}")
     _scheduler.start()
+    _scheduler.add_job(
+        _purge_old_app_logs,
+        trigger=CronTrigger(hour=3, minute=0, timezone="UTC"),
+        id="purge_old_app_logs",
+        misfire_grace_time=3600,
+    )
     asyncio.create_task(_load_and_schedule_all())
     yield
     _scheduler.shutdown(wait=False)

@@ -302,6 +302,26 @@ class MemoryProcedural(Base):
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
+class AppLog(Base):
+    """
+    General application log lines (info/warning/error emitted via the
+    `sciparser` logger), persisted to the database instead of a rotating
+    log file. This is distinct from the structured execution-tracking
+    tables above (AgentExecutionLog/ToolExecutionLog/LoginEvent/ScheduleRun),
+    which capture domain-specific events rather than free-form log messages.
+    """
+    __tablename__ = "app_logs"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    timestamp = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc), index=True, nullable=False)
+    level = Column(String(20), nullable=False, index=True)
+    logger_name = Column(String(100), nullable=False)
+    message = Column(Text, nullable=False)
+    module = Column(String(255), nullable=True)
+    func_name = Column(String(255), nullable=True)
+    line_no = Column(Integer, nullable=True)
+
+
 class MemoryReflection(Base):
     """Lessons distilled from failures and successes."""
     __tablename__ = "memory_reflection"
