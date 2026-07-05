@@ -294,7 +294,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile,
                     <textarea
                       value={proxyInput}
                       onChange={(e) => { setProxyInput(e.target.value); setProxyError(null); }}
-                      placeholder={proxyActive ? "Enter new URL or curl command to replace…" : "http://user:pass@proxy.host.com:port\nor: curl -x http://user:pass@host:port https://ipinfo.io"}
+                      placeholder={proxyActive ? "Enter new URL or curl command to replace…" : "http://user:pass@proxy.host.com:port\nor: curl -x http://user:pass@host:port https://ipinfo.io\n(not: curl POST commands that create proxies)"}
                       rows={proxyInput.trim().toLowerCase().startsWith("curl") ? 3 : 1}
                       className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20 pr-10 font-mono transition-colors resize-none"
                     />

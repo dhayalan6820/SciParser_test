@@ -1798,9 +1798,26 @@ def _extract_proxy_url_from_input(raw: str) -> str:
     if not re.match(r'^curl\b', text, re.IGNORECASE):
         return text
 
+    # Detect proxy-creation / API calls (not proxy-usage commands)
+    if re.search(r'(?:--data|\\-d)\b', text, re.IGNORECASE):
+        raise ValueError(
+            "This curl command looks like an API request (it has --data). "
+            "Please paste the proxy URL returned by the API, not the command that creates it. "
+            "The proxy URL looks like: http://user:pass@host:port"
+        )
+    if re.search(r'\\--request\s+POST', text, re.IGNORECASE):
+        raise ValueError(
+            "This curl command is a POST request (not a proxy usage command). "
+            "Please paste the proxy URL returned by the API, not the command that creates it. "
+            "The proxy URL looks like: http://user:pass@host:port"
+        )
+
     flag_match = re.search(r'(?:-x|--proxy)\s+(?:"([^"]+)"|\'([^\']+)\'|(\S+))', text)
     if not flag_match:
-        raise ValueError("Could not find a -x/--proxy flag in the curl command")
+        raise ValueError(
+            "Could not find a -x/--proxy flag in the curl command. "
+            "Make sure you paste a command that uses a proxy, not a proxy-creation API request."
+        )
     proxy_val = next(g for g in flag_match.groups() if g)
 
     if "://" not in proxy_val:
