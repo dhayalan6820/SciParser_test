@@ -37,6 +37,7 @@ const PROXY_PROVIDERS = [
   { name: "Oxylabs", example: "http://user:pass@pr.oxylabs.io:7777" },
   { name: "Smartproxy", example: "http://user:pass@gate.smartproxy.com:7000" },
   { name: "IPRoyal", example: "http://user:pass@geo.iproyal.com:12321" },
+  { name: "FloppyData", example: "http://user-...-rotation-15:pass@geo.g-w.info:10080" },
 ];
 
 export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile, activeThreadId, onResetSession }) => {
