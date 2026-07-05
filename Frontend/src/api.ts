@@ -592,20 +592,20 @@ export const sciparserApi = {
     return res.json() as Promise<{ active: boolean; proxy_url_masked: string | null }>;
   },
 
-  testProxy: async (proxyUrl?: string) => {
+  testProxy: async (proxyUrl?: string, testUrl?: string) => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
     const res = await fetch(`${BASE_URL}/sciparser/v1/settings/proxy/test`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: formattedToken },
-      body: JSON.stringify({ proxy_url: proxyUrl || "" }),
+      body: JSON.stringify({ proxy_url: proxyUrl || "", test_url: testUrl || "" }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || "Proxy test failed");
     }
-    return res.json() as Promise<{ status: string; exit_ip: string }>;
+    return res.json() as Promise<{ status: string; exit_ip: string; tested_url?: string }>;
   },
 
   // FloppyData API key

@@ -55,7 +55,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile,
   const [proxyError, setProxyError] = React.useState<string | null>(null);
   const [proxySaved, setProxySaved] = React.useState(false);
   const [proxyTesting, setProxyTesting] = React.useState(false);
-  const [proxyTestResult, setProxyTestResult] = React.useState<{ ip: string } | null>(null);
+  const [proxyTestResult, setProxyTestResult] = React.useState<{ ip: string; testedUrl?: string } | null>(null);
+  const [proxyTestUrl, setProxyTestUrl] = React.useState("");
+  const [showTestUrlInput, setShowTestUrlInput] = React.useState(false);
   const [proxyTestError, setProxyTestError] = React.useState<string | null>(null);
   const [showProviderHint, setShowProviderHint] = React.useState(false);
   const [loadingStatus, setLoadingStatus] = React.useState(true);
@@ -213,8 +215,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile,
     setProxyTestResult(null);
     setProxyTestError(null);
     try {
-      const res = await sciparserApi.testProxy(proxyInput.trim() || undefined);
-      setProxyTestResult({ ip: res.exit_ip });
+      const res = await sciparserApi.testProxy(proxyInput.trim() || undefined, proxyTestUrl.trim() || undefined);
+      setProxyTestResult({ ip: res.exit_ip, testedUrl: res.tested_url });
     } catch (err: any) {
       setProxyTestError(err.message || "Proxy test failed");
     } finally {
@@ -392,6 +394,44 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile,
                 </p>
               </div>
 
+              {/* Dynamic test target */}
+              <div className="border-t border-border pt-3.5">
+                <button
+                  type="button"
+                  onClick={() => setShowTestUrlInput((v) => !v)}
+                  className="flex items-center justify-between w-full text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <FlaskConical className="h-3.5 w-3.5" />
+                    Test against a specific site (optional)
+                  </span>
+                  <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", showTestUrlInput && "rotate-90")} />
+                </button>
+                <AnimatePresence>
+                  {showTestUrlInput && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="pt-2.5 space-y-1.5">
+                        <input
+                          type="text"
+                          value={proxyTestUrl}
+                          onChange={(e) => setProxyTestUrl(e.target.value)}
+                          placeholder="https://target-site.com (defaults to an IP-check service)"
+                          className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20 font-mono transition-colors"
+                        />
+                        <p className="text-[11px] text-muted-foreground/60">
+                          By default the test tries a chain of IP-check services (not tied to one site). Enter a URL here to verify reachability against the actual target you plan to scrape instead.
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
               {/* Error / success */}
               <AnimatePresence>
                 {proxyError && (
@@ -421,6 +461,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile,
                     <div>
                       <p className="text-xs font-semibold text-violet-300">Proxy working</p>
                       <p className="text-[11px] text-muted-foreground font-mono mt-0.5">Exit IP: {proxyTestResult.ip}</p>
+                      {proxyTestResult.testedUrl && (
+                        <p className="text-[10px] text-muted-foreground/60 font-mono mt-0.5 truncate">via {proxyTestResult.testedUrl}</p>
+                      )}
                     </div>
                   </motion.div>
                 )}

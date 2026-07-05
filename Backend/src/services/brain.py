@@ -1910,12 +1910,22 @@ class Brain:
                     return url
 
                 try:
-                    async with httpx.AsyncClient(proxy=_proxy_url_preflight, timeout=config.PROXY_TEST_TIMEOUT_SECONDS) as _pc:
-                        _ip_resp = await _pc.get(config.IP_CHECK_URL)
-                    _ip_resp.raise_for_status()
-                    _exit_ip = _ip_resp.json().get("ip")
+                    _exit_ip = None
+                    _pf_last_exc = None
+                    for _pf_url in (config.IP_CHECK_URLS or [config.IP_CHECK_URL]):
+                        try:
+                            async with httpx.AsyncClient(proxy=_proxy_url_preflight, timeout=config.PROXY_TEST_TIMEOUT_SECONDS) as _pc:
+                                _ip_resp = await _pc.get(_pf_url)
+                            _ip_resp.raise_for_status()
+                            _ip_data = _ip_resp.json()
+                            _exit_ip = _ip_data.get("ip") or _ip_data.get("origin") or _ip_data.get("query")
+                            if _exit_ip:
+                                break
+                        except Exception as _pf_exc:
+                            _pf_last_exc = _pf_exc
+                            continue
                     if not _exit_ip:
-                        raise ValueError("No IP in ipify response")
+                        raise ValueError(f"No IP found across {len(config.IP_CHECK_URLS or [config.IP_CHECK_URL])} check endpoint(s): {_pf_last_exc}")
                     logger.info(f"Proxy pre-flight OK for user {user_id} — exit IP: {_exit_ip}")
                     if self.stream_manager:
                         await self.stream_manager.broadcast_thought(

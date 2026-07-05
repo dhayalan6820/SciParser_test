@@ -218,3 +218,14 @@ def browser_use_own_browser() -> bool:
 # ---------------------------------------------------------------------------
 IP_CHECK_URL = _str("IP_CHECK_URL", "https://api.ipify.org?format=json")
 DEFAULT_TARGET_DOMAIN = _str("DEFAULT_TARGET_DOMAIN", "google.com")
+
+# Fallback chain of IP-check services used when testing a proxy. Not every
+# provider/network can reach every one of these, so the proxy test tries them
+# in order rather than hard-failing against a single site. Can be overridden
+# with a comma-separated IP_CHECK_URLS env var.
+IP_CHECK_URLS = [
+    u.strip() for u in _str(
+        "IP_CHECK_URLS",
+        "https://api.ipify.org?format=json,https://ipinfo.io/json,https://ifconfig.me/all.json,https://httpbin.org/ip",
+    ).split(",") if u.strip()
+]

@@ -1893,10 +1893,50 @@ async def get_proxy_status(current_user: User = Depends(ChatService.get_current_
     return {"active": proxy_url is not None, "proxy_url_masked": masked}
 
 
+def _extract_ip_from_response(resp: "_httpx.Response") -> str:
+    """Best-effort extraction of an IP address from a variety of IP-check API response shapes."""
+    try:
+        data = resp.json()
+    except Exception:
+        return (resp.text or "").strip()[:64] or "unknown"
+    if isinstance(data, dict):
+        for key in ("ip", "origin", "query", "YourFcIp"):
+            if data.get(key):
+                return str(data[key]).split(",")[0].strip()
+    return "unknown"
+
+
+async def _test_proxy_dynamic(proxy_url: str, test_url: Optional[str] = None) -> Dict[str, Any]:
+    """Route a request through `proxy_url` to verify it works.
+
+    If `test_url` is given, only that target is tried (fully dynamic — any site works).
+    Otherwise falls back through a configurable chain of IP-check services
+    (config.IP_CHECK_URLS) so the check isn't tied to a single third-party site.
+    """
+    candidates = [test_url] if test_url else list(config.IP_CHECK_URLS or [config.IP_CHECK_URL])
+    last_exc: Optional[Exception] = None
+    for url in candidates:
+        try:
+            async with _httpx.AsyncClient(proxy=proxy_url, timeout=config.PROXY_TEST_TIMEOUT_SECONDS) as client:
+                resp = await client.get(url)
+            resp.raise_for_status()
+            return {"status": "ok", "exit_ip": _extract_ip_from_response(resp), "tested_url": url}
+        except Exception as exc:
+            last_exc = exc
+            continue
+    raise RuntimeError(f"failed against all {len(candidates)} target(s): {last_exc}")
+
+
 @app.post("/sciparser/v1/settings/proxy/test")
 async def test_proxy(req: Dict[str, Any], current_user: User = Depends(ChatService.get_current_user)):
-    """Test a proxy URL (or curl -x command) by routing a request to an IP-check service through it."""
+    """Test a proxy URL (or curl -x command) by routing a request through it.
+
+    Optionally accepts `test_url` so the check isn't limited to a single hardcoded
+    site — pass any URL (e.g. the target site you actually plan to scrape) and it
+    will be used instead of the default IP-check fallback chain.
+    """
     proxy_url = (req.get("proxy_url") or "").strip()
+    test_url = (req.get("test_url") or "").strip() or None
     if not proxy_url:
         session = brain.session_manager.get_session(current_user.user_id)
         proxy_url = session.get("proxy_url") or ""
@@ -1907,10 +1947,7 @@ async def test_proxy(req: Dict[str, Any], current_user: User = Depends(ChatServi
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     try:
-        async with _httpx.AsyncClient(proxy=proxy_url, timeout=config.PROXY_TEST_TIMEOUT_SECONDS) as client:
-            resp = await client.get(config.IP_CHECK_URL)
-        data = resp.json()
-        return {"status": "ok", "exit_ip": data.get("ip", "unknown")}
+        return await _test_proxy_dynamic(proxy_url, test_url)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Proxy test failed: {exc}")
 
