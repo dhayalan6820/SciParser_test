@@ -36,7 +36,7 @@
   },
   "browser": {
     "engine_env": "BROWSER_ENGINE",
-    "default_engine": "camoufox",
+    "default_engine": "chrome",
     "default_cdp_host_env": "BROWSER_DEFAULT_CDP_HOST",
     "default_cdp_port_env": "BROWSER_DEFAULT_CDP_PORT",
     "headless_default_env": "BROWSER_USE_HEADLESS",
