@@ -1,0 +1,52 @@
+2026-07-06 13:26:44 | INFO     | sciparser | Task for chat_id thread-4ac0c6bd-0cf1-4242-96d6-70aa8746fab7 unwound via CancelledError (stop message already in DB)
+2026-07-06 13:26:46 | INFO     | sciparser | [User 9638739e-d981-4870-91ca-8f24f4c8157c] Browser process closed.
+2026-07-06 13:26:46 | INFO     | sciparser | Browser closed for user 9638739e-d981-4870-91ca-8f24f4c8157c via stop_process.
+2026-07-06 13:26:46 | INFO     | sciparser | Stop message persisted to DB for chat_id thread-4ac0c6bd-0cf1-4242-96d6-70aa8746fab7
+2026-07-06 13:26:55 | INFO     | httpx | HTTP Request: POST https://app.crewai.com/crewai_plus/api/v1/tracing/ephemeral/batches "HTTP/1.1 201 Created"
+2026-07-06 13:26:57 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-06 13:26:57 | INFO     | root | OpenAI API usage: {'prompt_tokens': 961, 'completion_tokens': 72, 'total_tokens': 1033, 'cached_prompt_tokens': 0, 'reasoning_tokens': 0}
+2026-07-06 13:26:58 | INFO     | sciparser | [Memory] Injecting 659 chars for domain 'general'
+2026-07-06 13:26:58 | INFO     | sciparser | Preparing MCP manager for user 9638739e-d981-4870-91ca-8f24f4c8157c on port 58249...
+2026-07-06 13:26:58 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server connecting to http://localhost:58249...
+2026-07-06 13:27:00 | INFO     | httpx | HTTP Request: POST https://app.crewai.com/crewai_plus/api/v1/tracing/ephemeral/batches/9abcfdfa-183a-4a7d-a3c4-cd081b1d1cc4/events "HTTP/1.1 200 OK"
+2026-07-06 13:27:01 | INFO     | httpx | HTTP Request: PATCH https://app.crewai.com/crewai_plus/api/v1/tracing/ephemeral/batches/9abcfdfa-183a-4a7d-a3c4-cd081b1d1cc4/finalize "HTTP/1.1 200 OK"
+2026-07-06 13:27:01 | INFO     | crewai_core.settings | Using config path: C:\Users\DhayalanPanneerselva\.config\crewai\settings.json
+2026-07-06 13:27:27 | INFO     | src.agents.mcp_agent | >>> MCP Session Ready. 16 tools active.
+2026-07-06 13:27:27 | INFO     | sciparser | Discovered 16 tools for execution.
+2026-07-06 13:27:27 | INFO     | sciparser | [Cooperative cancel] Exiting process loop for chat_id thread-4ac0c6bd-0cf1-4242-96d6-70aa8746fab7
+2026-07-06 13:27:27 | INFO     | sciparser | Starting raw-CDP screenshot stream: user=9638739e-d981-4870-91ca-8f24f4c8157c chat=thread-4ac0c6bd-0cf1-4242-96d6-70aa8746fab7 port=58249
+2026-07-06 13:27:29 | INFO     | sciparser | [Memory] Stored FAIL episode for domain 'general'
+2026-07-06 13:27:29 | INFO     | sciparser | Task for chat_id thread-4ac0c6bd-0cf1-4242-96d6-70aa8746fab7 unwound via CancelledError (stop message already in DB)
+2026-07-06 13:27:39 | INFO     | httpx | HTTP Request: POST https://app.crewai.com/crewai_plus/api/v1/tracing/ephemeral/batches "HTTP/1.1 201 Created"
+2026-07-06 13:27:41 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-06 13:27:41 | INFO     | root | OpenAI API usage: {'prompt_tokens': 961, 'completion_tokens': 56, 'total_tokens': 1017, 'cached_prompt_tokens': 0, 'reasoning_tokens': 0}
+2026-07-06 13:27:42 | INFO     | sciparser | [Memory] Injecting 716 chars for domain 'general'
+2026-07-06 13:27:42 | INFO     | sciparser | Discovered 16 tools for execution.
+2026-07-06 13:27:42 | INFO     | sciparser | Starting raw-CDP screenshot stream: user=9638739e-d981-4870-91ca-8f24f4c8157c chat=thread-4ac0c6bd-0cf1-4242-96d6-70aa8746fab7 port=58249
+2026-07-06 13:27:42 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-07-06 13:27:44 | INFO     | httpx | HTTP Request: POST https://app.crewai.com/crewai_plus/api/v1/tracing/ephemeral/batches/ea4937c9-05f9-40ef-b808-92732f278640/events "HTTP/1.1 200 OK"
+2026-07-06 13:27:44 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-06 13:27:46 | INFO     | httpx | HTTP Request: PATCH https://app.crewai.com/crewai_plus/api/v1/tracing/ephemeral/batches/ea4937c9-05f9-40ef-b808-92732f278640/finalize "HTTP/1.1 200 OK"
+2026-07-06 13:27:46 | INFO     | crewai_core.settings | Using config path: C:\Users\DhayalanPanneerselva\.config\crewai\settings.json
+2026-07-06 13:27:47 | INFO     | root | OpenAI API usage: {'prompt_tokens': 484, 'completion_tokens': 474, 'total_tokens': 958, 'cached_prompt_tokens': 0, 'reasoning_tokens': 0}
+2026-07-06 13:27:49 | INFO     | httpx | HTTP Request: POST https://app.crewai.com/crewai_plus/api/v1/tracing/ephemeral/batches "HTTP/1.1 201 Created"
+2026-07-06 13:27:54 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-06 13:27:56 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-06 13:28:06 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-06 13:28:17 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-06 13:28:21 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-06 13:28:23 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-06 13:28:26 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-06 13:28:28 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-06 13:28:33 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-06 13:28:36 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-06 13:28:38 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-06 13:28:41 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-06 13:28:41 | INFO     | sciparser | Last WS for thread-4ac0c6bd-0cf1-4242-96d6-70aa8746fab7 closed — auto-cancelling agent task.
+2026-07-06 13:28:41 | INFO     | sciparser | Cancellation signal sent to task for chat_id thread-4ac0c6bd-0cf1-4242-96d6-70aa8746fab7
+2026-07-06 13:28:41 | INFO     | src.agents.mcp_agent | >>> Closing MCP Session for http://localhost:58249...
+2026-07-06 13:28:43 | INFO     | sciparser | [User 9638739e-d981-4870-91ca-8f24f4c8157c] Browser process closed.
+2026-07-06 13:28:43 | INFO     | sciparser | Browser closed for user 9638739e-d981-4870-91ca-8f24f4c8157c via stop_process.
+2026-07-06 13:28:43 | INFO     | sciparser | [Memory] Stored FAIL episode for domain 'general'
+2026-07-06 13:28:43 | INFO     | sciparser | Task for chat_id thread-4ac0c6bd-0cf1-4242-96d6-70aa8746fab7 unwound via CancelledError (stop message already in DB)
+2026-07-06 13:28:44 | INFO     | sciparser | Session for user 9638739e-d981-4870-91ca-8f24f4c8157c fully cleaned up.

@@ -261,14 +261,12 @@ async def _ff_click(args: dict) -> str:
     try:
         if cx is not None and cy is not None:
             await page.mouse.click(int(cx), int(cy))
-            _write_mouse_state(float(cx), float(cy), "click")
             return f"Clicked at ({cx}, {cy})"
         if idx is not None:
             idx = int(idx)
             el = _CAMOUFOX_ELEMENTS.get(idx)
             if el:
                 await page.mouse.click(el["cx"], el["cy"])
-                _write_mouse_state(float(el["cx"]), float(el["cy"]), "click")
                 return f"Clicked [{idx}] <{el.get('tag','?')}> {el.get('text','')[:40]}"
             return f"Error: element index {idx} not found — call browser_get_state first"
         return "Error: provide index or coordinate_x+coordinate_y"
@@ -288,7 +286,6 @@ async def _ff_type(args: dict) -> str:
             el = _CAMOUFOX_ELEMENTS.get(int(idx))
             if el:
                 await page.mouse.click(el["cx"], el["cy"])
-                _write_mouse_state(float(el["cx"]), float(el["cy"]), "click")
                 await asyncio.sleep(0.1)
         await page.keyboard.type(text, delay=30)
         return f"Typed: {text[:60]}"
@@ -369,7 +366,6 @@ async def _ff_scroll(args: dict) -> str:
     try:
         if cx is not None and cy is not None:
             await page.mouse.move(int(cx), int(cy))
-            _write_mouse_state(float(cx), float(cy), "move")
         if direction == "down":
             await page.mouse.wheel(0, delta)
         elif direction == "up":
@@ -483,162 +479,6 @@ async def _ff_key_press(args: dict) -> str:
         return f"Pressed key: {key}"
     except Exception as exc:
         return f"Error pressing key '{key}': {exc}"
-
-
-async def _ff_hover(args: dict) -> str:
-    """Firefox-native hover — uses Playwright page.mouse.move()."""
-    page = _camoufox_page()
-    if not page:
-        return "Error: No active camoufox page"
-    cx = args.get("coordinate_x")
-    cy = args.get("coordinate_y")
-    idx = args.get("index")
-    try:
-        if cx is not None and cy is not None:
-            await page.mouse.move(int(cx), int(cy))
-            _write_mouse_state(float(cx), float(cy), "move")
-            return f"Hovered at ({cx}, {cy})"
-        if idx is not None:
-            el = _CAMOUFOX_ELEMENTS.get(int(idx))
-            if el:
-                await page.mouse.move(el["cx"], el["cy"])
-                _write_mouse_state(float(el["cx"]), float(el["cy"]), "move")
-                return f"Hovered over element [{idx}] at ({el['cx']}, {el['cy']})"
-            return f"Error: element {idx} not found — call browser_get_state first"
-        return "Error: provide index or coordinate_x+coordinate_y"
-    except Exception as exc:
-        return f"Error hovering: {exc}"
-
-
-async def _ff_drag(args: dict) -> str:
-    """Firefox-native drag — uses Playwright mouse down/move/up sequence."""
-    page = _camoufox_page()
-    if not page:
-        return "Error: No active camoufox page"
-    try:
-        fx, fy = int(args["from_x"]), int(args["from_y"])
-        tx, ty = int(args["to_x"]),   int(args["to_y"])
-        steps = max(5, min(50, int(args.get("steps", 15))))
-        _write_mouse_state(float(fx), float(fy), "move")
-        await page.mouse.move(fx, fy)
-        await asyncio.sleep(0.08)
-        await page.mouse.down()
-        await asyncio.sleep(0.05)
-        for i in range(1, steps + 1):
-            ix = int(fx + (tx - fx) * i / steps)
-            iy = int(fy + (ty - fy) * i / steps)
-            _write_mouse_state(float(ix), float(iy), "move")
-            await page.mouse.move(ix, iy)
-            await asyncio.sleep(0.02)
-        _write_mouse_state(float(tx), float(ty), "move")
-        await page.mouse.up()
-        return f"Dragged ({fx},{fy}) → ({tx},{ty}) in {steps} steps"
-    except Exception as exc:
-        return f"Error dragging: {exc}"
-
-# ---------------------------------------------------------------------------
-# Mouse-state temp file — shared with brain.py for cursor compositing
-# ---------------------------------------------------------------------------
-
-_MOUSE_STATE_PATH: str = ""  # set once in run_bridge() from CDP port
-_last_mouse_xy: tuple = (0.0, 0.0)  # updated on every write for mouse.down() tracking
-
-
-def _write_mouse_state(x: float, y: float, event: str, vp_w: int = 1280, vp_h: int = 800) -> None:
-    """Write current mouse position to a temp file so brain.py can composite it."""
-    global _last_mouse_xy
-    _last_mouse_xy = (x, y)
-    if not _MOUSE_STATE_PATH:
-        return
-    try:
-        Path(_MOUSE_STATE_PATH).write_text(json.dumps({
-            "x": x, "y": y, "event": event,
-            "ts": time.time(), "vpW": vp_w, "vpH": vp_h,
-        }))
-    except Exception:
-        pass
-
-
-def _write_mouse_click_at_last_pos() -> None:
-    """Write a 'click' event at the last known mouse position (used for mouse.down)."""
-    x, y = _last_mouse_xy
-    _write_mouse_state(x, y, "click")
-
-
-def _apply_mouse_patch(mouse: object) -> None:
-    """Monkey-patch move/click/down on a Playwright Mouse object for cursor tracking."""
-    if getattr(mouse, "_cursor_patched", False):
-        return
-    orig_move  = mouse.move   # type: ignore[attr-defined]
-    orig_click = mouse.click  # type: ignore[attr-defined]
-    orig_down  = mouse.down   # type: ignore[attr-defined]
-
-    async def _m_move(x: float, y: float, **kw):
-        _write_mouse_state(float(x), float(y), "move")
-        return await orig_move(x, y, **kw)
-
-    async def _m_click(x: float, y: float, **kw):
-        _write_mouse_state(float(x), float(y), "click")
-        return await orig_click(x, y, **kw)
-
-    async def _m_down(**kw):
-        _write_mouse_click_at_last_pos()
-        return await orig_down(**kw)
-
-    mouse.move  = _m_move   # type: ignore[attr-defined]
-    mouse.click = _m_click  # type: ignore[attr-defined]
-    mouse.down  = _m_down   # type: ignore[attr-defined]
-    mouse._cursor_patched = True  # type: ignore[attr-defined]
-    print("Bridge: Playwright page.mouse patched for cursor tracking", file=sys.stderr)
-
-
-async def _patch_page_mouse(page: object) -> None:
-    """Extract mouse from a page (handles both property and async-method patterns)."""
-    try:
-        mouse = None
-        # browser_use may wrap page.mouse as an async method
-        raw_mouse = getattr(page, "mouse", None)
-        if raw_mouse is not None:
-            if callable(raw_mouse) and not hasattr(raw_mouse, "move"):
-                # Looks like an async method — await it
-                try:
-                    mouse = await raw_mouse()
-                except Exception:
-                    mouse = None
-            elif hasattr(raw_mouse, "move"):
-                mouse = raw_mouse
-        if mouse:
-            _apply_mouse_patch(mouse)
-    except Exception as exc:
-        print(f"Bridge: _patch_page_mouse failed: {exc}", file=sys.stderr)
-
-
-async def _patch_session_mouse(session: object) -> None:
-    """
-    After BrowserSession.start(), patch the active page's mouse and hook
-    the browser context so future pages are patched automatically.
-    """
-    try:
-        # Patch the current page
-        get_page = getattr(session, "get_current_page", None)
-        if callable(get_page):
-            page = await get_page()
-            if page:
-                await _patch_page_mouse(page)
-
-        # Hook context so every new page is also patched
-        ctx = (
-            getattr(session, "context", None)
-            or getattr(session, "browser_context", None)
-            or getattr(session, "_context", None)
-        )
-        if ctx and hasattr(ctx, "on"):
-            def _on_new_page(pg):
-                asyncio.create_task(_patch_page_mouse(pg))
-            ctx.on("page", _on_new_page)
-            print("Bridge: page-creation hook registered for cursor tracking", file=sys.stderr)
-    except Exception as exc:
-        print(f"Bridge: _patch_session_mouse failed: {exc}", file=sys.stderr)
 
 
 async def _patch_session_stealth(session: object) -> None:
@@ -913,12 +753,6 @@ def _patch_mcp_server_session_retry(chrome_ready: asyncio.Event, cdp_url: str, h
             # before any content loads (must be done before any navigation).
             await _patch_session_stealth(session)
 
-            # Patch page.mouse so ALL Playwright mouse ops emit cursor events.
-            # Await the initial page patch before returning so early tool calls
-            # don't race ahead before the patch is applied; the context hook for
-            # future pages is registered inside _patch_session_mouse.
-            await _patch_session_mouse(session)
-
             # Track session for management (same as original)
             if hasattr(self, '_track_session'):
                 self._track_session(session)
@@ -994,31 +828,6 @@ def _patch_add_human_tools() -> None:
             },
         ),
         mcp_types.Tool(
-            name="browser_hover",
-            description=(
-                "Move the mouse cursor to an element or pixel coordinates WITHOUT clicking. "
-                "Use to: reveal hover-only menus/tooltips, pre-position cursor before drag, "
-                "or trigger CSS :hover effects that reveal a submit button."
-            ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "coordinate_x": {
-                        "type": "integer",
-                        "description": "X pixel coordinate (use with coordinate_y). Provide this OR index.",
-                    },
-                    "coordinate_y": {
-                        "type": "integer",
-                        "description": "Y pixel coordinate (use with coordinate_x).",
-                    },
-                    "index": {
-                        "type": "integer",
-                        "description": "Element index from browser_get_state. Provide this OR coordinate_x+coordinate_y.",
-                    },
-                },
-            },
-        ),
-        mcp_types.Tool(
             name="browser_wait",
             description=(
                 "Pause execution for a specified number of milliseconds. "
@@ -1034,28 +843,6 @@ def _patch_add_human_tools() -> None:
                         "default": 500,
                     }
                 },
-            },
-        ),
-        mcp_types.Tool(
-            name="browser_drag",
-            description=(
-                "Click-and-drag from one set of pixel coordinates to another. "
-                "Use for sliders, range inputs, drag-to-reorder lists, and drawing."
-            ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "from_x": {"type": "integer", "description": "Starting X coordinate."},
-                    "from_y": {"type": "integer", "description": "Starting Y coordinate."},
-                    "to_x": {"type": "integer", "description": "Ending X coordinate."},
-                    "to_y": {"type": "integer", "description": "Ending Y coordinate."},
-                    "steps": {
-                        "type": "integer",
-                        "description": "Number of intermediate mouse-move steps (smoother = more steps). Default 15.",
-                        "default": 15,
-                    },
-                },
-                "required": ["from_x", "from_y", "to_x", "to_y"],
             },
         ),
     ]
@@ -1075,80 +862,10 @@ def _patch_add_human_tools() -> None:
         except Exception as exc:
             return f"Error pressing key '{key}': {exc}"
 
-    async def _exec_hover(srv, args: dict) -> str:
-        if not srv.browser_session:
-            return "Error: No browser session active"
-        cx = args.get("coordinate_x")
-        cy = args.get("coordinate_y")
-        idx = args.get("index")
-        try:
-            page = await srv.browser_session.get_current_page()
-            if page is None:
-                return "Error: No active page"
-            mouse = await page.mouse()
-
-            if cx is not None and cy is not None:
-                await mouse.move(int(cx), int(cy))
-                _write_mouse_state(float(cx), float(cy), "move")
-                return f"Hovered at ({cx}, {cy})"
-
-            if idx is not None:
-                element = await srv.browser_session.get_dom_element_by_index(idx)
-                if not element:
-                    return f"Error: Element {idx} not found"
-                # Try common coordinate attributes on DOMElementNode
-                coords = (
-                    getattr(element, "viewport_coordinates", None)
-                    or getattr(element, "center", None)
-                )
-                if coords is not None:
-                    if hasattr(coords, "x"):
-                        x, y = int(coords.x), int(coords.y)
-                    elif hasattr(coords, "__iter__"):
-                        x, y = int(coords[0]), int(coords[1])
-                    else:
-                        return f"Error: Cannot read coordinates for element {idx}"
-                    await mouse.move(x, y)
-                    _write_mouse_state(float(x), float(y), "move")
-                    return f"Hovered over element {idx} at ({x}, {y})"
-                return f"Error: Cannot determine coordinates for element {idx}"
-
-            return "Error: Provide index or coordinate_x+coordinate_y"
-        except Exception as exc:
-            return f"Error hovering: {exc}"
-
     async def _exec_wait(srv, args: dict) -> str:
         ms = max(50, min(8000, int(args.get("milliseconds", 500))))
         await asyncio.sleep(ms / 1000.0)
         return f"Waited {ms} ms"
-
-    async def _exec_drag(srv, args: dict) -> str:
-        if not srv.browser_session:
-            return "Error: No browser session active"
-        fx, fy = int(args["from_x"]), int(args["from_y"])
-        tx, ty = int(args["to_x"]),   int(args["to_y"])
-        steps = max(5, min(50, int(args.get("steps", 15))))
-        try:
-            page = await srv.browser_session.get_current_page()
-            if page is None:
-                return "Error: No active page"
-            mouse = await page.mouse()
-            _write_mouse_state(float(fx), float(fy), "move")
-            await mouse.move(fx, fy)
-            await asyncio.sleep(0.08)
-            await mouse.down()
-            await asyncio.sleep(0.05)
-            for i in range(1, steps + 1):
-                ix = int(fx + (tx - fx) * i / steps)
-                iy = int(fy + (ty - fy) * i / steps)
-                _write_mouse_state(float(ix), float(iy), "move")
-                await mouse.move(ix, iy)
-                await asyncio.sleep(0.02)
-            _write_mouse_state(float(tx), float(ty), "move")
-            await mouse.up()
-            return f"Dragged from ({fx}, {fy}) to ({tx}, {ty})"
-        except Exception as exc:
-            return f"Error dragging: {exc}"
 
     # ── Patch 1: _execute_tool routing ────────────────────────────────────
     _orig_execute = BrowserUseServer._execute_tool
@@ -1197,59 +914,17 @@ def _patch_add_human_tools() -> None:
             # Custom tools: use Firefox-native implementations (no BrowserSession needed)
             if tool_name == "browser_key_press":
                 return await _ff_key_press(arguments)
-            if tool_name == "browser_hover":
-                return await _ff_hover(arguments)
             if tool_name == "browser_wait":
                 ms = max(50, min(8000, int(arguments.get("milliseconds", 500))))
                 await asyncio.sleep(ms / 1000.0)
                 return f"Waited {ms} ms"
-            if tool_name == "browser_drag":
-                return await _ff_drag(arguments)
             # Unknown browser_ tool — fall through to CDP path
         # ── Standard (Chrome CDP) path ─────────────────────────────────────
         if tool_name == "browser_key_press":
             return await _exec_key_press(self, arguments)
-        if tool_name == "browser_hover":
-            return await _exec_hover(self, arguments)
         if tool_name == "browser_wait":
             return await _exec_wait(self, arguments)
-        if tool_name == "browser_drag":
-            return await _exec_drag(self, arguments)
-        # Intercept any browser_use native tool that carries pixel coordinates
-        # so the cursor overlay tracks all agent click/interact operations.
-        cx = arguments.get("coordinate_x") if arguments.get("coordinate_x") is not None else arguments.get("x")
-        cy = arguments.get("coordinate_y") if arguments.get("coordinate_y") is not None else arguments.get("y")
-        if cx is not None and cy is not None:
-            is_click = any(k in tool_name for k in ("click", "input", "select", "type"))
-            _write_mouse_state(float(cx), float(cy), "click" if is_click else "move")
-        result = await _orig_execute(self, tool_name, arguments)
-        # After any index-based action (click, type, scroll on element, etc.),
-        # look up the element's bounding box and update the cursor position so the
-        # overlay doesn't stay frozen during the majority of agent interactions.
-        idx = arguments.get("index")
-        if idx is not None and cx is None and cy is None:
-            try:
-                session = getattr(self, "browser_session", None)
-                if session:
-                    element = await session.get_dom_element_by_index(int(idx))
-                    if element:
-                        coords = (
-                            getattr(element, "viewport_coordinates", None)
-                            or getattr(element, "center", None)
-                        )
-                        if coords is not None:
-                            if hasattr(coords, "x"):
-                                ex, ey = float(coords.x), float(coords.y)
-                            elif hasattr(coords, "__getitem__"):
-                                ex, ey = float(coords[0]), float(coords[1])
-                            else:
-                                ex, ey = None, None
-                            if ex is not None:
-                                is_click = any(k in tool_name for k in ("click", "input", "select", "type"))
-                                _write_mouse_state(ex, ey, "click" if is_click else "move")
-            except Exception:
-                pass
-        return result
+        return await _orig_execute(self, tool_name, arguments)
 
     BrowserUseServer._execute_tool = _patched_execute_tool  # type: ignore[method-assign]
 
@@ -1280,7 +955,7 @@ def _patch_add_human_tools() -> None:
 
     BrowserUseServer._setup_handlers = _patched_setup_handlers  # type: ignore[method-assign]
     print(
-        "Bridge: human-tools patched — browser_key_press, browser_hover, browser_wait, browser_drag",
+        "Bridge: human-tools patched — browser_key_press, browser_wait",
         file=sys.stderr,
     )
 
@@ -1312,11 +987,6 @@ async def run_bridge():
     os.makedirs(user_data_dir, exist_ok=True)
 
     cdp_url = cdp_url_env or f"http://{config.BROWSER_DEFAULT_CDP_HOST}:{port}"
-
-    # Set the mouse-state file path so _write_mouse_state() can use it
-    global _MOUSE_STATE_PATH
-    _MOUSE_STATE_PATH = f"/tmp/agent_mouse_{port}.json"
-    print(f"Bridge: mouse state file → {_MOUSE_STATE_PATH}", file=sys.stderr)
 
     print(
         f"Bridge: port={port}  headless={headless}  own_browser={own_browser}  "
