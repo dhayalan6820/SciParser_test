@@ -116,9 +116,33 @@ LLM_PRICING = {
 }
 
 
+_UNKNOWN_MODEL_WARNED: set = set()
+
+
 def calculate_llm_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     """Calculates the cost of an LLM call based on OpenRouter pricing (approximate)."""
-    p = LLM_PRICING.get(model, LLM_PRICING["default"])
+    if model not in LLM_PRICING:
+        p = LLM_PRICING["default"]
+        if model not in _UNKNOWN_MODEL_WARNED:
+            _UNKNOWN_MODEL_WARNED.add(model)
+            if p["input"] == 0.0 and p["output"] == 0.0:
+                logger.warning(
+                    "calculate_llm_cost: unknown model %r not in pricing table and "
+                    "default cost is 0.0 — cost will be recorded as $0.00. "
+                    "Set LLM_INPUT_COST_PER_MILLION / LLM_OUTPUT_COST_PER_MILLION env vars "
+                    "to avoid silent zero-cost billing.",
+                    model,
+                )
+            else:
+                logger.warning(
+                    "calculate_llm_cost: unknown model %r not in pricing table, "
+                    "falling back to default pricing (input=$%.4f/M, output=$%.4f/M).",
+                    model,
+                    p["input"],
+                    p["output"],
+                )
+    else:
+        p = LLM_PRICING[model]
     cost = (input_tokens / 1_000_000 * p["input"]) + (output_tokens / 1_000_000 * p["output"])
     return round(cost, 6)
 
