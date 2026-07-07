@@ -124,18 +124,32 @@ def calculate_llm_cost(model: str, input_tokens: int, output_tokens: int) -> flo
 
 
 def extract_token_usage(response, model: str) -> Dict[str, Any]:
-    """Pulls prompt/completion token counts + computed cost off an LLM
-    response's response_metadata, mirroring the shape used elsewhere
-    (brain.py's per-turn browsing usage) so both flows can be summed
-    and logged consistently."""
+    """Pulls prompt/completion token counts + computed cost from an LLM response.
+
+    Checks usage_metadata (newer LangChain ≥0.3 / Gemini) first, then falls back
+    to response_metadata["token_usage"] (OpenAI-compat / OpenRouter), mirroring
+    the same priority order used in brain.py so both flows can be summed and
+    logged consistently.
+    """
     token_usage: Dict[str, Any] = {}
-    if hasattr(response, "response_metadata") and "token_usage" in response.response_metadata:
+
+    # 1. Newer LangChain unified usage_metadata (Gemini, newer ChatOpenAI)
+    _meta = getattr(response, "usage_metadata", None)
+    if _meta and isinstance(_meta, dict) and (_meta.get("input_tokens") or _meta.get("output_tokens")):
+        inp = int(_meta.get("input_tokens", 0) or 0)
+        out = int(_meta.get("output_tokens", 0) or 0)
+        token_usage = {"input": inp, "output": out, "total": inp + out}
+
+    # 2. OpenAI-compat response_metadata (OpenRouter, older LangChain)
+    elif hasattr(response, "response_metadata") and "token_usage" in (response.response_metadata or {}):
         usage = response.response_metadata["token_usage"]
         token_usage = {
             "input": usage.get("prompt_tokens", 0),
             "output": usage.get("completion_tokens", 0),
             "total": usage.get("total_tokens", 0),
         }
+
+    if token_usage:
         token_usage["cost"] = calculate_llm_cost(model, token_usage["input"], token_usage["output"])
     return token_usage
 

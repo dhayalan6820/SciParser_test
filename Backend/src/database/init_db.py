@@ -69,6 +69,43 @@ async def init_database():
             await conn.execute(text(
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS credit_balance DOUBLE PRECISION NOT NULL DEFAULT 5.0"
             ))
+            # Task #176: llm_requests analytics table.
+            # Base.metadata.create_all above creates this for fresh installs; the
+            # explicit CREATE TABLE IF NOT EXISTS ensures existing deployments pick
+            # it up without an Alembic migration.
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS llm_requests (
+                    id VARCHAR(36) PRIMARY KEY,
+                    user_id VARCHAR(36) NOT NULL,
+                    chat_id VARCHAR(100),
+                    model VARCHAR(100) NOT NULL,
+                    source VARCHAR(50) NOT NULL,
+                    system_tokens INTEGER NOT NULL DEFAULT 0,
+                    user_tokens INTEGER NOT NULL DEFAULT 0,
+                    history_tokens INTEGER NOT NULL DEFAULT 0,
+                    memory_tokens INTEGER NOT NULL DEFAULT 0,
+                    tool_tokens INTEGER NOT NULL DEFAULT 0,
+                    rag_tokens INTEGER NOT NULL DEFAULT 0,
+                    input_tokens INTEGER NOT NULL DEFAULT 0,
+                    output_tokens INTEGER NOT NULL DEFAULT 0,
+                    cached_tokens INTEGER NOT NULL DEFAULT 0,
+                    total_tokens INTEGER NOT NULL DEFAULT 0,
+                    cost_usd DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    latency_ms INTEGER,
+                    finish_reason VARCHAR(50),
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    deleted_at TIMESTAMPTZ
+                )
+            """))
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_llm_requests_user_created "
+                "ON llm_requests (user_id, created_at)"
+            ))
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_llm_requests_chat_created "
+                "ON llm_requests (chat_id, created_at)"
+            ))
+
             # Task #127 (post-review fix): admin user deletion must cascade to a
             # user's owned rows instead of failing on FK constraints. messages.user_id
             # and chat_sessions.user_id were created without ON DELETE CASCADE;

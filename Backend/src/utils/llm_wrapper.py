@@ -85,19 +85,27 @@ class LangChainChatModelWrapper(BaseChatModel):
         lc_messages = self._convert_to_langchain_messages(messages)
 
         if output_format:
-            # Structured output — LangChain strips usage metadata from the parsed result,
-            # so we fall back to zeros rather than attempt a fragile workaround.
-            structured_llm = self.langchain_llm.with_structured_output(output_format)
-            response = await structured_llm.ainvoke(lc_messages)
+            # Use include_raw=True so LangChain returns {"raw": AIMessage, "parsed": obj}
+            # instead of the bare Pydantic object.  The raw AIMessage retains usage metadata
+            # that would otherwise be stripped, giving us real token counts.
+            structured_llm = self.langchain_llm.with_structured_output(
+                output_format, include_raw=True
+            )
+            result = await structured_llm.ainvoke(lc_messages)
+            raw_response = result.get("raw") if isinstance(result, dict) else None
+            parsed = result.get("parsed") if isinstance(result, dict) else result
+            prompt_tokens, completion_tokens, cached_tokens = (
+                _extract_usage(raw_response) if raw_response is not None else (0, 0, 0)
+            )
             usage = ChatInvokeUsage(
-                prompt_tokens=0,
-                prompt_cached_tokens=0,
+                prompt_tokens=prompt_tokens,
+                prompt_cached_tokens=cached_tokens,
                 prompt_cache_creation_tokens=0,
                 prompt_image_tokens=0,
-                completion_tokens=0,
-                total_tokens=0,
+                completion_tokens=completion_tokens,
+                total_tokens=prompt_tokens + completion_tokens,
             )
-            return ChatInvokeCompletion(completion=response, usage=usage)
+            return ChatInvokeCompletion(completion=parsed, usage=usage)
         else:
             response = await self.langchain_llm.ainvoke(lc_messages)
             prompt_tokens, completion_tokens, cached_tokens = _extract_usage(response)
