@@ -1,1 +1,7 @@
-{}
+{
+  "camoufox": {
+    "command": "npx",
+    "args": ["camoufox-mcp"],
+    "transport": "stdio"
+  }
+}
