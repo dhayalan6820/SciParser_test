@@ -1,0 +1,1131 @@
+# Production-Grade AI Usage Analytics & Admin Portal Prompt
+
+You are a Principal Staff Software Architect, Senior AI Platform Engineer, Data Engineer, FinOps Engineer, and UX Designer.
+
+Your task is to redesign the entire AI Usage Monitoring System, User Dashboard, Token Analytics Engine, Cost Tracking, and Admin Portal into a production-grade observability platform.
+
+The application currently uses:
+
+Model:
+`google/gemini-3-flash-preview`
+
+The biggest problem is:
+
+Daily model limits are getting exhausted very early.
+
+Currently there is no visibility into:
+
+* Actual input tokens
+* Output tokens
+* Memory/context tokens
+* System prompt tokens
+* Retrieved memory tokens
+* Conversation history tokens
+* Hidden framework tokens
+* Cost per request
+* Which users consume the most
+* Which conversations consume the most
+* Which prompts explode token usage
+* Which features generate unnecessary context
+
+The new dashboard must provide complete transparency for every AI request.
+
+---
+
+# PRIMARY OBJECTIVES
+
+Build an enterprise-grade AI Analytics Platform similar to:
+
+* OpenAI Usage Dashboard
+* Anthropic Console
+* Google Vertex AI Monitoring
+* LangSmith
+* Helicone
+* OpenTelemetry
+* Datadog
+* Grafana
+
+Everything must be measurable.
+
+Nothing should be hidden.
+
+---
+
+# TRACK EVERY REQUEST
+
+For EVERY LLM request store:
+
+Request ID
+
+Conversation ID
+
+User ID
+
+Organization ID
+
+Session ID
+
+Timestamp
+
+Model
+
+API Provider
+
+Request Duration
+
+Streaming Duration
+
+Status
+
+Environment
+
+Region
+
+Retry Count
+
+Temperature
+
+Top P
+
+Top K
+
+Max Tokens
+
+Finish Reason
+
+HTTP Status
+
+Latency
+
+Time To First Token
+
+Total Completion Time
+
+Network Time
+
+Queue Time
+
+Request Size
+
+Response Size
+
+---
+
+# COMPLETE TOKEN BREAKDOWN
+
+For every request calculate separately:
+
+System Prompt Tokens
+
+Developer Prompt Tokens
+
+User Prompt Tokens
+
+Conversation History Tokens
+
+Memory Retrieval Tokens
+
+RAG Context Tokens
+
+Tool Result Tokens
+
+Function Call Tokens
+
+Image Tokens (future)
+
+Audio Tokens (future)
+
+Video Tokens (future)
+
+Reasoning Tokens (if model exposes)
+
+Thinking Tokens (if available)
+
+Input Tokens
+
+Output Tokens
+
+Cached Input Tokens
+
+Cached Output Tokens
+
+Total Prompt Tokens
+
+Total Completion Tokens
+
+Grand Total Tokens
+
+Store every value individually.
+
+Never only store total_tokens.
+
+---
+
+# COST CALCULATION
+
+Implement proper pricing engine.
+
+Pricing must NOT be hardcoded.
+
+Create pricing configuration table.
+
+Example:
+
+Provider
+
+Model
+
+Input Price Per Million Tokens
+
+Output Price Per Million Tokens
+
+Cache Read Price
+
+Cache Write Price
+
+Reasoning Price
+
+Currency
+
+Effective Date
+
+End Date
+
+Version
+
+Every request must calculate
+
+Input Cost
+
+Output Cost
+
+Cache Cost
+
+Reasoning Cost
+
+Total Cost
+
+Store exact calculation.
+
+Support future pricing updates.
+
+---
+
+# USER DASHBOARD
+
+Each user dashboard must contain:
+
+Today's Usage
+
+Yesterday
+
+Last 7 Days
+
+Last 30 Days
+
+Lifetime Usage
+
+Charts:
+
+Daily Tokens
+
+Hourly Tokens
+
+Weekly Tokens
+
+Monthly Tokens
+
+Cost Trend
+
+Average Tokens
+
+Average Cost
+
+Average Response Size
+
+Average Prompt Size
+
+Average Latency
+
+Largest Prompt
+
+Largest Response
+
+Longest Conversation
+
+Most Expensive Request
+
+Most Expensive Day
+
+Most Used Model
+
+Success Rate
+
+Failure Rate
+
+429 Errors
+
+500 Errors
+
+Timeouts
+
+Streaming Requests
+
+Memory Usage
+
+Tool Calls
+
+RAG Calls
+
+Average Conversation Length
+
+Average Tokens Per Conversation
+
+Average Tokens Per Message
+
+---
+
+# USER TOKEN ANALYTICS
+
+Display:
+
+Input Tokens
+
+Output Tokens
+
+Memory Tokens
+
+History Tokens
+
+System Tokens
+
+Developer Tokens
+
+Retrieved Documents
+
+Cache Hits
+
+Cache Misses
+
+Completion Tokens
+
+Cost
+
+Remaining Daily Budget
+
+Remaining Monthly Budget
+
+Percentage Used
+
+Projected Monthly Usage
+
+Burn Rate
+
+Token Trend
+
+---
+
+# USER CONVERSATION PAGE
+
+Every conversation must show:
+
+Conversation Title
+
+Started Time
+
+Ended Time
+
+Duration
+
+Total Messages
+
+Total Requests
+
+Total Tokens
+
+Input Tokens
+
+Output Tokens
+
+Cost
+
+Average Tokens
+
+Largest Prompt
+
+Largest Completion
+
+Memory Usage
+
+Conversation Context Size
+
+History Size
+
+Per message:
+
+User Message
+
+Assistant Response
+
+Input Tokens
+
+Output Tokens
+
+Cost
+
+Latency
+
+Prompt Size
+
+Completion Size
+
+Timestamp
+
+Expandable Token Breakdown
+
+---
+
+# MESSAGE LEVEL ANALYTICS
+
+Every single message should display:
+
+Prompt
+
+Completion
+
+System Prompt
+
+Developer Prompt
+
+Memory
+
+Conversation Context
+
+Retrieved Context
+
+Token Count
+
+Estimated Cost
+
+Latency
+
+Finish Reason
+
+Streaming Time
+
+Raw Request Size
+
+Raw Response Size
+
+Retry Count
+
+---
+
+# ADMIN DASHBOARD
+
+Create enterprise admin dashboard.
+
+Overview cards:
+
+Total Users
+
+Active Users
+
+Total Requests
+
+Total Conversations
+
+Today's Tokens
+
+Today's Cost
+
+Monthly Tokens
+
+Monthly Cost
+
+Peak Hour
+
+Peak Day
+
+Average Cost/User
+
+Average Tokens/User
+
+Requests Per Second
+
+Token Throughput
+
+Success Rate
+
+Error Rate
+
+API Failure Rate
+
+429 Rate
+
+Latency
+
+Average Response Time
+
+Cache Hit Rate
+
+Memory Usage
+
+CPU
+
+RAM
+
+Database Load
+
+Queue Size
+
+Worker Health
+
+---
+
+# ADMIN ANALYTICS
+
+Charts:
+
+Requests Per Minute
+
+Tokens Per Minute
+
+Tokens Per Hour
+
+Tokens Per Day
+
+Tokens Per Week
+
+Cost Per Hour
+
+Cost Per Day
+
+Cost Per User
+
+Cost Per Organization
+
+Model Usage
+
+Latency Trend
+
+Error Trend
+
+Retry Trend
+
+Streaming Usage
+
+Heatmaps
+
+---
+
+# TOP USERS
+
+Table:
+
+User
+
+Email
+
+Organization
+
+Today's Tokens
+
+Weekly Tokens
+
+Monthly Tokens
+
+Lifetime Tokens
+
+Today's Cost
+
+Monthly Cost
+
+Largest Conversation
+
+Largest Prompt
+
+Largest Completion
+
+Average Tokens
+
+Average Cost
+
+Average Latency
+
+Last Activity
+
+Status
+
+Clicking user opens complete analytics.
+
+---
+
+# TOP CONVERSATIONS
+
+Table:
+
+Conversation
+
+User
+
+Messages
+
+Input Tokens
+
+Output Tokens
+
+Memory Tokens
+
+Total Tokens
+
+Cost
+
+Duration
+
+Started
+
+Last Activity
+
+Largest Prompt
+
+Largest Response
+
+Average Tokens
+
+---
+
+# TOKEN SPIKE DETECTION
+
+Automatically detect:
+
+Users consuming abnormal tokens
+
+Conversations with abnormal growth
+
+Prompt explosions
+
+Memory explosions
+
+History explosions
+
+Infinite loops
+
+Retry loops
+
+Repeated prompts
+
+Large RAG contexts
+
+Large system prompts
+
+Unexpected completion size
+
+Visualize spikes.
+
+Show timeline.
+
+Highlight exact message causing spike.
+
+---
+
+# MEMORY ANALYTICS
+
+Need dedicated Memory Dashboard.
+
+Track:
+
+Memory Retrieved
+
+Memory Injected
+
+Memory Token Count
+
+Memory Cost
+
+Average Memory Size
+
+Top Memories
+
+Memory Growth
+
+Memory Hit Rate
+
+Memory Miss Rate
+
+Duplicate Memory
+
+Unused Memory
+
+Memory Compression Ratio
+
+Old Memory
+
+Expired Memory
+
+---
+
+# CONTEXT WINDOW ANALYTICS
+
+For every request display:
+
+Current Context Size
+
+History Tokens
+
+Memory Tokens
+
+RAG Tokens
+
+System Tokens
+
+Developer Tokens
+
+User Tokens
+
+Completion Tokens
+
+Remaining Context Window
+
+Percentage Filled
+
+Warn when context exceeds:
+
+50%
+
+70%
+
+85%
+
+95%
+
+---
+
+# COST BREAKDOWN
+
+Breakdown by:
+
+User
+
+Organization
+
+Conversation
+
+Feature
+
+API
+
+Model
+
+Date
+
+Week
+
+Month
+
+Year
+
+Memory
+
+History
+
+Tools
+
+Streaming
+
+Export CSV
+
+Export Excel
+
+Export PDF
+
+---
+
+# FILTERS
+
+Support filtering by:
+
+Date
+
+User
+
+Organization
+
+Conversation
+
+Request ID
+
+Status
+
+Model
+
+Feature
+
+Cost Range
+
+Token Range
+
+Latency
+
+API
+
+Environment
+
+Region
+
+---
+
+# SEARCH
+
+Global search:
+
+Conversation ID
+
+User ID
+
+Email
+
+Prompt
+
+Response
+
+Message ID
+
+Request ID
+
+Token Count
+
+Cost
+
+Model
+
+---
+
+# ALERTING SYSTEM
+
+Create configurable alerts.
+
+Examples:
+
+User exceeded daily budget
+
+Organization exceeded monthly budget
+
+Conversation exceeded token limit
+
+Prompt exceeded threshold
+
+Memory exceeded threshold
+
+Cost spike
+
+Latency spike
+
+429 errors
+
+500 errors
+
+Timeouts
+
+Streaming failures
+
+---
+
+# EXPORTS
+
+Support exports:
+
+CSV
+
+Excel
+
+PDF
+
+JSON
+
+Parquet
+
+---
+
+# API ENDPOINTS
+
+Create APIs:
+
+GET /analytics/dashboard
+
+GET /analytics/users
+
+GET /analytics/user/:id
+
+GET /analytics/conversations
+
+GET /analytics/conversation/:id
+
+GET /analytics/messages
+
+GET /analytics/tokens
+
+GET /analytics/cost
+
+GET /analytics/spikes
+
+GET /analytics/memory
+
+GET /analytics/models
+
+GET /analytics/export
+
+GET /analytics/errors
+
+GET /analytics/performance
+
+---
+
+# DATABASE DESIGN
+
+Design normalized production schema.
+
+Tables:
+
+users
+
+organizations
+
+sessions
+
+conversations
+
+messages
+
+llm_requests
+
+llm_responses
+
+token_usage
+
+cost_usage
+
+pricing_models
+
+memory_usage
+
+rag_usage
+
+tool_calls
+
+performance_metrics
+
+error_logs
+
+daily_usage
+
+monthly_usage
+
+alerts
+
+audit_logs
+
+exports
+
+Each table should include:
+
+Primary Keys
+
+Indexes
+
+Foreign Keys
+
+Partitioning Strategy
+
+Retention Policy
+
+Soft Delete
+
+Created At
+
+Updated At
+
+---
+
+# OBSERVABILITY
+
+Integrate:
+
+OpenTelemetry
+
+Structured Logging
+
+Distributed Tracing
+
+Metrics Collection
+
+Prometheus
+
+Grafana
+
+Request Correlation IDs
+
+Trace IDs
+
+Span IDs
+
+---
+
+# PERFORMANCE
+
+Dashboard must support:
+
+100,000+ users
+
+Millions of requests
+
+Real-time updates
+
+Virtual scrolling
+
+Server-side pagination
+
+Caching
+
+Background aggregation
+
+Materialized views
+
+Optimized indexes
+
+---
+
+# SECURITY
+
+Role-based access:
+
+Super Admin
+
+Admin
+
+Organization Admin
+
+Support
+
+User
+
+Permissions:
+
+Read
+
+Write
+
+Export
+
+Delete
+
+Audit
+
+Cost Visibility
+
+Token Visibility
+
+---
+
+# UI REQUIREMENTS
+
+Modern enterprise UI.
+
+Dark mode.
+
+Responsive.
+
+Real-time updates.
+
+Interactive charts.
+
+Drill-down analytics.
+
+Advanced filtering.
+
+Saved filters.
+
+Bookmarks.
+
+Pinned dashboards.
+
+Comparison mode.
+
+Hover tooltips.
+
+Trend indicators.
+
+---
+
+# IMPORTANT TOKEN DIAGNOSTICS
+
+For every LLM request, explicitly display:
+
+System Prompt Tokens
+
+Developer Prompt Tokens
+
+User Prompt Tokens
+
+Conversation History Tokens
+
+Memory Tokens
+
+Retrieved Context Tokens
+
+Tool Tokens
+
+Final Prompt Tokens Sent to Gemini
+
+Output Tokens
+
+Total Tokens
+
+Estimated Cost
+
+Latency
+
+This section is critical because the primary goal is to identify where tokens are being consumed.
+
+---
+
+# GEMINI COST ENGINE
+
+The application currently uses:
+
+`google/gemini-3-flash-preview`
+
+Do not hardcode pricing values.
+
+Instead:
+
+1. Create a model pricing configuration table.
+2. Version pricing records by effective date.
+3. Resolve pricing dynamically based on the model and request timestamp.
+4. Calculate input and output costs independently.
+5. Store the exact pricing version used for each request to preserve historical accuracy when Google changes pricing.
+
+---
+
+# FINAL OBJECTIVE
+
+The completed system should allow an administrator to answer questions such as:
+
+* Which user consumed the most tokens today?
+* Which conversation caused the highest cost?
+* Which individual message created the token spike?
+* How many tokens came from system prompts?
+* How many came from conversation history?
+* How many came from memory retrieval?
+* How many came from RAG documents?
+* How many came from the user's prompt?
+* Which feature is responsible for most token usage?
+* What is the daily, weekly, monthly, and lifetime token consumption?
+* What is the exact cost per user, per conversation, and per request?
+* Which optimization opportunities will reduce token consumption by at least 30%?
+* Which prompts should be truncated or compressed?
+* Which memories should be summarized or discarded?
+* Which conversations exceed efficient context window limits?
+* What is the projected monthly token usage and estimated spend based on the current burn rate?
+
+Generate a complete production-ready implementation plan, including frontend architecture, backend architecture, API contracts, database schema, event logging, aggregation jobs, real-time dashboards, RBAC, analytics pipelines, observability integrations, performance optimizations, and UI specifications. The implementation should be scalable, auditable, maintainable, and suitable for enterprise production deployments.
