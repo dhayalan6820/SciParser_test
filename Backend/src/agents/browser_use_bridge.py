@@ -193,13 +193,60 @@ async def _patch_session_stealth(session: object) -> None:
         print(f"Bridge: _patch_session_stealth failed: {exc}", file=sys.stderr)
 
 # ---------------------------------------------------------------------------
-# Chrome binary (Playwright-managed Chromium in the Replit sandbox)
+# Chrome binary auto-detection (cross-platform)
 # ---------------------------------------------------------------------------
 
-CHROME_BINARY = (
-    "/home/runner/workspace/.cache/ms-playwright"
-    "/chromium-1228/chrome-linux64/chrome"
-)
+def _find_chrome_binary() -> str:
+    """Auto-detect Chrome/Chromium binary across platforms."""
+    import shutil
+    import sys
+
+    # Platform-specific search paths
+    if sys.platform == "win32":
+        candidates = [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        ]
+    elif sys.platform == "darwin":
+        candidates = [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        ]
+    else:
+        candidates = [
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable",
+            "/usr/bin/chromium",
+            "/usr/bin/chromium-browser",
+            "/snap/bin/chromium",
+            "/usr/local/bin/chromium",
+        ]
+        # Also check Playwright cache (Linux / CI)
+        import glob
+        playwright_paths = glob.glob(
+            str(Path.home() / ".cache" / "ms-playwright" / "chromium-*" / "chrome-linux64" / "chrome")
+        )
+        candidates.extend(playwright_paths)
+
+    # 1. Check well-known paths
+    for path in candidates:
+        if Path(path).is_file():
+            return path
+
+    # 2. Try PATH lookup
+    for name in ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "chrome", "msedge"]:
+        found = shutil.which(name)
+        if found:
+            return found
+
+    # 3. Fallback — let the OS error surface if nothing is found
+    return "google-chrome"
+
+
+CHROME_BINARY = _find_chrome_binary()
 
 
 # ---------------------------------------------------------------------------
