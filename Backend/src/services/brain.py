@@ -3,6 +3,7 @@ import base64
 import os
 import json
 import re
+import time
 import uuid
 import httpx
 from datetime import datetime, timezone
@@ -55,6 +56,7 @@ from src.services.ATAG import (
     calculate_llm_cost
 )
 from src.agents import spec_loader
+from src.utils.llm_instrumentation import count_message_tokens, record_llm_request
 
 # --- Token/cost optimization knobs ---
 # Trigger history summarization much earlier than the model's context limit so
@@ -1075,6 +1077,7 @@ class Brain:
                 current_messages = new_history
                 logger.info("Conversation history summarized and compressed.")
 
+            _t0 = time.monotonic()
             response = await llm_with_tools.ainvoke(current_messages)
 
             # Guard: if the model wrote a pending-action statement but produced no tool call,
@@ -1094,6 +1097,8 @@ class Brain:
                     )
                     response = await llm_with_tools.ainvoke(current_messages + [response, _nudge])
 
+            _latency_ms = int((time.monotonic() - _t0) * 1000)
+
             # Capture token usage and cost
             token_usage = {}
             cost = 0.0
@@ -1106,6 +1111,23 @@ class Brain:
                 }
                 cost = self._calculate_cost(self.llm.model_name, token_usage["input"], token_usage["output"])
                 token_usage["cost"] = cost
+
+            # Record every LLM call to the analytics table (non-blocking, never raises)
+            _finish_reason = None
+            _rm = getattr(response, "response_metadata", None) or {}
+            _finish_reason = _rm.get("finish_reason") or _rm.get("stop_reason")
+            asyncio.ensure_future(record_llm_request(
+                user_id=user_id,
+                chat_id=chat_id,
+                model=self.llm.model_name,
+                source="brain",
+                category_tokens=count_message_tokens(current_messages),
+                input_tokens=token_usage.get("input", 0),
+                output_tokens=token_usage.get("output", 0),
+                cost_usd=cost,
+                latency_ms=_latency_ms,
+                finish_reason=_finish_reason,
+            ))
 
             # Broadcast thinking to UI
             if response.content:

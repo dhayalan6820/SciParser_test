@@ -104,9 +104,15 @@ Provide a structured summary that an automation agent can use to continue the ta
 # per-model rates instead of maintaining duplicate pricing tables that
 # can drift out of sync.
 LLM_PRICING = {
-    "google/gemini-3-flash-preview": {"input": 0.1, "output": 0.4},
+    "google/gemini-3-flash-preview": {
+        "input": app_config.LLM_INPUT_COST_PER_MILLION,
+        "output": app_config.LLM_OUTPUT_COST_PER_MILLION,
+    },
     "moonshotai/kimi-k2.7-code": {"input": 0.5, "output": 1.5},
-    "default": {"input": 0.1, "output": 0.4},
+    "default": {
+        "input": app_config.LLM_INPUT_COST_PER_MILLION,
+        "output": app_config.LLM_OUTPUT_COST_PER_MILLION,
+    },
 }
 
 
@@ -582,6 +588,32 @@ hardcode placeholder URLs like "https://example.com".
                 await DatabaseManager().deduct_credits(user_id, _total_cost)
             except Exception as _bill_err:
                 logger.warning(f"[Credits] Failed to bill script-generation usage for user {user_id}: {_bill_err}")
+
+        # Persist one LlmRequest analytics row for the entire script-generation run.
+        # Runs even when cost=0 (e.g. admin users) so token counts are always captured.
+        if user_id and (_total_input_tokens or _total_output_tokens):
+            try:
+                from src.utils.llm_instrumentation import record_llm_request
+                _model_name = getattr(self.llm, "model_name", getattr(self.llm, "model", "unknown"))
+                await record_llm_request(
+                    user_id=user_id,
+                    chat_id=chat_id,
+                    model=_model_name,
+                    source="atag",
+                    category_tokens={
+                        "system_tokens": self._estimate_tokens(SYSTEM_PROMPT),
+                        "user_tokens": self._estimate_tokens(USER_PROMPT),
+                        "history_tokens": self._estimate_tokens(history_str),
+                        "tool_tokens": self._estimate_tokens(tool_context_section),
+                        "memory_tokens": 0,
+                        "rag_tokens": self._estimate_tokens(web_research_section),
+                    },
+                    input_tokens=_total_input_tokens,
+                    output_tokens=_total_output_tokens,
+                    cost_usd=_total_cost,
+                )
+            except Exception as _rec_err:
+                logger.warning(f"[instrumentation] ATAG LlmRequest write failed (non-fatal): {_rec_err}")
 
         return content
 

@@ -334,3 +334,49 @@ class MemoryReflection(Base):
     severity = Column(String(20), nullable=False)   # LOW | MEDIUM | HIGH
     validated_count = Column(Integer, default=0)
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class LlmRequest(Base):
+    """
+    One row per LLM API call — the foundation of all token/cost analytics.
+
+    Token category columns store character-based estimates of how much of the
+    input was spent on each context type (system prompt, conversation history,
+    the user's current message, memory blocks, tool results, RAG docs).
+    The authoritative input_tokens / output_tokens always come from the LLM
+    API response; the category split is approximate but useful for identifying
+    which part of the context is driving token consumption.
+    """
+    __tablename__ = "llm_requests"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), nullable=False)
+    chat_id = Column(String(100), nullable=True)
+    model = Column(String(100), nullable=False)
+    source = Column(String(50), nullable=False)   # "brain" | "atag" | "wrapper"
+
+    # Estimated token breakdown by context category (char-based approximation)
+    system_tokens = Column(Integer, nullable=False, default=0, server_default="0")
+    user_tokens = Column(Integer, nullable=False, default=0, server_default="0")
+    history_tokens = Column(Integer, nullable=False, default=0, server_default="0")
+    memory_tokens = Column(Integer, nullable=False, default=0, server_default="0")
+    tool_tokens = Column(Integer, nullable=False, default=0, server_default="0")
+    rag_tokens = Column(Integer, nullable=False, default=0, server_default="0")
+
+    # Authoritative counts from the API response
+    input_tokens = Column(Integer, nullable=False, default=0, server_default="0")
+    output_tokens = Column(Integer, nullable=False, default=0, server_default="0")
+    cached_tokens = Column(Integer, nullable=False, default=0, server_default="0")
+    total_tokens = Column(Integer, nullable=False, default=0, server_default="0")
+
+    cost_usd = Column(Float, nullable=False, default=0.0, server_default="0")
+    latency_ms = Column(Integer, nullable=True)
+    finish_reason = Column(String(50), nullable=True)
+
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    deleted_at = Column(TIMESTAMP(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("ix_llm_requests_user_created", "user_id", "created_at"),
+        Index("ix_llm_requests_chat_created", "chat_id", "created_at"),
+    )

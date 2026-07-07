@@ -214,6 +214,14 @@ def browser_use_own_browser() -> bool:
 
 
 # ---------------------------------------------------------------------------
+# LLM cost pricing (per million tokens) — used for analytics and credit billing.
+# Update these when the provider changes pricing. These are the single source of
+# truth; ATAG.py's LLM_PRICING dict reads from here at import time.
+# ---------------------------------------------------------------------------
+LLM_INPUT_COST_PER_MILLION = _float("LLM_INPUT_COST_PER_MILLION", 0.1)
+LLM_OUTPUT_COST_PER_MILLION = _float("LLM_OUTPUT_COST_PER_MILLION", 0.4)
+
+# ---------------------------------------------------------------------------
 # Third-party check endpoints / defaults
 # ---------------------------------------------------------------------------
 IP_CHECK_URL = _str("IP_CHECK_URL", "https://api.ipify.org?format=json")
