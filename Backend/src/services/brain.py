@@ -1077,11 +1077,55 @@ class Brain:
                 current_messages = new_history
                 logger.info("Conversation history summarized and compressed.")
 
+            _model_name = getattr(self.llm, "model_name", None) or getattr(self.llm, "model", "unknown")
+
+            def _extract_usage_dict(resp):
+                """Extract (input, output, total) token counts from a LangChain response."""
+                _um = getattr(resp, "usage_metadata", None)
+                if _um and isinstance(_um, dict) and (_um.get("input_tokens") or _um.get("output_tokens")):
+                    _i = int(_um.get("input_tokens", 0) or 0)
+                    _o = int(_um.get("output_tokens", 0) or 0)
+                    return {"input": _i, "output": _o, "total": _i + _o}
+                _rm = getattr(resp, "response_metadata", None) or {}
+                _tu = _rm.get("token_usage") or {}
+                if _tu:
+                    return {
+                        "input": int(_tu.get("prompt_tokens", 0) or 0),
+                        "output": int(_tu.get("completion_tokens", 0) or 0),
+                        "total": int(_tu.get("total_tokens", 0) or 0),
+                    }
+                return {}
+
+            def _fire_record(resp, msgs, lat_ms, src="brain"):
+                """Fire one non-blocking llm_requests row for a single LLM call."""
+                _u = _extract_usage_dict(resp)
+                _fr = (getattr(resp, "response_metadata", None) or {}).get("finish_reason") or \
+                      (getattr(resp, "response_metadata", None) or {}).get("stop_reason")
+                _cost = self._calculate_cost(_model_name, _u.get("input", 0), _u.get("output", 0)) if _u else 0.0
+                asyncio.ensure_future(record_llm_request(
+                    user_id=user_id,
+                    chat_id=chat_id,
+                    model=_model_name,
+                    source=src,
+                    category_tokens=count_message_tokens(msgs),
+                    input_tokens=_u.get("input", 0),
+                    output_tokens=_u.get("output", 0),
+                    cost_usd=_cost,
+                    latency_ms=lat_ms,
+                    finish_reason=_fr,
+                ))
+                return _u, _cost
+
             _t0 = time.monotonic()
             response = await llm_with_tools.ainvoke(current_messages)
+            _first_latency_ms = int((time.monotonic() - _t0) * 1000)
+
+            # Record the first LLM call immediately (one row per actual API call)
+            _first_usage, _first_cost = _fire_record(response, current_messages, _first_latency_ms)
 
             # Guard: if the model wrote a pending-action statement but produced no tool call,
             # re-invoke once with a nudge so the graph doesn't terminate prematurely.
+            _nudge_response = None
             if not response.tool_calls and response.content:
                 _pending_patterns = [
                     r"\bI will now\b", r"\bI'll now\b", r"\bI am going to\b",
@@ -1095,51 +1139,25 @@ class Brain:
                         content="You described an action you intend to take but did not call any tool. "
                                 "Please call the appropriate browser tool NOW to execute that action."
                     )
-                    response = await llm_with_tools.ainvoke(current_messages + [response, _nudge])
+                    _nudge_msgs = current_messages + [response, _nudge]
+                    _t1 = time.monotonic()
+                    _nudge_response = await llm_with_tools.ainvoke(_nudge_msgs)
+                    _nudge_latency_ms = int((time.monotonic() - _t1) * 1000)
+                    # Record nudge as its own row with source="brain_nudge"
+                    _fire_record(_nudge_response, _nudge_msgs, _nudge_latency_ms, src="brain_nudge")
+                    response = _nudge_response
 
-            _latency_ms = int((time.monotonic() - _t0) * 1000)
+            _latency_ms = _first_latency_ms + (
+                _nudge_latency_ms if _nudge_response is not None else 0
+            )
 
-            # Capture token usage and cost.
-            # Check usage_metadata (newer LangChain ≥0.3 / Gemini) first, then fall back
-            # to response_metadata["token_usage"] (OpenAI-compat / OpenRouter).
-            token_usage = {}
+            # Capture final token usage and cost for UI/billing reporting.
+            # Use the final response (nudge if it happened, otherwise first call).
+            token_usage = _extract_usage_dict(response)
             cost = 0.0
-            _usage_meta = getattr(response, "usage_metadata", None)
-            if _usage_meta and isinstance(_usage_meta, dict) and (_usage_meta.get("input_tokens") or _usage_meta.get("output_tokens")):
-                token_usage = {
-                    "input": _usage_meta.get("input_tokens", 0),
-                    "output": _usage_meta.get("output_tokens", 0),
-                    "total": _usage_meta.get("input_tokens", 0) + _usage_meta.get("output_tokens", 0),
-                }
-            elif hasattr(response, "response_metadata") and "token_usage" in (response.response_metadata or {}):
-                usage = response.response_metadata["token_usage"]
-                token_usage = {
-                    "input": usage.get("prompt_tokens", 0),
-                    "output": usage.get("completion_tokens", 0),
-                    "total": usage.get("total_tokens", 0)
-                }
             if token_usage:
-                _model_for_cost = getattr(self.llm, "model_name", None) or getattr(self.llm, "model", "")
-                cost = self._calculate_cost(_model_for_cost, token_usage["input"], token_usage["output"])
+                cost = self._calculate_cost(_model_name, token_usage["input"], token_usage["output"])
                 token_usage["cost"] = cost
-
-            # Record every LLM call to the analytics table (non-blocking, never raises)
-            _finish_reason = None
-            _rm = getattr(response, "response_metadata", None) or {}
-            _finish_reason = _rm.get("finish_reason") or _rm.get("stop_reason")
-            _model_name = getattr(self.llm, "model_name", None) or getattr(self.llm, "model", "unknown")
-            asyncio.ensure_future(record_llm_request(
-                user_id=user_id,
-                chat_id=chat_id,
-                model=_model_name,
-                source="brain",
-                category_tokens=count_message_tokens(current_messages),
-                input_tokens=token_usage.get("input", 0),
-                output_tokens=token_usage.get("output", 0),
-                cost_usd=cost,
-                latency_ms=_latency_ms,
-                finish_reason=_finish_reason,
-            ))
 
             # Broadcast thinking to UI
             if response.content:

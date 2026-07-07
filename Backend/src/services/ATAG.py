@@ -476,13 +476,36 @@ class ATAGProcessor:
         _total_output_tokens = 0
         _total_cost = 0.0
 
-        def _meter(response) -> None:
+        _atag_model_name = getattr(self.llm, "model_name", None) or getattr(self.llm, "model", "unknown")
+
+        def _meter(response, msgs=None) -> None:
+            """Accumulate totals AND fire a per-call llm_requests row (non-blocking)."""
             nonlocal _total_input_tokens, _total_output_tokens, _total_cost
-            usage = extract_token_usage(response, self.llm.model_name)
+            usage = extract_token_usage(response, _atag_model_name)
             if usage:
-                _total_input_tokens += usage.get("input", 0)
-                _total_output_tokens += usage.get("output", 0)
-                _total_cost += usage.get("cost", 0.0)
+                _inp = usage.get("input", 0)
+                _out = usage.get("output", 0)
+                _cst = usage.get("cost", 0.0)
+                _total_input_tokens += _inp
+                _total_output_tokens += _out
+                _total_cost += _cst
+                # Record one analytics row per LLM call, not one aggregated row at the end
+                if user_id:
+                    try:
+                        from src.utils.llm_instrumentation import record_llm_request, count_message_tokens
+                        _cat = count_message_tokens(msgs) if msgs else {}
+                        asyncio.ensure_future(record_llm_request(
+                            user_id=user_id,
+                            chat_id=chat_id,
+                            model=_atag_model_name,
+                            source="atag",
+                            category_tokens=_cat,
+                            input_tokens=_inp,
+                            output_tokens=_out,
+                            cost_usd=_cst,
+                        ))
+                    except Exception:
+                        pass
 
         # System prompt is assembled entirely from coder.agent.md — role,
         # output rules, and the framework-specific playbook all live in the
@@ -549,11 +572,12 @@ hardcode placeholder URLs like "https://example.com".
 """
 
         # ── 4. Initial LLM generation ─────────────────────────────────────────
-        response = await self.llm.ainvoke([
+        _gen_msgs = [
             SystemMessage(content=SYSTEM_PROMPT),
             HumanMessage(content=USER_PROMPT),
-        ])
-        _meter(response)
+        ]
+        response = await self.llm.ainvoke(_gen_msgs)
+        _meter(response, _gen_msgs)
         content = response.content.strip()
         content = re.sub(r"```(?:python)?\n?(.*?)\n?```", r"\1", content, flags=re.DOTALL)
 
@@ -567,11 +591,12 @@ hardcode placeholder URLs like "https://example.com".
                 f"Previous code:\n{content}\n\n"
                 "Please fix it and return the complete corrected code only."
             )
-            response = await self.llm.ainvoke([
+            _fix_msgs = [
                 SystemMessage(content=SYSTEM_PROMPT),
                 HumanMessage(content=fix_prompt),
-            ])
-            _meter(response)
+            ]
+            response = await self.llm.ainvoke(_fix_msgs)
+            _meter(response, _fix_msgs)
             content = response.content.strip()
             content = re.sub(r"```(?:python)?\n?(.*?)\n?```", r"\1", content, flags=re.DOTALL)
 
@@ -603,31 +628,9 @@ hardcode placeholder URLs like "https://example.com".
             except Exception as _bill_err:
                 logger.warning(f"[Credits] Failed to bill script-generation usage for user {user_id}: {_bill_err}")
 
-        # Persist one LlmRequest analytics row for the entire script-generation run.
-        # Runs even when cost=0 (e.g. admin users) so token counts are always captured.
-        if user_id and (_total_input_tokens or _total_output_tokens):
-            try:
-                from src.utils.llm_instrumentation import record_llm_request
-                _model_name = getattr(self.llm, "model_name", getattr(self.llm, "model", "unknown"))
-                await record_llm_request(
-                    user_id=user_id,
-                    chat_id=chat_id,
-                    model=_model_name,
-                    source="atag",
-                    category_tokens={
-                        "system_tokens": self._estimate_tokens(SYSTEM_PROMPT),
-                        "user_tokens": self._estimate_tokens(USER_PROMPT),
-                        "history_tokens": self._estimate_tokens(history_str),
-                        "tool_tokens": self._estimate_tokens(tool_context_section),
-                        "memory_tokens": 0,
-                        "rag_tokens": self._estimate_tokens(web_research_section),
-                    },
-                    input_tokens=_total_input_tokens,
-                    output_tokens=_total_output_tokens,
-                    cost_usd=_total_cost,
-                )
-            except Exception as _rec_err:
-                logger.warning(f"[instrumentation] ATAG LlmRequest write failed (non-fatal): {_rec_err}")
+        # Per-call llm_requests rows are written inside _meter() above so no
+        # aggregated write is needed here — each LLM invocation (initial generation
+        # + any self-fix passes) already has its own row with the actual token counts.
 
         return content
 
