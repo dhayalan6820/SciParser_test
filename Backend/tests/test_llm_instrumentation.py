@@ -295,6 +295,117 @@ async def test_record_llm_request_is_nonfatal_on_db_error(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_atag_run_script_generation_writes_llm_request_row(
+    sqlite_session_factory, monkeypatch
+):
+    """
+    Exercises the ATAG code path end-to-end:
+
+      ATAGProcessor.run_script_generation
+          → _meter() closure fires asyncio.ensure_future(record_llm_request(...))
+          → LlmRequest row with source="atag" and cost_usd > 0 lands in DB
+
+    This catches regressions where user_id is dropped or the ensure_future task
+    silently swallows an error before the row is committed.
+    """
+    import src.database.chat_db as chat_db_module
+    from src.services.ATAG import ATAGProcessor
+
+    monkeypatch.setattr(chat_db_module, "AsyncSessionLocal", sqlite_session_factory)
+
+    # ── 1. Mock LLM: returns valid Python content + usage_metadata ───────────
+    _VALID_SCRIPT = (
+        "import asyncio\n"
+        "async def main():\n"
+        "    pass\n"
+    )
+
+    class _MockLLM:
+        model_name = "google/gemini-3-flash-preview"
+
+        async def ainvoke(self, messages):
+            return SimpleNamespace(
+                usage_metadata={"input_tokens": 3000, "output_tokens": 500},
+                response_metadata={},
+                content=_VALID_SCRIPT,
+            )
+
+    # ── 2. Stub out Tavily enrichment and coder system prompt ─────────────────
+    async def _stub_tavily_enrich(self, task_summary):
+        return ""
+
+    monkeypatch.setattr(ATAGProcessor, "_tavily_enrich", _stub_tavily_enrich)
+    monkeypatch.setattr(
+        ATAGProcessor,
+        "_build_coder_system_prompt",
+        lambda self, framework: "You are a coder.",
+    )
+
+    # ── 3. Stub DatabaseManager so the billing tail doesn't hit real Postgres ─
+    class _NoOpDatabaseManager:
+        async def log_agent_execution(self, **_kwargs):
+            pass
+
+        async def deduct_credits(self, *_args):
+            pass
+
+    monkeypatch.setattr(
+        "src.services.brain.DatabaseManager",
+        _NoOpDatabaseManager,
+        raising=False,
+    )
+
+    # ── 4. Run script generation ──────────────────────────────────────────────
+    user_id = str(uuid.uuid4())
+    chat_id = f"thread-{uuid.uuid4()}"
+
+    processor = ATAGProcessor(llm=_MockLLM(), tavily_api_key=None)
+    script = await processor.run_script_generation(
+        task_summary="Go to example.com and click Sign In",
+        execution_history=[{"action": "navigate", "url": "https://example.com"}],
+        framework="playwright",
+        user_id=user_id,
+        chat_id=chat_id,
+    )
+
+    assert script, "run_script_generation must return a non-empty script"
+
+    # ── 5. Drain the event loop so ensure_future tasks complete ──────────────
+    pending = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
+    # Extra yield in case record_llm_request spawns its own awaits internally
+    for _ in range(5):
+        await asyncio.sleep(0)
+
+    # ── 6. Assert LlmRequest row exists with correct source and non-zero cost ─
+    async with sqlite_session_factory() as session:
+        rows = (
+            await session.execute(
+                select(LlmRequest).where(LlmRequest.user_id == user_id)
+            )
+        ).scalars().all()
+
+    assert len(rows) >= 1, (
+        f"expected at least one LlmRequest row for user {user_id}, got 0 — "
+        "_meter's ensure_future may have dropped user_id or silently errored"
+    )
+
+    atag_rows = [r for r in rows if r.source == "atag"]
+    assert atag_rows, (
+        f"no rows with source='atag' found (sources present: {[r.source for r in rows]})"
+    )
+
+    row = atag_rows[0]
+    assert row.cost_usd > 0, (
+        f"cost_usd must be positive for an ATAG script-generation call, got {row.cost_usd}"
+    )
+    assert row.input_tokens == 3000, f"expected 3000 input_tokens, got {row.input_tokens}"
+    assert row.output_tokens == 500, f"expected 500 output_tokens, got {row.output_tokens}"
+    assert row.chat_id == chat_id
+
+
+@pytest.mark.asyncio
 async def test_multiple_llm_calls_produce_multiple_rows(sqlite_session_factory, monkeypatch):
     """
     Simulates what happens during a real browser run: multiple sequential LLM
