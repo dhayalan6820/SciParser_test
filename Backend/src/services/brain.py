@@ -1099,27 +1099,39 @@ class Brain:
 
             _latency_ms = int((time.monotonic() - _t0) * 1000)
 
-            # Capture token usage and cost
+            # Capture token usage and cost.
+            # Check usage_metadata (newer LangChain ≥0.3 / Gemini) first, then fall back
+            # to response_metadata["token_usage"] (OpenAI-compat / OpenRouter).
             token_usage = {}
             cost = 0.0
-            if hasattr(response, "response_metadata") and "token_usage" in response.response_metadata:
+            _usage_meta = getattr(response, "usage_metadata", None)
+            if _usage_meta and isinstance(_usage_meta, dict) and (_usage_meta.get("input_tokens") or _usage_meta.get("output_tokens")):
+                token_usage = {
+                    "input": _usage_meta.get("input_tokens", 0),
+                    "output": _usage_meta.get("output_tokens", 0),
+                    "total": _usage_meta.get("input_tokens", 0) + _usage_meta.get("output_tokens", 0),
+                }
+            elif hasattr(response, "response_metadata") and "token_usage" in (response.response_metadata or {}):
                 usage = response.response_metadata["token_usage"]
                 token_usage = {
                     "input": usage.get("prompt_tokens", 0),
                     "output": usage.get("completion_tokens", 0),
                     "total": usage.get("total_tokens", 0)
                 }
-                cost = self._calculate_cost(self.llm.model_name, token_usage["input"], token_usage["output"])
+            if token_usage:
+                _model_for_cost = getattr(self.llm, "model_name", None) or getattr(self.llm, "model", "")
+                cost = self._calculate_cost(_model_for_cost, token_usage["input"], token_usage["output"])
                 token_usage["cost"] = cost
 
             # Record every LLM call to the analytics table (non-blocking, never raises)
             _finish_reason = None
             _rm = getattr(response, "response_metadata", None) or {}
             _finish_reason = _rm.get("finish_reason") or _rm.get("stop_reason")
+            _model_name = getattr(self.llm, "model_name", None) or getattr(self.llm, "model", "unknown")
             asyncio.ensure_future(record_llm_request(
                 user_id=user_id,
                 chat_id=chat_id,
-                model=self.llm.model_name,
+                model=_model_name,
                 source="brain",
                 category_tokens=count_message_tokens(current_messages),
                 input_tokens=token_usage.get("input", 0),
