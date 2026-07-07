@@ -243,3 +243,12 @@ code {
   --sidebar-border: rgba(255, 255, 255, 0.1);
   --sidebar-ring: oklch(0.7 0.2 150);
 }
+
+/* Fix: native <select> <option> dropdowns are rendered by the browser OS
+   chrome and do NOT inherit Tailwind dark-mode variables.  Without this
+   rule, dark-theme pages show white-background options with near-invisible
+   text.  Only targets .dark so light theme is untouched. */
+.dark select option {
+  background-color: #1a1a1a;
+  color: #ffffff;
+}
