@@ -353,7 +353,7 @@ class LlmRequest(Base):
     user_id = Column(String(36), nullable=False)
     chat_id = Column(String(100), nullable=True)
     model = Column(String(100), nullable=False)
-    source = Column(String(50), nullable=False)   # "brain" | "atag" | "wrapper"
+    source = Column(String(50), nullable=False)   # "chat" | "chat_nudge" | "atag"
 
     # Estimated token breakdown by context category (char-based approximation)
     system_tokens = Column(Integer, nullable=False, default=0, server_default="0")

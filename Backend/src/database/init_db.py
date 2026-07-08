@@ -69,10 +69,11 @@ async def init_database():
             await conn.execute(text(
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS credit_balance DOUBLE PRECISION NOT NULL DEFAULT 5.0"
             ))
-            # Task #176: llm_requests analytics table.
-            # Base.metadata.create_all above creates this for fresh installs; the
-            # explicit CREATE TABLE IF NOT EXISTS ensures existing deployments pick
-            # it up without an Alembic migration.
+            # llm_requests analytics table. The Alembic migration
+            # (alembic/versions/20260708_0001_create_llm_requests.py) is the
+            # source of truth going forward; this CREATE TABLE IF NOT EXISTS is
+            # kept as a defensive fallback for deployments that pick up the code
+            # change without running `alembic upgrade head` first.
             await conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS llm_requests (
                     id VARCHAR(36) PRIMARY KEY,

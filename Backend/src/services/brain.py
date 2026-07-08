@@ -1163,7 +1163,7 @@ class Brain:
                     }
                 return {}
 
-            def _fire_record(resp, msgs, lat_ms, src="brain"):
+            def _fire_record(resp, msgs, lat_ms, src="chat"):
                 """Fire one non-blocking llm_requests row for a single LLM call."""
                 _u = _extract_usage_dict(resp)
                 _fr = (getattr(resp, "response_metadata", None) or {}).get("finish_reason") or \
@@ -1210,8 +1210,8 @@ class Brain:
                     _t1 = time.monotonic()
                     _nudge_response = await llm_with_tools.ainvoke(_nudge_msgs)
                     _nudge_latency_ms = int((time.monotonic() - _t1) * 1000)
-                    # Record nudge as its own row with source="brain_nudge"
-                    _fire_record(_nudge_response, _nudge_msgs, _nudge_latency_ms, src="brain_nudge")
+                    # Record nudge as its own row with source="chat_nudge"
+                    _fire_record(_nudge_response, _nudge_msgs, _nudge_latency_ms, src="chat_nudge")
                     response = _nudge_response
 
             _latency_ms = _first_latency_ms + (
@@ -2652,6 +2652,48 @@ class Brain:
             ai_msg_id = str(uuid.uuid4())
             # Ensure chat session row exists before inserting a message (FK guard)
             await self.db_manager.get_or_create_chat_session(user_id, chat_id)
+
+            # Backfill the final message's token_usage/cost from the real
+            # per-stage numbers already written to AgentExecutionLog during
+            # this run (via update_ui -> log_agent_execution), instead of
+            # leaving these columns empty. Mirrors the aggregation the
+            # finally-block credit deduction below already does.
+            _msg_token_usage = None
+            _msg_cost = None
+            if '_agent_log_ids' in locals() and _agent_log_ids:
+                try:
+                    async with AsyncSessionLocal() as _tu_db:
+                        _tu_res = await _tu_db.execute(
+                            select(AgentExecutionLog.token_usage, AgentExecutionLog.cost)
+                            .where(AgentExecutionLog.id.in_(_agent_log_ids))
+                        )
+                        _total_input = _total_output = _total_tokens = 0
+                        _total_cost = 0.0
+                        for _tu_raw, _cost_raw in _tu_res.all():
+                            if _tu_raw:
+                                try:
+                                    _tu_parsed = json.loads(_tu_raw)
+                                    _total_input += int(_tu_parsed.get("input", 0) or 0)
+                                    _total_output += int(_tu_parsed.get("output", 0) or 0)
+                                    _total_tokens += int(_tu_parsed.get("total", 0) or (_tu_parsed.get("input", 0) or 0) + (_tu_parsed.get("output", 0) or 0))
+                                except (ValueError, TypeError):
+                                    pass
+                            if _cost_raw:
+                                try:
+                                    _total_cost += float(_cost_raw)
+                                except (ValueError, TypeError):
+                                    pass
+                    if _total_input or _total_output:
+                        _msg_token_usage = json.dumps({
+                            "input": _total_input,
+                            "output": _total_output,
+                            "total": _total_tokens,
+                        })
+                    if _total_cost > 0:
+                        _msg_cost = str(_total_cost)
+                except Exception as _tu_err:
+                    logger.warning(f"[Message backfill] Failed to aggregate token usage for message {ai_msg_id}: {_tu_err}")
+
             async with AsyncSessionLocal() as db:
                 ai_msg = Message(
                     message_id=ai_msg_id,
@@ -2661,7 +2703,9 @@ class Brain:
                     content=final_response,
                     plan_data=json.dumps(current_plan),
                     tool_calls=json.dumps(all_tool_calls),
-                    created_at=datetime.now(timezone.utc)
+                    created_at=datetime.now(timezone.utc),
+                    token_usage=_msg_token_usage,
+                    cost=_msg_cost,
                 )
                 db.add(ai_msg)
                 await db.commit()

@@ -23,6 +23,17 @@ security = HTTPBearer()
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 
 class ChatService:
+    # NOTE on LLM token instrumentation (llm_requests table, see
+    # src/utils/llm_instrumentation.py): ChatService itself never calls the
+    # LLM directly — it is a DB/analytics/session layer. The actual model
+    # invocation that answers a user's chat message lives in
+    # Brain.call_model() (src/services/brain.py) and is what services the
+    # /chat/message endpoint end-to-end, so those rows are written with
+    # source="chat" (nudge re-invocations use source="chat_nudge").
+    # ATAG's script-generation flow is a separate call site and uses
+    # source="atag". ChatService only *reads* llm_requests/AgentExecutionLog
+    # data back out for reporting (see get_user_conversation_usage,
+    # admin_get_operations_metrics below).
     @staticmethod
     async def create_user(db: AsyncSession, username: str, email: str, password: str) -> User:
         """Create a new user with hashed password."""
