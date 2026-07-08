@@ -9,6 +9,7 @@ import httpx
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any, List
+from urllib.parse import urlparse
 
 from sqlalchemy import select, insert
 from sqlalchemy.exc import IntegrityError
@@ -323,6 +324,12 @@ def _sanitize_browser_observation(observation: Any, tool_call: Dict[str, Any]) -
     return clean_error
 
 
+class _NavigationCooldownSkip(Exception):
+    """Raised inside _call_tool when browser_navigate is blocked by per-domain cooldown.
+    The observation string is already set; this just short-circuits further execution."""
+    pass
+
+
 class Brain:
     """
     Orchestrates the Multi-Agent System (Agent 1, Agent 2, Agent 3) using LangGraph and LangChain.
@@ -350,6 +357,66 @@ class Brain:
         self.tool_log_buffer: Dict[str, List[Dict]] = {}
         # Cognitive memory service (initialized after LLM is ready)
         self.memory_service: Optional[MemoryService] = None
+
+        # Navigation failure cooldown tracker: domain → {count: int, last_fail_ts: float,
+        # cooldown_until: float}. After 3 consecutive failures on the same domain,
+        # browser_navigate is blocked for COOLDOWN_SECONDS and the agent is told to
+        # back off so it doesn't burn tokens on a blocked site.
+        self._nav_failure_tracker: Dict[str, Dict[str, Any]] = {}
+
+    # --- Anti-rush navigation cooldown (per-domain) ---------------------------
+    MAX_NAV_FAILURES = 3
+    NAV_COOLDOWN_SECONDS = 60
+
+    def _extract_domain(self, url: str) -> str:
+        try:
+            return urlparse(url).netloc.lower()
+        except Exception:
+            return ""
+
+    def _record_nav_failure(self, domain: str):
+        """Increment failure count for a domain."""
+        now = time.time()
+        entry = self._nav_failure_tracker.get(domain, {"count": 0, "last_fail_ts": 0, "cooldown_until": 0})
+        entry["count"] += 1
+        entry["last_fail_ts"] = now
+        if entry["count"] >= self.MAX_NAV_FAILURES:
+            entry["cooldown_until"] = now + self.NAV_COOLDOWN_SECONDS
+            logger.warning(
+                f"Navigation cooldown activated for {domain}: "
+                f"{entry['count']} consecutive failures — blocking for {self.NAV_COOLDOWN_SECONDS}s"
+            )
+        self._nav_failure_tracker[domain] = entry
+
+    def _record_nav_success(self, domain: str):
+        """Reset failure count on a successful navigation."""
+        if domain in self._nav_failure_tracker:
+            del self._nav_failure_tracker[domain]
+
+    def _is_nav_blocked(self, domain: str) -> bool:
+        """Return True if this domain is currently in cooldown."""
+        entry = self._nav_failure_tracker.get(domain)
+        if not entry:
+            return False
+        now = time.time()
+        cooldown_until = entry.get("cooldown_until", 0)
+        # If cooldown has been set AND it expired, clean up
+        if cooldown_until > 0 and now > cooldown_until:
+            del self._nav_failure_tracker[domain]
+            return False
+        # Only blocked when cooldown is actively set (count >= MAX_NAV_FAILURES)
+        return cooldown_until > 0
+
+    def _nav_cooldown_message(self, domain: str) -> str:
+        """Return the message the agent sees when a navigation is blocked."""
+        entry = self._nav_failure_tracker.get(domain, {})
+        remaining = max(0, int(entry.get("cooldown_until", 0) - time.time()))
+        return (
+            f"[Navigation Cooldown] {domain} has blocked {entry.get('count', 0)} "
+            f"consecutive navigation attempts. Pausing for {remaining}s to avoid "
+            f"wasting tokens. Try a different approach: use web search, try a "
+            f"mirror/alternative URL, or ask the user for a different starting point."
+        )
 
     def buffer_tool_event(self, chat_id: str, event: Dict[str, Any]):
         """Append a tool event to the in-memory buffer (max 200 per chat)."""
@@ -1203,7 +1270,13 @@ class Brain:
             _last_validation_result: Optional[Dict[str, Any]] = None
             for tool_call in last_message.tool_calls:
                 tool = tool_map.get(tool_call["name"])
-                
+                # Pre-compute navigation metadata so it's available both inside the
+                # tool-execution block and in the post-execution cooldown tracker.
+                _tool_args = tool_call.get("args", {}) if isinstance(tool_call.get("args"), dict) else {}
+                _nav_url = _tool_args.get("url", "") if tool_call["name"] == "browser_navigate" else ""
+                _nav_domain = self._extract_domain(_nav_url)
+                _is_nav_tool = tool_call["name"] == "browser_navigate" and bool(_nav_domain)
+
                 # 1. Buffer + broadcast tool START to UI
                 _tool_start_event = {
                     "type": "tool_start",
@@ -1226,7 +1299,17 @@ class Brain:
                         # Use tool args as-is — injecting chat_id breaks MCP browser tools
                         # that have strict schemas (browser_get_state, browser_screenshot, etc.)
                         tool_args = tool_call["args"]
-                        
+
+                        # --- Anti-rush cooldown for browser_navigate ---------
+                        # After 3 consecutive failures on the same domain, block
+                        # further navigation for 60 s so we don't burn tokens
+                        # hammering a site that is actively blocking us.
+                        if _is_nav_tool and self._is_nav_blocked(_nav_domain):
+                            observation = self._nav_cooldown_message(_nav_domain)
+                            # Skip actual tool execution — return the cooldown message as-is
+                            # but still fall through to status/observer/logging below.
+                            raise _NavigationCooldownSkip()
+
                         # 2. Execute the actual tool (Playwright or Tavily) SEQUENTIALLY
                         observation = await tool.ainvoke(tool_args)
 
@@ -1237,6 +1320,9 @@ class Brain:
                         # clean, actionable error so the agent can recover.
                         observation = _sanitize_browser_observation(observation, tool_call)
 
+                    except _NavigationCooldownSkip:
+                        # Cooldown already set observation above; pass through
+                        pass
                     except Exception as e:
                         observation = f"Error executing tool: {str(e)}"
 
@@ -1398,6 +1484,20 @@ class Brain:
                     logger.warning(f"Obstacle detection error (non-fatal): {_oe}")
 
                 status = "SUCCESS" if "Error" not in str(observation) else "FAILED"
+
+                # --- Navigation cooldown: track success / failure per domain ------------
+                # After the tool has executed (or been skipped by cooldown), update the
+                # per-domain failure tracker so repeated blocked navigations trigger a
+                # 60-second cooldown instead of burning tokens.
+                if _is_nav_tool and _nav_domain:
+                    _obs_text = str(observation)
+                    # Treat cooldown-skipped calls as failures for tracking purposes
+                    _was_skipped = "[Navigation Cooldown]" in _obs_text
+                    _was_error = "Error" in _obs_text or "[Navigation Error]" in _obs_text
+                    if status == "SUCCESS" and not _was_skipped and not _was_error:
+                        self._record_nav_success(_nav_domain)
+                    else:
+                        self._record_nav_failure(_nav_domain)
 
                 # ── Verifier step (Task #154 Step 3) ────────────────────────────────────
                 # Explicit post-action check that the tool call's expected effect actually
