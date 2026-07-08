@@ -225,11 +225,14 @@ def _find_chrome_binary() -> str:
             "/usr/local/bin/chromium",
         ]
         # Also check Playwright cache (Linux / CI)
-        import glob
-        playwright_paths = glob.glob(
-            str(Path.home() / ".cache" / "ms-playwright" / "chromium-*" / "chrome-linux64" / "chrome")
-        )
-        candidates.extend(playwright_paths)
+        # Use the Playwright API to get the exact binary path — it knows where
+        # the browser was installed regardless of current working directory.
+        try:
+            from playwright.sync_api import sync_playwright
+            with sync_playwright() as p:
+                candidates.append(p.chromium.executable_path)
+        except Exception:
+            pass
 
     # 1. Check well-known paths
     for path in candidates:
@@ -670,12 +673,14 @@ async def run_bridge():
     chrome_ready = asyncio.Event()
     chrome_proc: asyncio.subprocess.Process | None = None
 
-    if own_browser:
-        # We own Chrome: launch it ourselves in the background.
+    if own_browser and browser_engine != "camoufox":
+        # We own Chrome/Chromium: launch it ourselves in the background.
         # The patch will await chrome_ready before attempting BrowserSession.start().
+        # NOTE: if browser_engine is "camoufox", camoufox manages its own
+        # browser internally; skip the external chrome launch entirely.
         async def _start_chrome_background() -> None:
             nonlocal chrome_proc
-            print("Bridge: launching Chrome in background...", file=sys.stderr)
+            print(f"Bridge: launching {browser_engine} in background...", file=sys.stderr)
             try:
                 chrome_proc = await _launch_chrome(port, user_data_dir, headless, proxy_url=proxy_url)
 
@@ -714,8 +719,10 @@ async def run_bridge():
         os.environ["MCP_BROWSER_CDP_URL"] = cdp_url
 
     else:
-        # External Chrome already running; signal ready immediately
-        print(f"Bridge: connecting to existing browser at {cdp_url}", file=sys.stderr)
+        if browser_engine == "camoufox":
+            print("Bridge: camoufox engine selected; browser will be managed internally.", file=sys.stderr)
+        else:
+            print(f"Bridge: connecting to existing browser at {cdp_url}", file=sys.stderr)
         chrome_ready.set()
 
     # -- Write browser-use config so _init_browser_session uses our cdp_url ---
