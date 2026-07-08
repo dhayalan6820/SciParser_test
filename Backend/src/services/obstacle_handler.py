@@ -57,6 +57,52 @@ def detect_captcha_type(observation_text: str) -> Optional[str]:
     return None
 
 
+# ── Generic "continue" interstitial detector ────────────────────────────────
+#
+# Many sites (Amazon included) occasionally insert a full-page confirmation
+# wall between the agent and its actual destination: no real content, just a
+# short instructional sentence ("Click the button below to continue
+# shopping") and a single CTA button. This is NOT a CAPTCHA and NOT a modal
+# on top of real content — the entire page IS the interstitial. Because it
+# can appear on any site with different wording/branding, we detect it by the
+# INSTRUCTIONAL PHRASING ("click/tap/press ... to continue"), not by any
+# site-specific button text, so the same detector generalizes dynamically
+# instead of being a one-off patch for a single screenshot/site.
+#
+# Deliberately narrower than a bare "continue" button match: ordinary
+# multi-step flows (checkout "Continue to payment", a post-add-to-cart modal
+# offering "Continue shopping" alongside "Go to cart") are NOT obstacles —
+# the agent should read and choose between those options normally. We only
+# match the imperative "click/tap/press ... to continue" sentence structure,
+# which is specific to a full-page redirect/confirmation wall.
+_CONTINUE_INTERSTITIAL_PATTERNS = [
+    r"\bclick\b.{0,25}\bto continue\b",
+    r"\btap\b.{0,25}\bto continue\b",
+    r"\bpress\b.{0,25}\bto continue\b",
+    # Deliberately a small, near-immediate gap for these two — "click
+    # Continue to Payment ... to proceed" (a legitimate multi-step checkout
+    # button) must NOT match, only the bare "click Continue to proceed"
+    # phrasing used by an actual confirmation wall.
+    r"\bselect continue\b.{0,5}\b(?:below|to proceed)\b",
+    r"\bclick continue\b.{0,5}\bto proceed\b",
+]
+
+
+def detect_continue_interstitial(observation_text: str) -> bool:
+    """Return True if the page looks like a generic full-page "click to
+    continue" confirmation wall rather than real content.
+
+    Site-agnostic by design — matches the instructional sentence structure
+    (imperative verb + "to continue"), not any particular site's button
+    label or branding, so new sites using the same common UX pattern are
+    recognized automatically without a new per-site rule.
+    """
+    if not observation_text:
+        return False
+    t = str(observation_text).lower()
+    return any(re.search(p, t) for p in _CONTINUE_INTERSTITIAL_PATTERNS)
+
+
 # ── OTP / verification-code detector (first new obstacle type) ─────────────
 
 _OTP_PATTERNS = [
@@ -185,6 +231,9 @@ def detect_obstacle(observation_text: str) -> Optional[ObstacleMatch]:
     if captcha_type:
         return ObstacleMatch(category="captcha", obstacle_type=captcha_type, requires_human_input=False)
 
+    if detect_continue_interstitial(text):
+        return ObstacleMatch(category="interstitial", obstacle_type="continue_wall", requires_human_input=False)
+
     otp_type = detect_otp(text)
     if otp_type:
         return ObstacleMatch(category="otp", obstacle_type=otp_type, requires_human_input=True)
@@ -194,15 +243,18 @@ def detect_obstacle(observation_text: str) -> Optional[ObstacleMatch]:
 
 def detect_obstacle_from_observed(state: Any) -> Optional[ObstacleMatch]:
     """Same result shape as `detect_obstacle`, but reads pre-computed
-    `captcha_type`/`otp_type` flags off an `observer.ObservedState` instead
-    of re-running the raw-text regex scan a second time. Callers that already
-    ran the Observer step for this tool result (`src.services.observer.observe`)
-    should use this instead of `detect_obstacle(str(observation))`.
+    `captcha_type`/`otp_type`/`interstitial_type` flags off an
+    `observer.ObservedState` instead of re-running the raw-text regex scan a
+    second time. Callers that already ran the Observer step for this tool
+    result (`src.services.observer.observe`) should use this instead of
+    `detect_obstacle(str(observation))`.
     """
     if state is None:
         return None
     if getattr(state, "captcha_type", None):
         return ObstacleMatch(category="captcha", obstacle_type=state.captcha_type, requires_human_input=False)
+    if getattr(state, "interstitial_type", None):
+        return ObstacleMatch(category="interstitial", obstacle_type=state.interstitial_type, requires_human_input=False)
     if getattr(state, "otp_type", None):
         return ObstacleMatch(category="otp", obstacle_type=state.otp_type, requires_human_input=True)
     return None

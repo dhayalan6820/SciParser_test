@@ -19,7 +19,7 @@ import re
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from src.services.obstacle_handler import detect_captcha_type, detect_otp
+from src.services.obstacle_handler import detect_captcha_type, detect_continue_interstitial, detect_otp
 
 _LOADING_PATTERNS = [
     r"\bloading\b", r"\bplease wait\b", r"\bspinner\b", r"\bfetching\b",
@@ -61,12 +61,13 @@ class ObservedState:
     error_signals: List[str] = field(default_factory=list)
     captcha_type: Optional[str] = None
     otp_type: Optional[str] = None
+    interstitial_type: Optional[str] = None
     elements_summary: str = ""
 
     @property
     def is_blocked(self) -> bool:
         """True when the page shows a blocker the agent cannot just click through."""
-        return bool(self.captcha_type or self.otp_type or self.has_modal)
+        return bool(self.captcha_type or self.otp_type or self.interstitial_type or self.has_modal)
 
     def to_dict(self) -> dict:
         return {
@@ -78,6 +79,7 @@ class ObservedState:
             "error_signals": self.error_signals,
             "captcha_type": self.captcha_type,
             "otp_type": self.otp_type,
+            "interstitial_type": self.interstitial_type,
             "is_blocked": self.is_blocked,
         }
 
@@ -108,5 +110,6 @@ def observe(observation_text: str) -> ObservedState:
         error_signals=error_signals,
         captcha_type=detect_captcha_type(text),
         otp_type=detect_otp(text),
+        interstitial_type=("continue_wall" if detect_continue_interstitial(text) else None),
         elements_summary=text[:300],
     )

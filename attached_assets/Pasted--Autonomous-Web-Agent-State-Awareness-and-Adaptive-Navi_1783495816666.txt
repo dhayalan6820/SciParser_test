@@ -1,0 +1,323 @@
+# Autonomous Web Agent - State Awareness and Adaptive Navigation
+
+## Objective
+
+Build an autonomous web agent that understands the current state of any webpage before taking action. The agent must never assume that the expected page has loaded. Instead, it should continuously observe, reason, adapt, and recover from unexpected UI changes.
+
+---
+
+# Core Principles
+
+## 1. State-Driven Execution
+
+The agent must always determine the current page state before executing any planned action.
+
+Every interaction follows this loop:
+
+```
+Observe
+↓
+Understand
+↓
+Decide
+↓
+Execute
+↓
+Verify
+↓
+Repeat
+```
+
+Never execute actions based solely on the original plan.
+
+---
+
+# 2. Detect Unexpected States
+
+The agent must recognize when the website presents an unexpected page, including:
+
+* Security verification pages
+* "Click here to continue" pages
+* CAPTCHA
+* Login screens
+* Session expiration
+* Consent or cookie dialogs
+* Region selection
+* Language selection
+* Error pages
+* Rate limiting
+* Human verification
+* Loading screens
+* Popups or modal dialogs
+* Network retry pages
+* Website redesigns
+
+Example:
+
+Expected:
+
+```
+Amazon Search Results
+```
+
+Actual:
+
+```
+Click here to continue
+```
+
+The agent must conclude:
+
+> Current page is not the expected destination.
+> A verification/interstitial page is blocking progress.
+
+It should then determine the safest next action instead of continuing with the original workflow.
+
+---
+
+# 3. Page Understanding
+
+The agent should infer page intent using multiple signals rather than a single selector.
+
+Analyze:
+
+* Page title
+* URL
+* Visible headings
+* Main buttons
+* Forms
+* Navigation
+* Dialogs
+* Error messages
+* Accessibility labels
+* Semantic HTML
+* DOM structure
+* Interactive elements
+
+Classify the page as one of:
+
+* Home page
+* Search results
+* Product page
+* Login page
+* Checkout page
+* Verification page
+* CAPTCHA
+* Cookie consent
+* Error page
+* Unknown page
+
+If confidence is low, gather more evidence before acting.
+
+---
+
+# 4. Goal-Oriented Planning
+
+The agent should focus on the user's objective rather than a rigid sequence of clicks.
+
+Example goal:
+
+```
+Find the product and add it to the cart.
+```
+
+If the expected page is not available:
+
+```
+Current state:
+Verification page
+
+Goal:
+Reach search results
+
+Action:
+Click Continue
+
+Verify:
+Did the search page load?
+
+If yes:
+Resume the original workflow.
+```
+
+---
+
+# 5. Dynamic Recovery
+
+When an unexpected state occurs:
+
+1. Identify the issue.
+2. Explain why progress stopped.
+3. Generate recovery options.
+4. Execute the safest recovery.
+5. Verify success.
+6. Resume the original task.
+
+Avoid repeating the same failed action.
+
+---
+
+# 6. Verification After Every Action
+
+After every interaction, verify that the expected outcome occurred.
+
+Example:
+
+Action:
+
+```
+Click Search
+```
+
+Verify:
+
+* Did the URL change?
+* Did new content load?
+* Is the loading spinner gone?
+* Did the DOM update?
+* Is the expected button visible?
+
+If not:
+
+* Retry if appropriate.
+* Choose an alternative strategy.
+* Escalate only after multiple recovery attempts fail.
+
+---
+
+# 7. Learn from Previous Failures
+
+Maintain a persistent knowledge base of encountered issues.
+
+Store information such as:
+
+```
+Website
+Issue
+Detection signals
+Successful recovery
+Failed recovery attempts
+Timestamp
+Confidence
+```
+
+Example:
+
+```
+Site:
+Amazon
+
+Problem:
+Click here to continue page
+
+Detection:
+Button text = "Click here to continue"
+
+Solution:
+Click the Continue button
+
+Result:
+Success
+
+Confidence:
+98%
+```
+
+Future sessions should recognize the same pattern immediately and apply the proven recovery.
+
+---
+
+# 8. Pattern Recognition
+
+Identify recurring UI patterns instead of memorizing exact selectors.
+
+Examples:
+
+* Verification screens
+* Cookie banners
+* Modal dialogs
+* Login prompts
+* Infinite loading
+* Empty search results
+* Pop-up interruptions
+
+Generalize solutions so they remain effective after minor UI changes.
+
+---
+
+# 9. Self-Correction
+
+If repeated failures occur:
+
+* Stop repeating the same action.
+* Analyze why it failed.
+* Form a new hypothesis.
+* Test an alternative.
+* Continue only after verifying progress.
+
+Avoid entering infinite retry loops.
+
+---
+
+# 10. Autonomous Reasoning
+
+Before every action, the agent should internally evaluate:
+
+* What page am I currently on?
+* Is this the page I expected?
+* What evidence supports that conclusion?
+* What is blocking progress?
+* What is the safest next action?
+* How can I verify success?
+* If this fails, what is my next strategy?
+
+---
+
+# 11. Continuous Awareness
+
+The agent should continuously monitor:
+
+* URL changes
+* DOM mutations
+* New dialogs
+* Button availability
+* Network idle state
+* JavaScript navigation
+* Loading indicators
+* Error messages
+* Authentication status
+* Session validity
+
+If the page changes unexpectedly, pause and reassess before continuing.
+
+---
+
+# 12. Recovery Priority
+
+When progress is blocked, attempt recovery in this order:
+
+1. Close popups or overlays.
+2. Accept cookie or consent dialogs.
+3. Complete verification pages when appropriate.
+4. Refresh the page if safe.
+5. Wait for asynchronous loading.
+6. Retry using an alternative element.
+7. Navigate using breadcrumbs or menus.
+8. Return to the previous stable state.
+9. Restart only the failed portion of the workflow, not the entire process.
+
+---
+
+# 13. Success Criteria
+
+The agent is successful when it:
+
+* Understands the actual page before acting.
+* Adapts to unexpected website behavior.
+* Recovers autonomously from interruptions.
+* Learns from previous successful recoveries.
+* Avoids repeating failed actions.
+* Verifies every interaction.
+* Maintains progress toward the user's goal despite UI changes.
+
+The agent should behave like an experienced human operator who observes, reasons, adapts, learns, and continuously improves, rather than a script that follows predefined clicks.

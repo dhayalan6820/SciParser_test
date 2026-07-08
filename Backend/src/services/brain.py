@@ -1367,6 +1367,30 @@ class Brain:
                 except Exception as _ce:
                     logger.warning(f"CAPTCHA detection error (non-fatal): {_ce}")
 
+                # ── Generic "continue" interstitial detection ───────────────────────────
+                # Site-agnostic full-page confirmation wall (see obstacle_handler.
+                # detect_continue_interstitial) — the agent should treat the entire page
+                # as a blocker, not real content, and click the primary continue-style
+                # control before resuming the original mission. This is NOT hardcoded to
+                # any one site/wording; any page matching the generic "click ... to
+                # continue" phrasing is handled the same way dynamically.
+                try:
+                    _interstitial_type = _observed.interstitial_type
+                    if _interstitial_type and not _captcha_type:
+                        observation = str(observation) + (
+                            f"\n\n[CONTINUE_INTERSTITIAL_DETECTED: {_interstitial_type}]\n"
+                            f"This page is a full-page confirmation wall, not real content — it is "
+                            f"blocking progress toward the actual goal. Do NOT treat this as the "
+                            f"expected destination. Find the single primary button/link that matches "
+                            f"the page's own continue instruction (e.g. 'Continue', 'Continue shopping', "
+                            f"'Proceed') and click it now. After clicking, verify the page actually "
+                            f"changed (new URL or new content) before resuming the original task — if "
+                            f"it is still the same wall, try an alternative element or navigate directly "
+                            f"to the intended URL instead of repeating the same click."
+                        )
+                except Exception as _ie:
+                    logger.warning(f"Continue-interstitial detection error (non-fatal): {_ie}")
+
                 # ── Address Agent: deterministic address-autocomplete handling ─────────
                 # Only runs when the task actually supplied an address to enter and no
                 # CAPTCHA is blocking the page. See src/services/address_agent.py for the

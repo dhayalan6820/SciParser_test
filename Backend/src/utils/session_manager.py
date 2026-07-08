@@ -19,6 +19,23 @@ class SessionManager:
         self.stream_manager = stream_manager
         self.sessions: Dict[str, Dict[str, Any]] = {}
         self._lock = asyncio.Lock()
+        # Per-user locks serializing close_browser calls. Multiple callers can
+        # legitimately race to close the same browser (stop_process, the
+        # tool-graph's cleanup finally block, and an explicit POST
+        # /browser/close from the frontend can all fire around the same
+        # cancellation). Without serialization, a second caller can grab the
+        # `mcp` reference before the first sets it to None and then call
+        # mcp.close() concurrently from a different asyncio task than the one
+        # that entered its AsyncExitStack, raising "Attempted to exit cancel
+        # scope in a different task than it was entered in".
+        self._close_locks: Dict[str, asyncio.Lock] = {}
+
+    def _get_close_lock(self, user_id: str) -> asyncio.Lock:
+        lock = self._close_locks.get(user_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._close_locks[user_id] = lock
+        return lock
 
     def get_session(self, user_id: str) -> Dict[str, Any]:
         """Retrieves or initializes an isolated state container for a user."""
@@ -55,9 +72,18 @@ class SessionManager:
         """
         if user_id not in self.sessions:
             return
-        session = self.sessions[user_id]
-        mcp = session.get("mcp_manager")
-        if mcp:
+        # Serialize concurrent closers for this user — see the comment on
+        # self._close_locks in __init__ for why this is required.
+        async with self._get_close_lock(user_id):
+            session = self.sessions[user_id]
+            mcp = session.get("mcp_manager")
+            if mcp is None:
+                return
+            # Clear the reference before awaiting the close so any concurrent
+            # caller that queued up behind this lock sees mcp_manager is
+            # already gone once it acquires the lock, instead of trying to
+            # close the same (already-closing) manager a second time.
+            session["mcp_manager"] = None
             try:
                 # Enforce a hard timeout so a stuck MCP manager (e.g. mid-
                 # tool-call deadlock) can't hang the stop/close operation.
@@ -67,7 +93,6 @@ class SessionManager:
                 logger.warning(f"[User {user_id}] Browser close timed out after 5s — forcing None.")
             except Exception as e:
                 logger.error(f"[User {user_id}] Error closing browser: {e}")
-            session["mcp_manager"] = None
 
     async def shutdown_session(self, user_id: str):
         """Fully destroy a user session (called at server shutdown or on explicit full-cleanup)."""

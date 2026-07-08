@@ -59,6 +59,35 @@ async def test_close_browser_on_none_mcp_is_noop():
     await sm.close_browser("user-2")  # should not raise
 
 
+@pytest.mark.anyio
+async def test_close_browser_concurrent_callers_close_mcp_only_once():
+    """Regression test: stop_process, the tool-graph finally block, and an
+    explicit POST /browser/close can all race to close the same browser
+    around a cancellation. Without serialization, a second caller can grab
+    the `mcp` reference before the first sets it to None and call
+    mcp.close() a second time concurrently -- close() must only ever be
+    awaited once no matter how many callers race in."""
+    sm = SessionManager()
+    sm.get_session("user-3")
+
+    mcp = AsyncMock()
+
+    async def slow_close():
+        await asyncio.sleep(0.05)
+
+    mcp.close = AsyncMock(side_effect=slow_close)
+    sm.sessions["user-3"]["mcp_manager"] = mcp
+
+    await asyncio.gather(
+        sm.close_browser("user-3"),
+        sm.close_browser("user-3"),
+        sm.close_browser("user-3"),
+    )
+
+    mcp.close.assert_awaited_once()
+    assert sm.sessions["user-3"]["mcp_manager"] is None
+
+
 # ---------------------------------------------------------------------------
 # Brain.stop_process tests
 # ---------------------------------------------------------------------------
