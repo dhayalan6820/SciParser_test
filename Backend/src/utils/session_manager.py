@@ -48,7 +48,7 @@ class SessionManager:
 
     async def close_browser(self, user_id: str):
         """Close the browser/MCP process for a user but keep the session alive for reuse.
-        
+
         Use this for the 'Close Browser' button and 'Stop Process' — it stops
         the browser process and marks mcp_manager as None so it will be
         re-initialised on the next task, without destroying the whole session.
@@ -59,8 +59,12 @@ class SessionManager:
         mcp = session.get("mcp_manager")
         if mcp:
             try:
-                await mcp.close()
+                # Enforce a hard timeout so a stuck MCP manager (e.g. mid-
+                # tool-call deadlock) can't hang the stop/close operation.
+                await asyncio.wait_for(mcp.close(), timeout=5.0)
                 logger.info(f"[User {user_id}] Browser process closed.")
+            except asyncio.TimeoutError:
+                logger.warning(f"[User {user_id}] Browser close timed out after 5s — forcing None.")
             except Exception as e:
                 logger.error(f"[User {user_id}] Error closing browser: {e}")
             session["mcp_manager"] = None

@@ -1485,6 +1485,16 @@ class Brain:
 
                 status = "SUCCESS" if "Error" not in str(observation) else "FAILED"
 
+                # --- Cooperative cancellation: stop early if user clicked Stop ---
+                # Without this check, the agent will keep executing every remaining
+                # tool_call in last_message.tool_calls even though the user already
+                # asked to abort. We break the loop here so the cancellation takes
+                # effect immediately instead of after all queued tools finish.
+                if chat_id in self.cancelled_chats:
+                    observation = "Process stopped by user."
+                    status = "CANCELLED"
+                    break
+
                 # --- Navigation cooldown: track success / failure per domain ------------
                 # After the tool has executed (or been skipped by cooldown), update the
                 # per-domain failure tracker so repeated blocked navigations trigger a
@@ -1554,13 +1564,20 @@ class Brain:
                 # on unique content, then fall back to a hard cutoff if still too big.
                 llm_observation = _compress_observation_for_llm(str(observation), MAX_OBSERVATION_CHARS_FOR_LLM)
 
-                # --- NEW: Explicit cleanup if browser was closed ---
+                # --- Explicit cleanup if browser was closed by tool call ---
                 if tool_call["name"] in ["browser_close_session", "browser_close_all"] and status == "SUCCESS":
                     logger.info(f"Browser closed by tool call. Cleaning up session for user {user_id}")
                     session_obj = self.session_manager.get_session(user_id)
                     if session_obj.get("mcp_manager"):
-                        # Don't await close here to avoid deadlock if we're inside a tool call, 
-                        # but mark it as None so it's not reused.
+                        # Close the MCP manager so the subprocess (and any Chrome
+                        # process it owns) actually terminates.  Use a short timeout
+                        # so a stuck manager doesn't block the whole tool loop.
+                        try:
+                            mcp = session_obj["mcp_manager"]
+                            await asyncio.wait_for(mcp.close(), timeout=3.0)
+                            logger.info(f"[User {user_id}] MCP manager closed after browser_close_* tool.")
+                        except Exception:
+                            pass
                         session_obj["mcp_manager"] = None
                 
                 # 4. Buffer + broadcast tool OUTPUT to UI
@@ -1628,8 +1645,23 @@ class Brain:
             }
             final_state = await app.ainvoke(graph_input, config=config)
             return final_state
+        except asyncio.CancelledError:
+            # Propagate the cancellation so callers can react.
+            raise
         finally:
-            pass
+            # If this graph was cancelled (user hit "Stop"), the browser/MCP
+            # process may still be alive.  Ask the session manager to close it
+            # so the next run starts fresh and the old Chrome process doesn't
+            # leak.  We use a timeout so a stuck manager can't block the
+            # cleanup path indefinitely.
+            try:
+                await asyncio.wait_for(
+                    self.session_manager.close_browser(user_id), timeout=5.0
+                )
+            except asyncio.TimeoutError:
+                pass
+            except Exception:
+                pass
 
     async def process_chat_message(
         self,
