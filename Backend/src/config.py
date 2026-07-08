@@ -110,7 +110,7 @@ DATABASE_URL = _require("DATABASE_URL") if IS_PRODUCTION else os.getenv("DATABAS
 # ---------------------------------------------------------------------------
 OPENROUTER_API_KEY = _require("OPENROUTER_API_KEY") if IS_PRODUCTION else os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = _str("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-OPENROUTER_MODEL = _str("OPENROUTER_MODEL", "google/gemini-3-flash-preview")
+OPENROUTER_MODEL = _str("OPENROUTER_MODEL", "openai/gpt-oss-120b:free")
 
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 
