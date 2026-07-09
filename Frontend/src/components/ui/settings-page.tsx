@@ -22,12 +22,13 @@ import {
   Server,
   Zap,
   RefreshCw,
+  Brain,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface SettingsPageProps {
   onBack: () => void;
-  userProfile: { username: string; email: string } | null;
+  userProfile: { username: string; email: string; role?: string } | null;
   activeThreadId?: string | null;
   onResetSession?: () => Promise<void> | void;
 }
@@ -67,6 +68,22 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile,
   const [engineSaving, setEngineSaving] = React.useState(false);
   const [engineSaved, setEngineSaved] = React.useState(false);
 
+  // LLM Provider (admin only)
+  const isAdmin = userProfile?.role === "admin";
+  const [llmProvider, setLlmProvider] = React.useState<string | null>(null);
+  const [llmModel, setLlmModel] = React.useState("");
+  const [llmApiKey, setLlmApiKey] = React.useState("");
+  const [llmBaseUrl, setLlmBaseUrl] = React.useState("");
+  const [llmLoading, setLlmLoading] = React.useState(false);
+  const [llmSaving, setLlmSaving] = React.useState(false);
+  const [llmSaved, setLlmSaved] = React.useState(false);
+  const [llmDeleting, setLlmDeleting] = React.useState(false);
+  const [llmError, setLlmError] = React.useState<string | null>(null);
+  const [llmTesting, setLlmTesting] = React.useState(false);
+  const [llmTestResult, setLlmTestResult] = React.useState<{ provider: string; model: string; base_url: string } | null>(null);
+  const [llmTestError, setLlmTestError] = React.useState<string | null>(null);
+  const [showLlmBaseUrl, setShowLlmBaseUrl] = React.useState(false);
+
 
   React.useEffect(() => {
     setLoadingStatus(true);
@@ -82,6 +99,20 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile,
       .then((r) => setBrowserEngine((r.engine as "camoufox" | "chrome") || "camoufox"))
       .catch(() => {})
       .finally(() => setEngineLoading(false));
+
+    if (isAdmin) {
+      setLlmLoading(true);
+      sciparserApi.getLlmProvider()
+        .then((r) => {
+          if (r.active) {
+            setLlmProvider(r.provider);
+            setLlmModel(r.model || "");
+            setLlmBaseUrl(r.base_url || "");
+          }
+        })
+        .catch(() => {})
+        .finally(() => setLlmLoading(false));
+    }
   }, []);
 
   const handleSetEngine = async (engine: "camoufox" | "chrome") => {
@@ -148,6 +179,72 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile,
       setProxyTestError(err.message || "Proxy test failed");
     } finally {
       setProxyTesting(false);
+    }
+  };
+
+  // LLM Provider handlers (admin only)
+  const handleSaveLlmProvider = async () => {
+    if (!llmProvider || !llmModel.trim() || !llmApiKey.trim()) return;
+    setLlmSaving(true);
+    setLlmError(null);
+    setLlmSaved(false);
+    setLlmTestResult(null);
+    setLlmTestError(null);
+    try {
+      const res = await sciparserApi.setLlmProvider(
+        llmProvider,
+        llmModel.trim(),
+        llmApiKey.trim(),
+        llmBaseUrl.trim() || undefined,
+      );
+      setLlmProvider(res.provider);
+      setLlmModel(res.model);
+      setLlmApiKey(""); // clear so only the masked version is shown
+      setLlmBaseUrl(res.base_url || "");
+      setLlmSaved(true);
+      setTimeout(() => setLlmSaved(false), 3000);
+    } catch (err: any) {
+      setLlmError(err.message || "Failed to save LLM provider");
+    } finally {
+      setLlmSaving(false);
+    }
+  };
+
+  const handleDeleteLlmProvider = async () => {
+    setLlmDeleting(true);
+    setLlmError(null);
+    setLlmTestResult(null);
+    setLlmTestError(null);
+    try {
+      await sciparserApi.deleteLlmProvider();
+      setLlmProvider(null);
+      setLlmModel("");
+      setLlmApiKey("");
+      setLlmBaseUrl("");
+    } catch (err: any) {
+      setLlmError(err.message || "Failed to remove LLM provider");
+    } finally {
+      setLlmDeleting(false);
+    }
+  };
+
+  const handleTestLlmProvider = async () => {
+    if (!llmProvider || !llmModel.trim() || !llmApiKey.trim()) return;
+    setLlmTesting(true);
+    setLlmTestResult(null);
+    setLlmTestError(null);
+    try {
+      const res = await sciparserApi.testLlmProvider(
+        llmProvider,
+        llmModel.trim(),
+        llmApiKey.trim(),
+        llmBaseUrl.trim() || undefined,
+      );
+      setLlmTestResult({ provider: res.provider, model: res.model, base_url: res.base_url });
+    } catch (err: any) {
+      setLlmTestError(err.message || "LLM provider test failed");
+    } finally {
+      setLlmTesting(false);
     }
   };
 
@@ -626,6 +723,193 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onBack, userProfile,
             </div>
           </div>
         </section>
+
+        {/* ── LLM Provider Section (admin only) ──────────── */}
+        {isAdmin && (
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <Brain className="h-4 w-4 text-rose-400" />
+              <h2 className="text-sm font-bold text-foreground uppercase tracking-widest">LLM Provider</h2>
+            </div>
+            <div className="rounded-2xl border border-border bg-card overflow-hidden">
+              {/* Info banner */}
+              <div className="px-5 py-4 border-b border-border">
+                <div className="flex gap-3">
+                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-rose-500/10 border border-rose-500/20">
+                    <Zap className="h-3.5 w-3.5 text-rose-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-foreground mb-1">Custom LLM provider</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Override the global OpenRouter default with your own API key. Supports Groq, NVIDIA, and Ollama — all using the OpenAI API format. Only admins can configure this.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-5 py-4 space-y-4">
+                {/* Provider selector */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Provider</label>
+                  <div className="flex gap-2">
+                    {(["groq", "nvidia", "ollama"] as const).map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => { setLlmProvider(p); setLlmError(null); }}
+                        disabled={llmSaving || llmDeleting}
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all",
+                          llmProvider === p
+                            ? "border-rose-400/40 bg-rose-400/10 text-rose-300"
+                            : "border-border bg-background text-muted-foreground hover:border-rose-400/20 hover:bg-rose-400/5"
+                        )}
+                      >
+                        {p.charAt(0).toUpperCase() + p.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Model */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Model</label>
+                  <input
+                    type="text"
+                    value={llmModel}
+                    onChange={(e) => { setLlmModel(e.target.value); setLlmError(null); }}
+                    placeholder="e.g. llama-3.1-70b-versatile"
+                    className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-rose-400/40 focus:ring-1 focus:ring-rose-400/20 font-mono transition-colors"
+                  />
+                  <p className="text-[11px] text-muted-foreground/60">
+                    Use the exact model identifier from your provider's docs.
+                  </p>
+                </div>
+
+                {/* API Key */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">API Key</label>
+                  <input
+                    type="password"
+                    value={llmApiKey}
+                    onChange={(e) => { setLlmApiKey(e.target.value); setLlmError(null); }}
+                    placeholder={llmProvider ? "gsk_... or nvapi-..." : "Select a provider first"}
+                    disabled={!llmProvider}
+                    className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-rose-400/40 focus:ring-1 focus:ring-rose-400/20 font-mono transition-colors disabled:opacity-40"
+                  />
+                </div>
+
+                {/* Optional base URL */}
+                <div className="space-y-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowLlmBaseUrl((v) => !v)}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", showLlmBaseUrl && "rotate-90")} />
+                    Custom base URL (optional — overrides defaults)
+                  </button>
+                  <AnimatePresence>
+                    {showLlmBaseUrl && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <input
+                          type="text"
+                          value={llmBaseUrl}
+                          onChange={(e) => setLlmBaseUrl(e.target.value)}
+                          placeholder="https://api.groq.com/openai/v1"
+                          className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-rose-400/40 focus:ring-1 focus:ring-rose-400/20 font-mono transition-colors"
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Error */}
+                {llmError && (
+                  <div className="flex items-start gap-2 rounded-xl bg-red-950/20 border border-red-500/20 px-3.5 py-2.5">
+                    <AlertCircle className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
+                    <p className="text-xs text-red-300">{llmError}</p>
+                  </div>
+                )}
+
+                {/* Buttons */}
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    className="gap-1.5 text-xs font-semibold bg-rose-500 hover:bg-rose-600 text-white"
+                    onClick={handleSaveLlmProvider}
+                    disabled={llmSaving || !llmProvider || !llmModel.trim() || !llmApiKey.trim()}
+                  >
+                    {llmSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                    {llmSaving ? "Saving…" : "Save Provider"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 text-xs font-semibold text-amber-500 border-amber-200 hover:bg-amber-50 dark:border-amber-900/30 dark:hover:bg-amber-900/10 disabled:opacity-40"
+                    onClick={handleDeleteLlmProvider}
+                    disabled={llmDeleting || !llmProvider}
+                  >
+                    {llmDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                    Reset to OpenRouter
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 text-xs font-semibold text-emerald-500 border-emerald-200 hover:bg-emerald-50 dark:border-emerald-900/30 dark:hover:bg-emerald-900/10 disabled:opacity-40"
+                    onClick={handleTestLlmProvider}
+                    disabled={llmTesting || !llmProvider || !llmModel.trim() || !llmApiKey.trim()}
+                  >
+                    {llmTesting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FlaskConical className="h-3.5 w-3.5" />}
+                    Test Connection
+                  </Button>
+                </div>
+
+                {/* Test result */}
+                <AnimatePresence>
+                  {llmTestResult && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                      className="flex items-center gap-2 rounded-xl bg-emerald-900/20 border border-emerald-500/20 px-3.5 py-2.5"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                      <p className="text-xs text-emerald-300">
+                        Connected to {llmTestResult.provider} ({llmTestResult.model}) at {llmTestResult.base_url}
+                      </p>
+                    </motion.div>
+                  )}
+                  {llmTestError && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                      className="flex items-start gap-2 rounded-xl bg-red-950/20 border border-red-500/20 px-3.5 py-2.5"
+                    >
+                      <AlertCircle className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
+                      <p className="text-xs text-red-300">{llmTestError}</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Saved confirmation */}
+                <AnimatePresence>
+                  {llmSaved && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                      className="flex items-center gap-2 rounded-xl bg-emerald-900/20 border border-emerald-500/20 px-3.5 py-2.5"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                      <p className="text-xs text-emerald-300">Provider saved — takes effect on the next automation run.</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          </section>
+        )}
 
       </div>
     </div>

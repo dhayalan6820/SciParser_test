@@ -60,6 +60,23 @@ class AdminSetCreditsRequest(BaseModel):
     delta: Optional[float] = None
 
 
+class LlmProviderRequest(BaseModel):
+    """Set or update a custom LLM provider for the current user."""
+    provider: Literal["openrouter", "groq", "nvidia", "ollama"]
+    model: str
+    api_key: str
+    base_url: Optional[str] = None
+
+
+class LlmProviderResponse(BaseModel):
+    """Return the current user's LLM provider config with the API key masked."""
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    api_key_masked: Optional[str] = None
+    base_url: Optional[str] = None
+    active: bool = False
+
+
 class ConversationTokenUsage(BaseModel):
     chat_id: str
     input_tokens: int = 0

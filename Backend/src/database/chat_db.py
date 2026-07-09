@@ -72,6 +72,10 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     proxy_url = Column(Text, nullable=True)
     browser_engine = Column(String(50), nullable=True, default=None)
+    llm_provider = Column(String(20), nullable=True, default=None)
+    llm_model = Column(String(100), nullable=True, default=None)
+    llm_api_key = Column(Text, nullable=True)
+    llm_base_url = Column(Text, nullable=True)
     role = Column(String(20), nullable=False, default="user", server_default="user")
     status = Column(String(20), nullable=False, default="active", server_default="active")
     # Task #146: admin-managed usage credits. 1 credit == $1 of the same

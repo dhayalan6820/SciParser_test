@@ -73,6 +73,7 @@ interface UserProfile {
   user_id: string;
   username: string;
   email: string;
+  role: string;
   created_at: string;
   updated_at: string;
   credit_balance?: number;
@@ -915,6 +916,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         user_id: user.user_id,
         username: user.username,
         email: user.email,
+        role: user.role,
         created_at: user.created_at,
         updated_at: user.updated_at,
         credit_balance: user.credit_balance,

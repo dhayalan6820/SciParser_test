@@ -39,7 +39,8 @@ from src.schemas.schema import (
     AdminAutomationsResponse, AdminBrowserSessionsResponse, AdminUsageResponse,
     AdminSecurityResponse, AdminAgentRunTimelineResponse, AdminAgentActionResponse,
     AdminAnalyticsResponse, OperationsLogListResponse, AdminUserAnalyticsResponse,
-    AdminSetCreditsRequest, ConversationTokenUsage, AppLogListResponse
+    AdminSetCreditsRequest, ConversationTokenUsage, AppLogListResponse,
+    LlmProviderRequest, LlmProviderResponse,
 )
 from src.utils.logger import logger
 from src.services.brain import brain
@@ -2092,6 +2093,123 @@ async def get_memory_skills(
     if not brain.memory_service:
         return []
     return await brain.memory_service.get_all_skills(str(user.id))
+
+
+# ---------------------------------------------------------------------------
+# Admin-only LLM Provider Settings
+# ---------------------------------------------------------------------------
+
+@app.get("/sciparser/v1/settings/llm-provider")
+async def get_llm_provider(
+    current_user: User = Depends(ChatService.get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the current user's custom LLM provider config (admin only, API key masked)."""
+    result = await db.execute(select(User).where(User.user_id == current_user.user_id))
+    db_user = result.scalar_one_or_none()
+    if not db_user or not db_user.llm_provider:
+        return LlmProviderResponse(
+            provider=None, model=None, api_key_masked=None, base_url=None, active=False,
+        )
+    masked = (
+        db_user.llm_api_key[:4] + "***" + db_user.llm_api_key[-4:]
+        if db_user.llm_api_key and len(db_user.llm_api_key) > 8
+        else "***" if db_user.llm_api_key else None
+    )
+    return LlmProviderResponse(
+        provider=db_user.llm_provider,
+        model=db_user.llm_model,
+        api_key_masked=masked,
+        base_url=db_user.llm_base_url,
+        active=True,
+    )
+
+
+@app.post("/sciparser/v1/settings/llm-provider")
+async def set_llm_provider(
+    req: LlmProviderRequest,
+    current_user: User = Depends(ChatService.get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Store a custom LLM provider config for the current admin user (admin only)."""
+    result = await db.execute(select(User).where(User.user_id == current_user.user_id))
+    db_user = result.scalar_one_or_none()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    db_user.llm_provider = req.provider
+    db_user.llm_model = req.model.strip()
+    db_user.llm_api_key = req.api_key.strip() or None
+    db_user.llm_base_url = (req.base_url or "").strip() or None
+    await db.commit()
+
+    # Evict cached LLM so the next run picks up the new config
+    brain._user_llm_cache.pop(current_user.user_id, None)
+
+    masked = (
+        db_user.llm_api_key[:4] + "***" + db_user.llm_api_key[-4:]
+        if db_user.llm_api_key and len(db_user.llm_api_key) > 8
+        else "***" if db_user.llm_api_key else None
+    )
+    return LlmProviderResponse(
+        provider=db_user.llm_provider,
+        model=db_user.llm_model,
+        api_key_masked=masked,
+        base_url=db_user.llm_base_url,
+        active=True,
+    )
+
+
+@app.delete("/sciparser/v1/settings/llm-provider")
+async def delete_llm_provider(
+    current_user: User = Depends(ChatService.get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reset LLM provider to the global OpenRouter default (admin only)."""
+    result = await db.execute(select(User).where(User.user_id == current_user.user_id))
+    db_user = result.scalar_one_or_none()
+    if db_user:
+        db_user.llm_provider = None
+        db_user.llm_model = None
+        db_user.llm_api_key = None
+        db_user.llm_base_url = None
+        await db.commit()
+
+    brain._user_llm_cache.pop(current_user.user_id, None)
+    return {"status": "removed"}
+
+
+@app.post("/sciparser/v1/settings/llm-provider/test")
+async def test_llm_provider(
+    req: LlmProviderRequest,
+    current_user: User = Depends(ChatService.get_current_admin_user),
+):
+    """Test-connect to the specified LLM provider with a tiny prompt (admin only)."""
+    from langchain_openai import ChatOpenAI
+    from langchain_core.messages import HumanMessage
+
+    base_url = (req.base_url or "").strip()
+    api_key = req.api_key.strip()
+
+    provider_defaults = {
+        "groq": "https://api.groq.com/openai/v1",
+        "nvidia": "https://integrate.api.nvidia.com/v1",
+        "ollama": "http://localhost:11434/v1",
+    }
+    resolved_url = base_url or provider_defaults.get(req.provider, config.OPENROUTER_BASE_URL)
+
+    try:
+        test_llm = ChatOpenAI(
+            model=req.model,
+            openai_api_key=api_key,
+            base_url=resolved_url,
+            temperature=0.1,
+            max_tokens=10,
+        )
+        _ = await test_llm.ainvoke([HumanMessage(content="Say OK")])
+        return {"status": "ok", "provider": req.provider, "model": req.model, "base_url": resolved_url}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Provider test failed: {exc}")
 
 
 if __name__ == "__main__":

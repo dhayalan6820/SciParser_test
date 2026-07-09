@@ -636,6 +636,68 @@ export const sciparserApi = {
     return res.json() as Promise<{ status: string; engine: string }>;
   },
 
+  // LLM Provider (admin only)
+  getLlmProvider: async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/settings/llm-provider`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Failed to load LLM provider settings");
+    }
+    return res.json() as Promise<{ provider: string | null; model: string | null; api_key_masked: string | null; base_url: string | null; active: boolean }>;
+  },
+
+  setLlmProvider: async (provider: string, model: string, apiKey: string, baseUrl?: string) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/settings/llm-provider`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: formattedToken },
+      body: JSON.stringify({ provider, model, api_key: apiKey, base_url: baseUrl || null }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Failed to save LLM provider");
+    }
+    return res.json() as Promise<{ provider: string; model: string; api_key_masked: string; base_url: string | null; active: boolean }>;
+  },
+
+  deleteLlmProvider: async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/settings/llm-provider`, {
+      method: "DELETE",
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Failed to remove LLM provider");
+    }
+    return res.json() as Promise<{ status: string }>;
+  },
+
+  testLlmProvider: async (provider: string, model: string, apiKey: string, baseUrl?: string) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/settings/llm-provider/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: formattedToken },
+      body: JSON.stringify({ provider, model, api_key: apiKey, base_url: baseUrl || null }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "LLM provider test failed");
+    }
+    return res.json() as Promise<{ status: string; provider: string; model: string; base_url: string }>;
+  },
+
   // Logout
   logout: () => {
     localStorage.removeItem("access_token");

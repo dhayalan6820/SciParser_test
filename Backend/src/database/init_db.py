@@ -69,6 +69,23 @@ async def init_database():
             await conn.execute(text(
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS credit_balance DOUBLE PRECISION NOT NULL DEFAULT 5.0"
             ))
+            # LLM provider columns — stored per-user so admins can configure custom
+            # providers (Groq / NVIDIA / Ollama) that override the global OpenRouter
+            # default. api_key is kept nullable so that provider selection without a
+            # key can still be useful for admin-managed deployments where keys live
+            # in env vars or a vault.
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS llm_provider VARCHAR(20)"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS llm_model VARCHAR(100)"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS llm_api_key TEXT"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS llm_base_url TEXT"
+            ))
             # llm_requests analytics table. The Alembic migration
             # (alembic/versions/20260708_0001_create_llm_requests.py) is the
             # source of truth going forward; this CREATE TABLE IF NOT EXISTS is

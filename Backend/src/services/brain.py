@@ -364,6 +364,10 @@ class Brain:
         # back off so it doesn't burn tokens on a blocked site.
         self._nav_failure_tracker: Dict[str, Dict[str, Any]] = {}
 
+        # Per-user LLM cache: user_id → ChatOpenAI.  Cleared on provider config
+        # change so that the next run picks up the updated base_url/model/api_key.
+        self._user_llm_cache: Dict[str, Any] = {}
+
     # --- Anti-rush navigation cooldown (per-domain) ---------------------------
     MAX_NAV_FAILURES = 3
     NAV_COOLDOWN_SECONDS = 60
@@ -417,6 +421,49 @@ class Brain:
             f"wasting tokens. Try a different approach: use web search, try a "
             f"mirror/alternative URL, or ask the user for a different starting point."
         )
+
+    # ------------------------------------------------------------------
+    # Per-user LLM factory (admin-configured provider overrides)
+    # ------------------------------------------------------------------
+    async def _get_user_llm(self, user_id: str) -> Any:
+        """Return a ChatOpenAI configured for this user's custom provider,
+        or the global default (self.llm) when none is configured.
+
+        Results are cached in self._user_llm_cache so repeated calls within
+        the same process are cheap.  The cache is invalidated when the user
+        updates their provider config via the settings endpoints.
+        """
+        cached = self._user_llm_cache.get(user_id)
+        if cached is not None:
+            return cached
+
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(User).where(User.user_id == user_id))
+            db_user = result.scalar_one_or_none()
+
+        if not db_user or not db_user.llm_provider or db_user.llm_provider == "openrouter":
+            self._user_llm_cache[user_id] = self.llm
+            return self.llm
+
+        # Resolve default base URLs for known providers
+        provider_defaults = {
+            "groq": "https://api.groq.com/openai/v1",
+            "nvidia": "https://integrate.api.nvidia.com/v1",
+            "ollama": "http://localhost:11434/v1",
+        }
+        base_url = db_user.llm_base_url or provider_defaults.get(
+            db_user.llm_provider, config.OPENROUTER_BASE_URL
+        )
+
+        user_llm = ChatOpenAI(
+            model=db_user.llm_model or config.OPENROUTER_MODEL,
+            openai_api_key=db_user.llm_api_key or config.OPENROUTER_API_KEY,
+            base_url=base_url,
+            temperature=0.3,
+            max_tokens=16384,
+        )
+        self._user_llm_cache[user_id] = user_llm
+        return user_llm
 
     def buffer_tool_event(self, chat_id: str, event: Dict[str, Any]):
         """Append a tool event to the in-memory buffer (max 200 per chat)."""
@@ -918,8 +965,9 @@ class Brain:
         browser_spec = spec_loader.load_spec("browser")
         filtered_tools = spec_loader.filter_tools(tools, browser_spec.tool_filter)
 
-        # Bind tools to the LLM
-        llm_with_tools = self.llm.bind_tools(filtered_tools)
+        # Bind tools to the LLM (per-user override if configured)
+        _llm = await self._get_user_llm(user_id)
+        llm_with_tools = _llm.bind_tools(filtered_tools)
 
         # Build one static system message PER STAGE, once per execution — never
         # rebuilt per step. Each stage's prompt (~1-1.5KB) is identical across
@@ -1144,7 +1192,7 @@ class Brain:
                 current_messages = new_history
                 logger.info("Conversation history summarized and compressed.")
 
-            _model_name = getattr(self.llm, "model_name", None) or getattr(self.llm, "model", "unknown")
+            _model_name = getattr(_llm, "model_name", None) or getattr(_llm, "model", "unknown")
 
             def _extract_usage_dict(resp):
                 """Extract (input, output, total) token counts from a LangChain response."""
