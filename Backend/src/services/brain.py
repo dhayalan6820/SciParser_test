@@ -2429,6 +2429,17 @@ class Brain:
                                     # We re-index the plan starting from 2 (since Analysis is 1)
                                     for i, task in enumerate(plan_data):
                                         task["id"] = str(i + 2)
+                                        # Ensure the task itself has a non-empty title
+                                        if not task.get("title", "").strip():
+                                            task["title"] = task.get("description", "").split(".")[0].strip() or f"Step {i + 2}"
+                                        # Sanitise subtask titles so the frontend fallback
+                                        # ("Step N") is never triggered in normal runs.
+                                        for j, sub in enumerate(task.get("subtasks", [])):
+                                            if not sub.get("title", "").strip():
+                                                sub["title"] = (
+                                                    sub.get("description", "").split(".")[0].strip()
+                                                    or f"{task['title']} — part {j + 1}"
+                                                )
                                     current_plan = [current_plan[0]] + plan_data
                                     if self.stream_manager:
                                         await self.stream_manager.broadcast_plan(chat_id, current_plan)

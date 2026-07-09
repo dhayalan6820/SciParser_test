@@ -81,7 +81,25 @@ REASONING:
 <why this strategy was chosen>
 
 PLAN:
-<JSON array of {id, title, description, status: "pending", priority, level, dependencies, subtasks}>
+<JSON array of task objects. Each task has these fields:
+  - id: string (sequential number as string, e.g. "2")
+  - title: string — SHORT, action-oriented label (3–8 words) describing exactly what
+    this task does, e.g. "Navigate to search results page", "Fill booking form",
+    "Extract availability data", "Confirm and submit reservation". Never leave blank.
+  - description: string — one sentence elaborating on the task goal.
+  - status: "pending"
+  - priority: "high" | "medium" | "low"
+  - level: integer (0 = top-level)
+  - dependencies: array of id strings
+  - subtasks: array of subtask objects, each with:
+      - id: string (e.g. "2.1", "2.2")
+      - title: string — SHORT, action-oriented label (3–8 words) for this specific
+        step, e.g. "Click date picker", "Select 2 guests", "Enter email address".
+        REQUIRED — never leave blank or omit.
+      - description: string — one sentence describing the sub-step.
+      - status: "pending"
+      - priority: "high" | "medium" | "low"
+>
 
 MISSION OBJECTIVE:
 <numbered instructions for the Browser agent, including target URL and every confirmed input>
