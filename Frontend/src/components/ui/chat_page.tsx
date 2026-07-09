@@ -2212,7 +2212,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     try {
       await sciparserApi.closeBrowser();
       setBrowserActive(false);
-      setBrowserFrame(null);
+      // Keep the last frame so the user can still see the final screenshot
+      // after closing the browser session.
       setSuccess("Browser session closed successfully.");
       setTimeout(() => setSuccess(""), 3000);
     } catch (err) {
