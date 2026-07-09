@@ -1227,6 +1227,7 @@ class Brain:
                 token_usage["cost"] = cost
 
             # Broadcast thinking to UI
+            thought_text = None
             if response.content:
                 # Clean up any leaked internal tool markers (common in some OpenRouter models)
                 clean_content = re.sub(r"<｜tool▁.*?｜>", "", response.content)
@@ -1256,7 +1257,7 @@ class Brain:
             # for calls that produced only a tool call).
             if update_ui_func:
                 _details = clean_content if response.content and clean_content else None
-                await update_ui_func(1, "in-progress", details=_details, token_usage=token_usage, cost=cost)
+                await update_ui_func(1, "in-progress", details=_details, thought=thought_text if thought_text else None, token_usage=token_usage, cost=cost)
 
             return {"messages": [response]}
 
@@ -1805,12 +1806,14 @@ class Brain:
                 return self._mask_labeled_secrets(self._redact_secret_values_in_text(data, _agent_log_secret_values))
             return data
 
-        async def update_ui(idx, status, input_data=None, output_data=None, error=None, details=None, token_usage=None, cost=None):
+        async def update_ui(idx, status, input_data=None, output_data=None, error=None, details=None, thought=None, token_usage=None, cost=None):
             # Ensure idx is within bounds of current_plan
             if idx < len(current_plan):
                 current_plan[idx]["status"] = status
                 if details:
                     current_plan[idx]["details"] = details
+                if thought:
+                    current_plan[idx]["thought"] = thought
                 
                 if token_usage:
                     current_plan[idx]["token_usage"] = token_usage

@@ -818,6 +818,16 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           }
           if (msg.type === "plan_update") {
             setCurrentPlan(msg.data);
+            // Extract persisted thoughts from plan tasks so they survive page refresh
+            if (Array.isArray(msg.data)) {
+              const thoughtMap: Record<string, string> = {};
+              msg.data.forEach((t: any) => {
+                if (t.thought) thoughtMap[t.id] = t.thought;
+              });
+              if (Object.keys(thoughtMap).length > 0) {
+                setTaskThoughts((prev) => ({ ...prev, ...thoughtMap }));
+              }
+            }
             // Only mark as typing if the plan has a task that is actually still running.
             // Rehydrated plans from stopped/completed runs must not restart the polling loop.
             const stillRunning = Array.isArray(msg.data) && msg.data.some(

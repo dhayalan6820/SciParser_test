@@ -33,6 +33,7 @@ export interface Task {
   dependencies: string[];
   subtasks: Subtask[];
   details?: string;
+  thought?: string;
   token_usage?: {
     input: number;
     output: number;
@@ -202,7 +203,7 @@ export default function Plan({
           {propTasks.map((task, idx) => {
             const isActive   = task.id === activeTaskId;
             const isExpanded = expandedTasks[task.id] ?? isActive;
-            const thought    = taskThoughts[task.id] ?? (isActive ? latestThought : null);
+            const thought    = taskThoughts[task.id] ?? (isActive ? latestThought : null) ?? task.thought ?? null;
             const hasSubs    = task.subtasks && task.subtasks.length > 0;
 
             const activeSubIdx = isActive
@@ -350,6 +351,25 @@ export default function Plan({
                               );
                             })}
                           </div>
+                        )}
+
+                        {/* Reasoning for completed tasks with sub-steps — shown after sub-task list */}
+                        {hasSubs && !isActive && thought && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="rounded-xl border border-sky-500/10 bg-sky-500/5 p-3"
+                          >
+                            <div className="flex items-center gap-2 mb-2">
+                              <Brain className="h-3 w-3 text-sky-400/70" />
+                              <span className="text-[9px] font-bold uppercase tracking-[0.25em] text-sky-400/60">
+                                Agent Reasoning
+                              </span>
+                            </div>
+                            <p className="text-[12px] leading-[1.65] text-muted-foreground font-normal whitespace-pre-line">
+                              {thought}
+                            </p>
+                          </motion.div>
                         )}
 
                         {/* Reasoning fallback — shown below description when there are no sub-steps */}
