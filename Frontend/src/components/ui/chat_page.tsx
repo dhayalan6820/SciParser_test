@@ -128,10 +128,6 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const [isCancellingStep, setIsCancellingStep] = React.useState(false);
   const [currentPlan, setCurrentPlan] = React.useState<Task[] | null>(null);
   const [toolLogs, setToolLogs] = React.useState<any[]>([]);
-  const [aiThinking, setAiThinking] = React.useState<string | null>(null);
-  const [taskThoughts, setTaskThoughts] = React.useState<
-    Record<string, string>
-  >({});
   const [showExecutionPlan, setShowExecutionPlan] = React.useState(true);
   const [userInterruptedHide, setUserInterruptedHide] = React.useState(false);
   const [visiblePlans, setVisiblePlans] = React.useState<
@@ -348,7 +344,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         behavior: "smooth",
       });
     }
-  }, [toolLogs, aiThinking, isAtBottom]);
+  }, [toolLogs, isAtBottom]);
 
   // File handling functions
   const handleFileDrop = async (e: React.DragEvent) => {
@@ -819,16 +815,6 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           }
           if (msg.type === "plan_update") {
             setCurrentPlan(msg.data);
-            // Extract persisted thoughts from plan tasks so they survive page refresh
-            if (Array.isArray(msg.data)) {
-              const thoughtMap: Record<string, string> = {};
-              msg.data.forEach((t: any) => {
-                if (t.thought) thoughtMap[t.id] = t.thought;
-              });
-              if (Object.keys(thoughtMap).length > 0) {
-                setTaskThoughts((prev) => ({ ...prev, ...thoughtMap }));
-              }
-            }
             // Only mark as typing if the plan has a task that is actually still running.
             // Rehydrated plans from stopped/completed runs must not restart the polling loop.
             const stillRunning = Array.isArray(msg.data) && msg.data.some(
@@ -837,19 +823,6 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             if (stillRunning) setIsAiTyping(true);
           } else if (msg.type === "notification" && msg.notification_type === "camoufox_fallback") {
             setCamoufoxFallbackWarning(true);
-          } else if (msg.type === "thought_update") {
-            setAiThinking(msg.data);
-            // Associate thought with the currently running task
-            setCurrentPlan((prev) => {
-              if (!prev) return prev;
-              const active = prev.find(
-                (t) => t.status === "in-progress" || t.status === "running",
-              );
-              if (active) {
-                setTaskThoughts((th) => ({ ...th, [active.id]: msg.data }));
-              }
-              return prev;
-            });
           }
         } catch {
           /* ignore non-JSON keep-alive responses */
@@ -1179,9 +1152,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     setUserInterruptedBrowser(false); // Reset browser interruption flag
     isFirstFrame.current = true; // Reset for new message
     setToolLogs([]); // Clear tool logs for the new live process
-    setAiThinking(null); // Clear thinking for new process
     setCurrentPlan(null); // Clear old plan steps immediately
-    setTaskThoughts({}); // Clear old per-task reasoning immediately
     // Refresh the active engine badge so it reflects what the backend will actually use
     sciparserApi.getBrowserEngine().then((r) => {
       setActiveBrowserEngine((r.engine as "camoufox" | "chrome") || "camoufox");
@@ -3487,8 +3458,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                                 {currentPlan ? (
                                   <Plan
                                     tasks={currentPlan}
-                                    thoughts={aiThinking ? [aiThinking] : []}
-                                    taskThoughts={taskThoughts}
+                                    thoughts={[]}
+                                    taskThoughts={{}}
                                     isAiTyping={isAiTyping}
                                   />
                                 ) : (

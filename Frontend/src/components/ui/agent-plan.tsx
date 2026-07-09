@@ -8,7 +8,6 @@ import {
   CircleX,
   ChevronDown,
   ChevronUp,
-  Brain,
   Zap,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -64,7 +63,6 @@ export default function Plan({
   const [manualToggle, setManualToggle]   = useState<Record<string, boolean>>({});
   const prevStatuses = useRef<Record<string, string>>({});
 
-  const latestThought = thoughts[thoughts.length - 1] ?? null;
 
   const activeTask = useMemo(() => {
     const running = propTasks.find((t) => isRunning(t.status));
@@ -203,7 +201,6 @@ export default function Plan({
           {propTasks.map((task, idx) => {
             const isActive   = task.id === activeTaskId;
             const isExpanded = expandedTasks[task.id] ?? isActive;
-            const thought    = taskThoughts[task.id] ?? (isActive ? latestThought : null) ?? task.thought ?? null;
             const hasSubs    = task.subtasks && task.subtasks.length > 0;
 
             const activeSubIdx = isActive
@@ -324,81 +321,16 @@ export default function Plan({
                                     </div>
                                   </motion.div>
 
-                                  {/* Inline reasoning — rendered immediately after the active sub-step */}
-                                  {subActive && thought && (
-                                    <motion.div
-                                      initial={{ opacity: 0, y: 4 }}
-                                      animate={{ opacity: 1, y: 0 }}
-                                      exit={{ opacity: 0 }}
-                                      className="ml-6 rounded-xl border border-sky-500/10 bg-sky-500/5 p-3"
-                                    >
-                                      <div className="flex items-center gap-2 mb-2">
-                                        <Brain className="h-3 w-3 text-sky-400/70" />
-                                        <span className="text-[9px] font-bold uppercase tracking-[0.25em] text-sky-400/60">
-                                          Agent Reasoning
-                                        </span>
-                                        <span className="ml-auto flex h-1.5 w-1.5">
-                                          <span className="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-sky-400 opacity-60" />
-                                          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-sky-400" />
-                                        </span>
-                                      </div>
-                                      <p className="text-[12px] leading-[1.65] text-muted-foreground font-normal whitespace-pre-line">
-                                        {thought}
-                                      </p>
-                                    </motion.div>
-                                  )}
+                                  {/* Internal reasoning is kept hidden from the UI;
+                                      the agent still uses memory for learning, but
+                                      only the current execution steps are shown. */}
                                 </React.Fragment>
                               );
                             })}
                           </div>
                         )}
 
-                        {/* Reasoning for completed tasks with sub-steps — shown after sub-task list */}
-                        {hasSubs && !isActive && thought && (
-                          <motion.div
-                            initial={{ opacity: 0, y: 4 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="rounded-xl border border-sky-500/10 bg-sky-500/5 p-3"
-                          >
-                            <div className="flex items-center gap-2 mb-2">
-                              <Brain className="h-3 w-3 text-sky-400/70" />
-                              <span className="text-[9px] font-bold uppercase tracking-[0.25em] text-sky-400/60">
-                                Agent Reasoning
-                              </span>
-                            </div>
-                            <p className="text-[12px] leading-[1.65] text-muted-foreground font-normal whitespace-pre-line">
-                              {thought}
-                            </p>
-                          </motion.div>
-                        )}
 
-                        {/* Reasoning fallback — shown below description when there are no sub-steps */}
-                        {!hasSubs && thought && (
-                          <AnimatePresence>
-                            <motion.div
-                              initial={{ opacity: 0, y: 6 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0 }}
-                              className="rounded-xl border border-sky-500/10 bg-sky-500/5 p-4"
-                            >
-                              <div className="flex items-center gap-2 mb-2.5">
-                                <Brain className="h-3.5 w-3.5 text-sky-400/70" />
-                                <span className="text-[9px] font-bold uppercase tracking-[0.25em] text-sky-400/60">
-                                  Agent Reasoning
-                                </span>
-                                {isActive && (
-                                  <span className="ml-auto flex h-1.5 w-1.5">
-                                    <span className="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-sky-400 opacity-60" />
-                                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-sky-400" />
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-[13px] leading-[1.7] text-muted-foreground font-normal whitespace-pre-line">
-                                {thought}
-                              </p>
-                            </motion.div>
-                          </AnimatePresence>
-                        )}
                       </div>
                     </motion.div>
                   )}
