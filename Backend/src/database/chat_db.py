@@ -115,6 +115,7 @@ class Message(Base):
     form_data = Column(Text)
     token_usage = Column(Text)
     cost = Column(Text)
+    screenshots = Column(Text)
 
     user: Mapped["User"] = relationship("User", back_populates="messages")
 

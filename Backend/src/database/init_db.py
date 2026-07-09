@@ -27,6 +27,9 @@ async def init_database():
             await conn.execute(text(
                 "ALTER TABLE users DROP COLUMN IF EXISTS floppydata_api_key"
             ))
+            await conn.execute(text(
+                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS screenshots TEXT"
+            ))
             # Reset rows that were seeded with the migration default so env-var override
             # works correctly for self-hosted deployments. Resetting 'camoufox' → NULL is
             # safe: the effective engine is unchanged (env fallback also yields camoufox

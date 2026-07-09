@@ -2805,6 +2805,27 @@ class Brain:
             # Ensure current_plan exists before using it
             if 'current_plan' in locals():
                 await update_ui(len(current_plan) - 1, "failed", error=error_detail, details=f"Overall task failed: {error_detail}")
+
+            # Persist the error as an AI message so it survives page refresh.
+            _error_msg_id = str(uuid.uuid4())
+            try:
+                async with AsyncSessionLocal() as _err_db:
+                    await self.db_manager.get_or_create_chat_session(user_id, chat_id)
+                    _err_msg = Message(
+                        message_id=_error_msg_id,
+                        chat_id=chat_id,
+                        user_id=user_id,
+                        role="ai",
+                        content=f"\u26a0\ufe0f An unexpected error occurred: {error_detail}",
+                        plan_data=json.dumps(current_plan) if 'current_plan' in locals() else None,
+                        tool_calls=json.dumps(all_tool_calls) if 'all_tool_calls' in locals() else None,
+                        created_at=datetime.now(timezone.utc),
+                    )
+                    _err_db.add(_err_msg)
+                    await _err_db.commit()
+            except Exception as _persist_err:
+                logger.warning(f"[Error persist] Failed to persist error message to DB: {_persist_err}")
+
             return {"success": False, "message": f"An unexpected error occurred: {error_detail}"}
         finally:
             # Safely cleanup stream tasks if they were initialized.

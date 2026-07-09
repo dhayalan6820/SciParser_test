@@ -1700,6 +1700,7 @@ class ChatService:
                     "token_usage": json.loads(msg.token_usage) if msg.token_usage else None,
                     "cost": msg.cost,
                     "tool_calls": json.loads(msg.tool_calls) if msg.tool_calls else [],
+                    "screenshots": json.loads(msg.screenshots) if msg.screenshots else None,
                     "timestamp": msg.created_at.isoformat() if msg.created_at else datetime.now(timezone.utc).isoformat()
                 }
                 for msg in messages

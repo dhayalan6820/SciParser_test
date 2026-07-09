@@ -190,6 +190,22 @@ export const sciparserApi = {
     return res.json();
   },
 
+  updateMessageScreenshots: async (messageId: string, screenshots: string[]) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/chat/messages/${messageId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: formattedToken,
+      },
+      body: JSON.stringify({ screenshots }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
   // Chat Messages
   sendChatMessage: async (
     message: string,

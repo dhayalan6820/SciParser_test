@@ -21,7 +21,7 @@ from email.mime.text import MIMEText
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request, Query, Response
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request, Query, Response, Body
 from fastapi.middleware.cors import CORSMiddleware
 
 from sqlalchemy import select, delete
@@ -1124,6 +1124,28 @@ async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db), current_use
         "chat_id": chat_id,
         "plan": result.get("plan", [])
     }
+
+@app.patch("/sciparser/v1/chat/messages/{message_id}")
+async def patch_message(
+    message_id: str,
+    req: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(ChatService.get_current_user),
+):
+    """Update a message's screenshots or other mutable fields."""
+    from src.database.chat_db import Message as MessageModel
+    stmt = select(MessageModel).where(
+        MessageModel.message_id == message_id,
+        MessageModel.user_id == current_user.user_id,
+    )
+    res = await db.execute(stmt)
+    msg = res.scalar_one_or_none()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if "screenshots" in req:
+        msg.screenshots = json.dumps(req["screenshots"])
+    await db.commit()
+    return {"status": "success", "message_id": message_id}
 
 @app.post("/sciparser/v1/chat/stop")
 async def stop_chat_process(chat_id: str = Query(...), current_user: User = Depends(ChatService.get_current_user)):

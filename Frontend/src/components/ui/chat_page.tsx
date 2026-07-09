@@ -1215,6 +1215,12 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           lastBrowserFrameRef.current
         ) {
           msgToAdd.screenshots = [lastBrowserFrameRef.current];
+          // Persist screenshots to DB so they survive page refresh
+          if (msgToAdd.id) {
+            sciparserApi.updateMessageScreenshots(msgToAdd.id, msgToAdd.screenshots).catch((e) =>
+              console.warn("Failed to persist screenshots:", e),
+            );
+          }
         }
         setMessages((prev) => [...prev, msgToAdd]);
         setThreads((prev) =>
@@ -1498,7 +1504,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 "px-5 py-3.5 rounded-2xl shadow-sm border transition-all duration-200",
                 isUser
                   ? "bg-emerald-600 border-emerald-500 text-white rounded-tr-none shadow-emerald-500/10"
-                  : "bg-card border-border text-card-foreground rounded-tl-none hover:border-accent",
+                  : msg.content?.startsWith("\u26a0\ufe0f") || msg.content?.startsWith("\u26a0")
+                    ? "bg-amber-50/80 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40 text-amber-900 dark:text-amber-100 rounded-tl-none"
+                    : "bg-card border-border text-card-foreground rounded-tl-none hover:border-accent",
                 isSelectionMode &&
                   isSelected &&
                   "ring-2 ring-indigo-500 border-indigo-500",
