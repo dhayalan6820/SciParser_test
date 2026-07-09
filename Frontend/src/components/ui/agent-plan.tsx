@@ -9,7 +9,7 @@ import {
   ChevronDown,
   ChevronUp,
   Brain,
-  Sparkles,
+  Zap,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "../../../lib/utils";
@@ -65,12 +65,14 @@ export default function Plan({
 
   const latestThought = thoughts[thoughts.length - 1] ?? null;
 
-  const activeTaskId = useMemo(() => {
+  const activeTask = useMemo(() => {
     const running = propTasks.find((t) => isRunning(t.status));
-    if (running) return running.id;
+    if (running) return running;
     const pending = propTasks.find((t) => !isCompleted(t.status) && !isFailed(t.status));
-    return pending?.id ?? null;
+    return pending ?? null;
   }, [propTasks]);
+
+  const activeTaskId = activeTask?.id ?? null;
 
   useEffect(() => {
     propTasks.forEach((task) => {
@@ -104,6 +106,9 @@ export default function Plan({
   const completedCount = propTasks.filter((t) => isCompleted(t.status)).length;
   const totalCount     = propTasks.length;
   const progress       = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+  const activeTaskIdx = activeTask ? propTasks.indexOf(activeTask) : -1;
+  const anyRunning = propTasks.some((t) => isRunning(t.status));
 
   const getStatusIcon = (status: string, isActive: boolean) => {
     if (isCompleted(status))
@@ -161,6 +166,35 @@ export default function Plan({
           </div>
         </div>
       </div>
+
+      {/* Active stage indicator — shown only while a task is running */}
+      <AnimatePresence>
+        {anyRunning && activeTask && (
+          <motion.div
+            key="stage-indicator"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: "easeInOut" }}
+            className="overflow-hidden"
+          >
+            <div className="flex items-center gap-2.5 px-5 py-2 bg-sky-500/[0.07] border-b border-sky-500/10">
+              <Zap className="h-3 w-3 text-sky-400 shrink-0" />
+              <span className="text-[11px] text-sky-400/70 font-medium truncate">
+                <span className="font-bold text-sky-400">
+                  Step {String(activeTaskIdx + 1).padStart(2, "0")}
+                </span>
+                <span className="mx-1.5 text-sky-400/40">·</span>
+                {activeTask.title}
+              </span>
+              <span className="ml-auto flex h-1.5 w-1.5 shrink-0">
+                <span className="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-sky-400 opacity-60" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-sky-400" />
+              </span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Tasks */}
       <div className="px-4 py-3 space-y-2">
@@ -248,7 +282,7 @@ export default function Plan({
                           <p className="text-[13px] text-muted-foreground leading-relaxed">{task.description}</p>
                         )}
 
-                        {/* Subtasks */}
+                        {/* Subtasks — reasoning appears inline after the active sub-step */}
                         {hasSubs && (
                           <div className="space-y-1.5 border-l-2 border-border pl-4 ml-1">
                             {task.subtasks.map((sub, si) => {
@@ -256,44 +290,71 @@ export default function Plan({
                               const showSub   = isCompleted(sub.status) || isRunning(sub.status) || subActive || isCompleted(task.status);
                               if (!showSub && !isActive && !isExpanded) return null;
 
+                              const subLabel = sub.title || `Step ${si + 1}`;
+
                               return (
-                                <motion.div
-                                  key={sub.id}
-                                  initial={{ opacity: 0, x: -8 }}
-                                  animate={{ opacity: 1, x: 0 }}
-                                  transition={{ delay: si * 0.04 }}
-                                  className="flex items-start gap-2.5"
-                                >
-                                  <div className="mt-[2px] shrink-0">
-                                    {isCompleted(sub.status) ? (
-                                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400/80" />
-                                    ) : isRunning(sub.status) || subActive ? (
-                                      <CircleDotDashed className="h-3.5 w-3.5 text-sky-400 animate-spin" />
-                                    ) : (
-                                      <Circle className="h-3.5 w-3.5 text-muted-foreground/30" />
-                                    )}
-                                  </div>
-                                  <div>
-                                    <p className={cn(
-                                      "text-[12px] font-medium leading-snug",
-                                      isCompleted(sub.status) ? "text-muted-foreground" :
-                                      (isRunning(sub.status) || subActive) ? "text-foreground/85" : "text-muted-foreground/50"
-                                    )}>
-                                      {sub.title}
-                                    </p>
-                                    {sub.description && (
-                                      <p className="text-[11px] text-muted-foreground/50 mt-0.5 leading-relaxed">{sub.description}</p>
-                                    )}
-                                  </div>
-                                </motion.div>
+                                <React.Fragment key={sub.id}>
+                                  <motion.div
+                                    initial={{ opacity: 0, x: -8 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: si * 0.04 }}
+                                    className="flex items-start gap-2.5"
+                                  >
+                                    <div className="mt-[2px] shrink-0">
+                                      {isCompleted(sub.status) ? (
+                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400/80" />
+                                      ) : isRunning(sub.status) || subActive ? (
+                                        <CircleDotDashed className="h-3.5 w-3.5 text-sky-400 animate-spin" />
+                                      ) : (
+                                        <Circle className="h-3.5 w-3.5 text-muted-foreground/30" />
+                                      )}
+                                    </div>
+                                    <div>
+                                      <p className={cn(
+                                        "text-[12px] font-medium leading-snug",
+                                        isCompleted(sub.status) ? "text-muted-foreground" :
+                                        (isRunning(sub.status) || subActive) ? "text-foreground/85" : "text-muted-foreground/50"
+                                      )}>
+                                        {subLabel}
+                                      </p>
+                                      {sub.description && (
+                                        <p className="text-[11px] text-muted-foreground/50 mt-0.5 leading-relaxed">{sub.description}</p>
+                                      )}
+                                    </div>
+                                  </motion.div>
+
+                                  {/* Inline reasoning — rendered immediately after the active sub-step */}
+                                  {subActive && thought && (
+                                    <motion.div
+                                      initial={{ opacity: 0, y: 4 }}
+                                      animate={{ opacity: 1, y: 0 }}
+                                      exit={{ opacity: 0 }}
+                                      className="ml-6 rounded-xl border border-sky-500/10 bg-sky-500/5 p-3"
+                                    >
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <Brain className="h-3 w-3 text-sky-400/70" />
+                                        <span className="text-[9px] font-bold uppercase tracking-[0.25em] text-sky-400/60">
+                                          Agent Reasoning
+                                        </span>
+                                        <span className="ml-auto flex h-1.5 w-1.5">
+                                          <span className="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-sky-400 opacity-60" />
+                                          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-sky-400" />
+                                        </span>
+                                      </div>
+                                      <p className="text-[12px] leading-[1.65] text-muted-foreground font-normal whitespace-pre-line">
+                                        {thought}
+                                      </p>
+                                    </motion.div>
+                                  )}
+                                </React.Fragment>
                               );
                             })}
                           </div>
                         )}
 
-                        {/* Reasoning / Thinking block */}
-                        <AnimatePresence>
-                          {thought && (
+                        {/* Reasoning fallback — shown below description when there are no sub-steps */}
+                        {!hasSubs && thought && (
+                          <AnimatePresence>
                             <motion.div
                               initial={{ opacity: 0, y: 6 }}
                               animate={{ opacity: 1, y: 0 }}
@@ -316,8 +377,8 @@ export default function Plan({
                                 {thought}
                               </p>
                             </motion.div>
-                          )}
-                        </AnimatePresence>
+                          </AnimatePresence>
+                        )}
                       </div>
                     </motion.div>
                   )}
