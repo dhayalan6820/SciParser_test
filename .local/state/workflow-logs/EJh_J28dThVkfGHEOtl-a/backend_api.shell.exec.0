@@ -1,0 +1,354 @@
+[start.sh] LD_LIBRARY_PATH set (19 Nix lib paths injected)
+[start.sh] BROWSER_ENGINE=camoufox — fetching camoufox browser binary...
+[32m[1mCamoufox binaries up to date![0m
+[32m[1mCurrent version: v135.0.1-beta.24[0m
+[32mINFO[0m:     Started server process [[36m56[0m]
+[32mINFO[0m:     Waiting for application startup.
+2026-07-09 02:56:21 | INFO     | sciparser | Creating/verifying database tables...
+2026-07-09 02:56:21 | INFO     | sciparser | Creating/verifying database tables...
+2026-07-09 02:56:21 | INFO     | sciparser | Database tables checked/created successfully.
+2026-07-09 02:56:21 | INFO     | sciparser | Database tables checked/created successfully.
+2026-07-09 02:56:21 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-07-09 02:56:21 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-07-09 02:56:22 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-07-09 02:56:22 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-07-09 02:56:22 | INFO     | apscheduler.scheduler | Scheduler started
+2026-07-09 02:56:22 | INFO     | apscheduler.scheduler | Added job "_purge_old_app_logs" to job store "default"
+[32mINFO[0m:     Application startup complete.
+[32mINFO[0m:     Uvicorn running on [1mhttp://0.0.0.0:8000[0m (Press CTRL+C to quit)
+2026-07-09 02:56:22 | INFO     | sciparser | APScheduler: registered 0 active schedule(s).
+2026-07-09 02:56:22 | INFO     | sciparser | APScheduler: registered 0 active schedule(s).
+[32mINFO[0m:     10.60.10.182:0 - "WebSocket /sciparser/v1/browser/stream?chat_id=thread-41a1a576-b1c2-44c9-9b35-b048f634c385&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     10.60.12.18:0 - "WebSocket /sciparser/v1/ws/plan/thread-41a1a576-b1c2-44c9-9b35-b048f634c385?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+2026-07-09 03:00:00 | INFO     | apscheduler.executors.default | Running job "_purge_old_app_logs (trigger: cron[hour='3', minute='0'], next run at: 2026-07-10 03:00:00 UTC)" (scheduled at 2026-07-09 03:00:00+00:00)
+2026-07-09 03:00:00 | INFO     | apscheduler.executors.default | Job "_purge_old_app_logs (trigger: cron[hour='3', minute='0'], next run at: 2026-07-10 03:00:00 UTC)" executed successfully
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     10.60.3.186:0 - "WebSocket /sciparser/v1/ws/plan/thread-41a1a576-b1c2-44c9-9b35-b048f634c385?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     10.60.2.31:0 - "WebSocket /sciparser/v1/browser/stream?chat_id=thread-41a1a576-b1c2-44c9-9b35-b048f634c385&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     10.60.12.44:0 - "WebSocket /sciparser/v1/ws/plan/thread-41a1a576-b1c2-44c9-9b35-b048f634c385?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     connection closed
+[31mERROR[0m:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 892, in commit
+    self.await_(self._commit_and_discard())
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 871, in _commit_and_discard
+    await self._transaction.commit()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/asyncpg/connresource.py", line 19, in _check
+    self._check_conn_validity(meth.__name__)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/asyncpg/connresource.py", line 41, in _check_conn_validity
+    raise exceptions.InterfaceError(
+asyncpg.exceptions._base.InterfaceError: cannot call Transaction.commit(): the underlying connection is closed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1147, in _commit_impl
+    self.engine.dialect.do_commit(self.connection)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 715, in do_commit
+    dbapi_connection.commit()
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 898, in commit
+    self._handle_exception(error)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 797, in _handle_exception
+    raise translated_error from error
+sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.InterfaceError: <class 'asyncpg.exceptions._base.InterfaceError'>: cannot call Transaction.commit(): the underlying connection is closed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py", line 239, in run_asgi
+    result = await self.app(self.scope, self.asgi_receive, self.asgi_send)  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 62, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/starlette/middleware/errors.py", line 151, in __call__
+    await self.app(scope, receive, send)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/starlette/middleware/cors.py", line 80, in __call__
+    await self.app(scope, receive, send)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/fastapi/routing.py", line 2531, in app
+    await route.handle(scope, receive, send)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/starlette/routing.py", line 350, in handle
+    await self.app(scope, receive, send)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/fastapi/routing.py", line 176, in app
+    await wrap_app_handling_exceptions(app, session)(scope, receive, send)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/fastapi/routing.py", line 169, in app
+    async with AsyncExitStack() as request_stack:
+               ^^^^^^^^^^^^^^^^
+  File "/nix/store/iizfzmqjdfvbyx82gqw92glb5zl6m4my-python3-3.12.12/lib/python3.12/contextlib.py", line 754, in __aexit__
+    raise exc_details[1]
+  File "/nix/store/iizfzmqjdfvbyx82gqw92glb5zl6m4my-python3-3.12.12/lib/python3.12/contextlib.py", line 737, in __aexit__
+    cb_suppress = await cb(*exc_details)
+                  ^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/iizfzmqjdfvbyx82gqw92glb5zl6m4my-python3-3.12.12/lib/python3.12/contextlib.py", line 217, in __aexit__
+    await anext(self.gen)
+  File "/home/runner/workspace/Backend/src/database/chat_db.py", line 56, in get_db
+    await session.commit()
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py", line 999, in commit
+    await greenlet_spawn(self.sync_session.commit)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 203, in greenlet_spawn
+    result = context.switch(value)
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2035, in commit
+    trans.commit(_to_root=True)
+  File "<string>", line 2, in commit
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/orm/state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 1323, in commit
+    trans.commit()
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2642, in commit
+    self._do_commit()
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2747, in _do_commit
+    self._connection_commit_impl()
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2718, in _connection_commit_impl
+    self.connection._commit_impl()
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1149, in _commit_impl
+    self._handle_dbapi_exception(e, None, None, None, None)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2365, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1147, in _commit_impl
+    self.engine.dialect.do_commit(self.connection)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 715, in do_commit
+    dbapi_connection.commit()
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 898, in commit
+    self._handle_exception(error)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 797, in _handle_exception
+    raise translated_error from error
+sqlalchemy.exc.InterfaceError: (sqlalchemy.dialects.postgresql.asyncpg.InterfaceError) <class 'asyncpg.exceptions._base.InterfaceError'>: cannot call Transaction.commit(): the underlying connection is closed
+(Background on this error at: https://sqlalche.me/e/20/rvf5)
+[32mINFO[0m:     10.60.6.116:0 - "WebSocket /sciparser/v1/browser/stream?chat_id=thread-41a1a576-b1c2-44c9-9b35-b048f634c385&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     connection closed
+[31mERROR[0m:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 892, in commit
+    self.await_(self._commit_and_discard())
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 871, in _commit_and_discard
+    await self._transaction.commit()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/asyncpg/connresource.py", line 19, in _check
+    self._check_conn_validity(meth.__name__)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/asyncpg/connresource.py", line 41, in _check_conn_validity
+    raise exceptions.InterfaceError(
+asyncpg.exceptions._base.InterfaceError: cannot call Transaction.commit(): the underlying connection is closed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1147, in _commit_impl
+    self.engine.dialect.do_commit(self.connection)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 715, in do_commit
+    dbapi_connection.commit()
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 898, in commit
+    self._handle_exception(error)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 797, in _handle_exception
+    raise translated_error from error
+sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.InterfaceError: <class 'asyncpg.exceptions._base.InterfaceError'>: cannot call Transaction.commit(): the underlying connection is closed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py", line 239, in run_asgi
+    result = await self.app(self.scope, self.asgi_receive, self.asgi_send)  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 62, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/starlette/middleware/errors.py", line 151, in __call__
+    await self.app(scope, receive, send)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/starlette/middleware/cors.py", line 80, in __call__
+    await self.app(scope, receive, send)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/fastapi/routing.py", line 2531, in app
+    await route.handle(scope, receive, send)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/starlette/routing.py", line 350, in handle
+    await self.app(scope, receive, send)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/fastapi/routing.py", line 176, in app
+    await wrap_app_handling_exceptions(app, session)(scope, receive, send)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/fastapi/routing.py", line 169, in app
+    async with AsyncExitStack() as request_stack:
+               ^^^^^^^^^^^^^^^^
+  File "/nix/store/iizfzmqjdfvbyx82gqw92glb5zl6m4my-python3-3.12.12/lib/python3.12/contextlib.py", line 754, in __aexit__
+    raise exc_details[1]
+  File "/nix/store/iizfzmqjdfvbyx82gqw92glb5zl6m4my-python3-3.12.12/lib/python3.12/contextlib.py", line 737, in __aexit__
+    cb_suppress = await cb(*exc_details)
+                  ^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/iizfzmqjdfvbyx82gqw92glb5zl6m4my-python3-3.12.12/lib/python3.12/contextlib.py", line 217, in __aexit__
+    await anext(self.gen)
+  File "/home/runner/workspace/Backend/src/database/chat_db.py", line 56, in get_db
+    await session.commit()
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py", line 999, in commit
+    await greenlet_spawn(self.sync_session.commit)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 203, in greenlet_spawn
+    result = context.switch(value)
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2035, in commit
+    trans.commit(_to_root=True)
+  File "<string>", line 2, in commit
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/orm/state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 1323, in commit
+    trans.commit()
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2642, in commit
+    self._do_commit()
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2747, in _do_commit
+    self._connection_commit_impl()
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2718, in _connection_commit_impl
+    self.connection._commit_impl()
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1149, in _commit_impl
+    self._handle_dbapi_exception(e, None, None, None, None)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2365, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1147, in _commit_impl
+    self.engine.dialect.do_commit(self.connection)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 715, in do_commit
+    dbapi_connection.commit()
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 898, in commit
+    self._handle_exception(error)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 797, in _handle_exception
+    raise translated_error from error
+sqlalchemy.exc.InterfaceError: (sqlalchemy.dialects.postgresql.asyncpg.InterfaceError) <class 'asyncpg.exceptions._base.InterfaceError'>: cannot call Transaction.commit(): the underlying connection is closed
+(Background on this error at: https://sqlalche.me/e/20/rvf5)
+[32mINFO[0m:     10.60.1.231:0 - "WebSocket /sciparser/v1/ws/plan/thread-41a1a576-b1c2-44c9-9b35-b048f634c385?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     10.60.0.141:0 - "WebSocket /sciparser/v1/ws/plan/thread-41a1a576-b1c2-44c9-9b35-b048f634c385?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.8.7:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.8.7:0 - "[1mGET /sciparser/v1/admin/users?page=1&page_size=8 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/admin/metrics/overview?days=30 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/activity?limit=15 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/admin/users?page=1&page_size=8 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.8.7:0 - "[1mGET /sciparser/v1/admin/metrics/overview?days=30 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/admin/activity?limit=15 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.8.7:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/chat/sessions HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/settings/browser-engine HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/browser/cdp-status HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.8.7:0 - "[1mGET /sciparser/v1/chat/sessions HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/settings/browser-engine HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.6.116:0 - "[1mGET /sciparser/v1/browser/cdp-status HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "WebSocket /sciparser/v1/browser/stream?chat_id=thread-9d50e55b-1b40-4a57-88b5-15d00f2e74ee&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjgwY2JmMS05OGRhLTQ4OTAtOWNjNS03Y2QyZWVlNTI2ZGUiLCJleHAiOjE3ODQwMzM2NTh9.RGx2xou3rs6OQf_WCooL81X7aRAtk2CN_IknxLnDnws" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/chat/history?chat_id=thread-9d50e55b-1b40-4a57-88b5-15d00f2e74ee HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.5.158:0 - "WebSocket /sciparser/v1/ws/plan/thread-9d50e55b-1b40-4a57-88b5-15d00f2e74ee?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjgwY2JmMS05OGRhLTQ4OTAtOWNjNS03Y2QyZWVlNTI2ZGUiLCJleHAiOjE3ODQwMzM2NTh9.RGx2xou3rs6OQf_WCooL81X7aRAtk2CN_IknxLnDnws" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     10.60.6.116:0 - "[1mGET /sciparser/v1/chat/history?chat_id=thread-9d50e55b-1b40-4a57-88b5-15d00f2e74ee HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/chat/sessions/thread-9d50e55b-1b40-4a57-88b5-15d00f2e74ee/logs HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/chat/sessions/thread-9d50e55b-1b40-4a57-88b5-15d00f2e74ee/tools HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/chat/sessions/thread-9d50e55b-1b40-4a57-88b5-15d00f2e74ee/logs HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/chat/sessions/thread-9d50e55b-1b40-4a57-88b5-15d00f2e74ee/tools HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     10.60.12.54:0 - "WebSocket /sciparser/v1/ws/plan/thread-9d50e55b-1b40-4a57-88b5-15d00f2e74ee?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjgwY2JmMS05OGRhLTQ4OTAtOWNjNS03Y2QyZWVlNTI2ZGUiLCJleHAiOjE3ODQwMzM2NTh9.RGx2xou3rs6OQf_WCooL81X7aRAtk2CN_IknxLnDnws" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.2.42:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.2.42:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.2.42:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.2.42:0 - "[1mGET /sciparser/v1/chat/sessions HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.233:0 - "[1mGET /sciparser/v1/browser/cdp-status HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/settings/browser-engine HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.2.42:0 - "[1mGET /sciparser/v1/chat/sessions HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/browser/cdp-status HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.233:0 - "[1mGET /sciparser/v1/settings/browser-engine HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/chat/history?chat_id=thread-41a1a576-b1c2-44c9-9b35-b048f634c385 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.233:0 - "[1mGET /sciparser/v1/chat/history?chat_id=thread-41a1a576-b1c2-44c9-9b35-b048f634c385 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/chat/sessions/thread-41a1a576-b1c2-44c9-9b35-b048f634c385/tools HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/chat/sessions/thread-41a1a576-b1c2-44c9-9b35-b048f634c385/logs HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "WebSocket /sciparser/v1/browser/stream?chat_id=thread-41a1a576-b1c2-44c9-9b35-b048f634c385&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     10.60.12.54:0 - "WebSocket /sciparser/v1/ws/plan/thread-41a1a576-b1c2-44c9-9b35-b048f634c385?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/chat/sessions/thread-41a1a576-b1c2-44c9-9b35-b048f634c385/logs HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/chat/sessions/thread-41a1a576-b1c2-44c9-9b35-b048f634c385/tools HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mDELETE /sciparser/v1/chat/sessions/thread-41a1a576-b1c2-44c9-9b35-b048f634c385 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     10.60.0.141:0 - "WebSocket /sciparser/v1/browser/stream?chat_id=thread-1a78a1bc-8cf5-45e1-a1e9-0e4a2d541005&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     10.60.6.116:0 - "WebSocket /sciparser/v1/ws/plan/thread-1a78a1bc-8cf5-45e1-a1e9-0e4a2d541005?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/admin/metrics/overview?days=30 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/admin/users?page=1&page_size=8 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/admin/activity?limit=15 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/admin/users?page=1&page_size=8 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.233:0 - "[1mGET /sciparser/v1/admin/metrics/overview?days=30 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/admin/activity?limit=15 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     Shutting down
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     Waiting for application shutdown.
+2026-07-09 07:14:59 | INFO     | sciparser | Session for user 6680cbf1-98da-4890-9cc5-7cd2eee526de fully cleaned up.
+2026-07-09 07:14:59 | INFO     | sciparser | Session for user 6680cbf1-98da-4890-9cc5-7cd2eee526de fully cleaned up.
+2026-07-09 07:14:59 | INFO     | sciparser | Session for user fefe8e8e-45fa-4782-8bea-b702353d883e fully cleaned up.
+2026-07-09 07:14:59 | INFO     | sciparser | Session for user fefe8e8e-45fa-4782-8bea-b702353d883e fully cleaned up.
+2026-07-09 07:14:59 | INFO     | apscheduler.scheduler | Scheduler has been shut down
+[32mINFO[0m:     Application shutdown complete.
+[32mINFO[0m:     Finished server process [[36m56[0m]

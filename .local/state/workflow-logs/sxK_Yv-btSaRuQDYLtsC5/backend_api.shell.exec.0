@@ -1,0 +1,157 @@
+[start.sh] LD_LIBRARY_PATH set (19 Nix lib paths injected)
+[start.sh] BROWSER_ENGINE=camoufox — fetching camoufox browser binary...
+[32m[1mCamoufox binaries up to date![0m
+[32m[1mCurrent version: v135.0.1-beta.24[0m
+[32mINFO[0m:     Started server process [[36m6085[0m]
+[32mINFO[0m:     Waiting for application startup.
+2026-07-09 07:15:10 | INFO     | sciparser | Creating/verifying database tables...
+2026-07-09 07:15:10 | INFO     | sciparser | Creating/verifying database tables...
+2026-07-09 07:15:10 | INFO     | sciparser | Database tables checked/created successfully.
+2026-07-09 07:15:10 | INFO     | sciparser | Database tables checked/created successfully.
+2026-07-09 07:15:11 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-07-09 07:15:11 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-07-09 07:15:11 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-07-09 07:15:11 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-07-09 07:15:11 | INFO     | apscheduler.scheduler | Scheduler started
+2026-07-09 07:15:11 | INFO     | apscheduler.scheduler | Added job "_purge_old_app_logs" to job store "default"
+[32mINFO[0m:     Application startup complete.
+[32mINFO[0m:     Uvicorn running on [1mhttp://0.0.0.0:8000[0m (Press CTRL+C to quit)
+2026-07-09 07:15:11 | INFO     | sciparser | APScheduler: registered 0 active schedule(s).
+2026-07-09 07:15:11 | INFO     | sciparser | APScheduler: registered 0 active schedule(s).
+[32mINFO[0m:     10.60.0.141:0 - "WebSocket /sciparser/v1/browser/stream?chat_id=thread-1a78a1bc-8cf5-45e1-a1e9-0e4a2d541005&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     10.60.12.54:0 - "WebSocket /sciparser/v1/ws/plan/thread-1a78a1bc-8cf5-45e1-a1e9-0e4a2d541005?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     127.0.0.1:58654 - "[1mGET / HTTP/1.1[0m" [31m404 Not Found[0m
+[32mINFO[0m:     127.0.0.1:58654 - "[1mGET /favicon.ico HTTP/1.1[0m" [31m404 Not Found[0m
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     127.0.0.1:34178 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+2026-07-09 07:15:44 | ERROR    | sciparser | Auth validation error: Not enough segments
+2026-07-09 07:15:44 | ERROR    | sciparser | Auth validation error: Not enough segments
+[32mINFO[0m:     127.0.0.1:34194 - "[1mGET /sciparser/v1/settings/llm-provider HTTP/1.1[0m" [31m401 Unauthorized[0m
+[32mINFO[0m:     127.0.0.1:53370 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:53382 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "WebSocket /sciparser/v1/browser/stream?chat_id=thread-1a78a1bc-8cf5-45e1-a1e9-0e4a2d541005&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     10.60.2.42:0 - "WebSocket /sciparser/v1/ws/plan/thread-1a78a1bc-8cf5-45e1-a1e9-0e4a2d541005?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/users?page=1&page_size=8 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/admin/metrics/overview?days=30 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/activity?limit=15 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/admin/users?page=1&page_size=8 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/metrics/overview?days=30 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/activity?limit=15 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/users?page=1&page_size=10 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/users?page=1&page_size=10 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/users?page=1&page_size=10 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/agents?page=1&page_size=15&sort_by=created_at&sort_dir=desc HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/agents?page=1&page_size=15&sort_by=created_at&sort_dir=desc HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/analytics?days=30 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/analytics?days=30 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/metrics/operations?days=30 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/metrics/operations?days=30 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/operations/logs?page=1&page_size=20 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/operations/logs?page=1&page_size=20 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/users?page=1&page_size=10 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/users?page=1&page_size=10 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/metrics/overview?days=30 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/admin/activity?limit=15 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/users?page=1&page_size=8 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/activity?limit=15 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/admin/metrics/overview?days=30 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/admin/users?page=1&page_size=8 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/admin/users?page=1&page_size=10 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/admin/users?page=1&page_size=10 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/admin/users?page=1&page_size=10 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/chat/sessions HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/settings/browser-engine HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/browser/cdp-status HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/chat/sessions HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/chat/history?chat_id=thread-9d50e55b-1b40-4a57-88b5-15d00f2e74ee HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/settings/browser-engine HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/browser/cdp-status HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/chat/history?chat_id=thread-9d50e55b-1b40-4a57-88b5-15d00f2e74ee HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/chat/sessions/thread-9d50e55b-1b40-4a57-88b5-15d00f2e74ee/logs HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.233:0 - "WebSocket /sciparser/v1/browser/stream?chat_id=thread-9d50e55b-1b40-4a57-88b5-15d00f2e74ee&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjgwY2JmMS05OGRhLTQ4OTAtOWNjNS03Y2QyZWVlNTI2ZGUiLCJleHAiOjE3ODQwMzM2NTh9.RGx2xou3rs6OQf_WCooL81X7aRAtk2CN_IknxLnDnws" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/chat/sessions/thread-9d50e55b-1b40-4a57-88b5-15d00f2e74ee/tools HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/chat/sessions/thread-9d50e55b-1b40-4a57-88b5-15d00f2e74ee/logs HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/chat/sessions/thread-9d50e55b-1b40-4a57-88b5-15d00f2e74ee/tools HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "WebSocket /sciparser/v1/ws/plan/thread-9d50e55b-1b40-4a57-88b5-15d00f2e74ee?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjgwY2JmMS05OGRhLTQ4OTAtOWNjNS03Y2QyZWVlNTI2ZGUiLCJleHAiOjE3ODQwMzM2NTh9.RGx2xou3rs6OQf_WCooL81X7aRAtk2CN_IknxLnDnws" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/settings/llm-provider HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/settings/browser-engine HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/settings/proxy HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/settings/llm-provider HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/settings/browser-engine HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/settings/proxy HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.2.42:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.2.42:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.2.42:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.2.42:0 - "[1mGET /sciparser/v1/chat/sessions HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/browser/cdp-status HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.2.42:0 - "[1mGET /sciparser/v1/chat/sessions HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/settings/browser-engine HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.6.116:0 - "[1mGET /sciparser/v1/browser/cdp-status HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.2.42:0 - "[1mGET /sciparser/v1/settings/browser-engine HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "WebSocket /sciparser/v1/browser/stream?chat_id=thread-43a83490-0e90-4409-9ad7-dc74a9c9fc16&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     10.60.9.234:0 - "WebSocket /sciparser/v1/ws/plan/thread-43a83490-0e90-4409-9ad7-dc74a9c9fc16?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     127.0.0.1:39732 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:39746 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.233:0 - "WebSocket /sciparser/v1/browser/stream?chat_id=thread-9d50e55b-1b40-4a57-88b5-15d00f2e74ee&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjgwY2JmMS05OGRhLTQ4OTAtOWNjNS03Y2QyZWVlNTI2ZGUiLCJleHAiOjE3ODQwMzM2NTh9.RGx2xou3rs6OQf_WCooL81X7aRAtk2CN_IknxLnDnws" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     10.60.12.54:0 - "WebSocket /sciparser/v1/ws/plan/thread-9d50e55b-1b40-4a57-88b5-15d00f2e74ee?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjgwY2JmMS05OGRhLTQ4OTAtOWNjNS03Y2QyZWVlNTI2ZGUiLCJleHAiOjE3ODQwMzM2NTh9.RGx2xou3rs6OQf_WCooL81X7aRAtk2CN_IknxLnDnws" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.233:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.233:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/metrics/overview?days=30 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.233:0 - "[1mGET /sciparser/v1/admin/users?page=1&page_size=8 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.2.42:0 - "[1mGET /sciparser/v1/admin/activity?limit=15 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.233:0 - "[1mGET /sciparser/v1/admin/users?page=1&page_size=8 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/admin/metrics/overview?days=30 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.2.42:0 - "[1mGET /sciparser/v1/admin/activity?limit=15 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.233:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.2.42:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.2.42:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.233:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.2.42:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.233:0 - "[1mGET /sciparser/v1/chat/sessions HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/settings/browser-engine HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.2.42:0 - "[1mGET /sciparser/v1/browser/cdp-status HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.6.116:0 - "[1mGET /sciparser/v1/chat/sessions HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.233:0 - "[1mGET /sciparser/v1/settings/browser-engine HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "[1mGET /sciparser/v1/browser/cdp-status HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "WebSocket /sciparser/v1/browser/stream?chat_id=thread-8b070ce3-92cb-4008-8da3-10277304f8c3&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     10.60.12.54:0 - "WebSocket /sciparser/v1/ws/plan/thread-8b070ce3-92cb-4008-8da3-10277304f8c3?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     Shutting down
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     Waiting for application shutdown.
+2026-07-09 07:57:14 | INFO     | sciparser | Session for user 6680cbf1-98da-4890-9cc5-7cd2eee526de fully cleaned up.
+2026-07-09 07:57:14 | INFO     | sciparser | Session for user 6680cbf1-98da-4890-9cc5-7cd2eee526de fully cleaned up.
+2026-07-09 07:57:14 | INFO     | sciparser | Session for user fefe8e8e-45fa-4782-8bea-b702353d883e fully cleaned up.
+2026-07-09 07:57:14 | INFO     | sciparser | Session for user fefe8e8e-45fa-4782-8bea-b702353d883e fully cleaned up.
+2026-07-09 07:57:14 | INFO     | apscheduler.scheduler | Scheduler has been shut down
+[32mINFO[0m:     Application shutdown complete.
+[32mINFO[0m:     Finished server process [[36m6085[0m]

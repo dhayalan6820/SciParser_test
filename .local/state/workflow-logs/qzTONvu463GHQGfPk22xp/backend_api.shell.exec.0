@@ -1,0 +1,31 @@
+[start.sh] LD_LIBRARY_PATH set (19 Nix lib paths injected)
+[32mINFO[0m:     Started server process [[36m13898[0m]
+[32mINFO[0m:     Waiting for application startup.
+2026-07-04 15:52:16 | INFO     | sciparser | Creating/verifying database tables...
+2026-07-04 15:52:16 | INFO     | sciparser | Creating/verifying database tables...
+2026-07-04 15:52:16 | INFO     | sciparser | Database tables checked/created successfully.
+2026-07-04 15:52:16 | INFO     | sciparser | Database tables checked/created successfully.
+2026-07-04 15:52:17 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-07-04 15:52:17 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-07-04 15:52:17 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-07-04 15:52:17 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-07-04 15:52:17 | INFO     | apscheduler.scheduler | Scheduler started
+[32mINFO[0m:     Application startup complete.
+[32mINFO[0m:     Uvicorn running on [1mhttp://0.0.0.0:8000[0m (Press CTRL+C to quit)
+2026-07-04 15:52:17 | INFO     | apscheduler.scheduler | Added job "_auto_run_schedule" to job store "default"
+2026-07-04 15:52:17 | INFO     | sciparser | Registered APScheduler job sched_57776cee-c260-4a38-9794-92e5abccb087 (daily @ 09:00 America/New_York)
+2026-07-04 15:52:17 | INFO     | sciparser | Registered APScheduler job sched_57776cee-c260-4a38-9794-92e5abccb087 (daily @ 09:00 America/New_York)
+2026-07-04 15:52:17 | INFO     | sciparser | APScheduler: registered 1 active schedule(s).
+2026-07-04 15:52:17 | INFO     | sciparser | APScheduler: registered 1 active schedule(s).
+[32mINFO[0m:     10.60.5.49:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.5.49:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.123:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.13.66:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.5.49:0 - "[1mPOST /sciparser/v1/signup HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.4.219:0 - "[1mPOST /sciparser/v1/signin HTTP/1.1[0m" [31m401 Unauthorized[0m
+[32mINFO[0m:     10.60.13.66:0 - "[1mPOST /sciparser/v1/signup HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     Shutting down
+[32mINFO[0m:     Waiting for application shutdown.
+2026-07-04 15:53:59 | INFO     | apscheduler.scheduler | Scheduler has been shut down
+[32mINFO[0m:     Application shutdown complete.
+[32mINFO[0m:     Finished server process [[36m13898[0m]

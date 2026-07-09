@@ -5,11 +5,58 @@ from sqlalchemy import text
 from src.database.chat_db import Base, engine as app_engine, AsyncSessionLocal
 from src.utils.logger import logger
 
+async def create_database_if_not_exists():
+    """
+    Checks if the database specified in config.DATABASE_URL exists,
+    and creates it if it does not.
+    """
+    from urllib.parse import urlparse, urlunparse
+    from src import config
+    from src.database.chat_db import _build_asyncpg_url
+
+    raw_url = config.DATABASE_URL
+    if not raw_url:
+        logger.error("DATABASE_URL is not set.")
+        return
+
+    parsed = urlparse(raw_url)
+    db_name = parsed.path.lstrip('/')
+    if not db_name:
+        logger.error("No database name found in DATABASE_URL.")
+        return
+
+    # Connect to 'postgres' default database to perform database check/creation
+    postgres_parsed = parsed._replace(path='/postgres')
+    postgres_url = _build_asyncpg_url(urlunparse(postgres_parsed))
+
+    # We must use isolation_level="AUTOCOMMIT" so CREATE DATABASE is run outside a transaction block
+    temp_engine = create_async_engine(postgres_url, isolation_level="AUTOCOMMIT")
+    try:
+        async with temp_engine.connect() as conn:
+            # Query pg_database to check if database exists
+            result = await conn.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :dbname"),
+                {"dbname": db_name}
+            )
+            exists = result.scalar()
+            if not exists:
+                logger.info(f"Database '{db_name}' does not exist. Creating database...")
+                # CREATE DATABASE cannot be parameterized, but db_name comes from parsed config url path (safe)
+                await conn.execute(text(f"CREATE DATABASE {db_name}"))
+                logger.info(f"Database '{db_name}' created successfully.")
+            else:
+                logger.info(f"Database '{db_name}' already exists.")
+    except Exception as e:
+        logger.error(f"Error checking/creating database '{db_name}': {e}")
+    finally:
+        await temp_engine.dispose()
+
 async def init_database():
     """
     Creates all database tables if they don't exist.
     Uses Replit's built-in PostgreSQL database.
     """
+    await create_database_if_not_exists()
     try:
         logger.info("Creating/verifying database tables...")
         async with app_engine.begin() as conn:

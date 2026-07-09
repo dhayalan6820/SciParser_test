@@ -1,0 +1,193 @@
+[start.sh] LD_LIBRARY_PATH set (19 Nix lib paths injected)
+[32mINFO[0m:     Started server process [[36m14353[0m]
+[32mINFO[0m:     Waiting for application startup.
+2026-07-04 15:55:09 | INFO     | sciparser | Creating/verifying database tables...
+2026-07-04 15:55:09 | INFO     | sciparser | Creating/verifying database tables...
+2026-07-04 15:55:09 | INFO     | sciparser | Database tables checked/created successfully.
+2026-07-04 15:55:09 | INFO     | sciparser | Database tables checked/created successfully.
+2026-07-04 15:55:09 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-07-04 15:55:09 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-07-04 15:55:10 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-07-04 15:55:10 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-07-04 15:55:10 | INFO     | apscheduler.scheduler | Scheduler started
+[32mINFO[0m:     Application startup complete.
+[32mINFO[0m:     Uvicorn running on [1mhttp://0.0.0.0:8000[0m (Press CTRL+C to quit)
+2026-07-04 15:55:10 | INFO     | apscheduler.scheduler | Added job "_auto_run_schedule" to job store "default"
+2026-07-04 15:55:10 | INFO     | sciparser | Registered APScheduler job sched_57776cee-c260-4a38-9794-92e5abccb087 (daily @ 09:00 America/New_York)
+2026-07-04 15:55:10 | INFO     | sciparser | Registered APScheduler job sched_57776cee-c260-4a38-9794-92e5abccb087 (daily @ 09:00 America/New_York)
+2026-07-04 15:55:10 | INFO     | sciparser | APScheduler: registered 1 active schedule(s).
+2026-07-04 15:55:10 | INFO     | sciparser | APScheduler: registered 1 active schedule(s).
+[32mINFO[0m:     10.60.1.58:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.58:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.58:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.123:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.123:0 - "[1mPOST /sciparser/v1/signup HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.58:0 - "[1mPOST /sciparser/v1/signup HTTP/1.1[0m" [31m400 Bad Request[0m
+[32mINFO[0m:     10.60.0.123:0 - "[1mPOST /sciparser/v1/signup HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.13.66:0 - "[1mPOST /sciparser/v1/signin HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.58:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.13.66:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.13.66:0 - "[1mGET /sciparser/v1/chat/sessions HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.58:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.58:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.126:0 - "[1mGET /sciparser/v1/chat/sessions HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.58:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.123:0 - "[1mGET /sciparser/v1/chat/sessions HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.5.49:0 - "[1mGET /sciparser/v1/browser/cdp-status HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.5.49:0 - "[1mGET /sciparser/v1/settings/browser-engine HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.58:0 - "[1mGET /sciparser/v1/chat/sessions HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.5.49:0 - "WebSocket /sciparser/v1/browser/stream?chat_id=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjMDZjNTA5Ni1hNWQyLTRiNGUtYjRmZC1mNDA3MDk3MTI3MTMiLCJleHAiOjE3ODM3ODU0Mzd9.V32oS8y95H-dXcJmrSzxo_a_-ViM7pp6wNgzLauiyWI" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     10.60.13.66:0 - "[1mGET /sciparser/v1/browser/cdp-status HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.126:0 - "[1mGET /sciparser/v1/settings/browser-engine HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.4.219:0 - "WebSocket /sciparser/v1/ws/plan/thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjMDZjNTA5Ni1hNWQyLTRiNGUtYjRmZC1mNDA3MDk3MTI3MTMiLCJleHAiOjE3ODM3ODU0Mzd9.V32oS8y95H-dXcJmrSzxo_a_-ViM7pp6wNgzLauiyWI" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     10.60.13.66:0 - "[1mGET /sciparser/v1/settings/browser-engine HTTP/1.1[0m" [32m200 OK[0m
+2026-07-04 15:57:33 | INFO     | httpx | HTTP Request: GET https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json "HTTP/1.1 200 OK"
+[92m15:57:38 - LiteLLM:INFO[0m: utils.py:3258 - 
+LiteLLM completion() model= google/gemini-3-flash-preview; provider = openrouter
+2026-07-04 15:57:38 | INFO     | LiteLLM | 
+LiteLLM completion() model= google/gemini-3-flash-preview; provider = openrouter
+2026-07-04 15:57:40 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+[92m15:57:40 - LiteLLM:INFO[0m: utils.py:1260 - Wrapper: Completed Call, calling success_handler
+2026-07-04 15:57:40 | INFO     | LiteLLM | Wrapper: Completed Call, calling success_handler
+2026-07-04 15:57:40 | INFO     | sciparser | [Memory] Injecting 659 chars for domain 'example.com'
+2026-07-04 15:57:40 | INFO     | sciparser | [Memory] Injecting 659 chars for domain 'example.com'
+2026-07-04 15:57:40 | INFO     | sciparser | Preparing MCP manager for user c06c5096-a5d2-4b4e-b4fd-f40709712713 on port 60655...
+2026-07-04 15:57:40 | INFO     | sciparser | Preparing MCP manager for user c06c5096-a5d2-4b4e-b4fd-f40709712713 on port 60655...
+2026-07-04 15:57:40 | INFO     | src.agents.mcp_agent | >>> Starting MCP Server connecting to http://localhost:60655...
+Bridge: mouse state file → /tmp/agent_mouse_60655.json
+Bridge: port=60655  headless=False  own_browser=True  cdp_url=http://localhost:60655  user_data_dir=/home/runner/workspace/Backend/temp/user_60655  proxy=none
+Bridge: camoufox not installed — falling back to Chrome
+Bridge: wrote camoufox fallback flag → /tmp/camoufox_fallback_60655.json
+Bridge: wrote browser-use config → /home/runner/workspace/.config/browseruse/config.json  cdp_url=http://localhost:60655
+Bridge: _init_browser_session patched (direct CDP connect, no LocalBrowserWatchdog)
+Bridge: human-tools patched — browser_key_press, browser_hover, browser_wait, browser_drag
+Bridge: starting browser-use MCP server...
+Bridge: Chrome launched — pid=14732  port=60655
+2026-07-04 15:57:44 | INFO     | src.agents.mcp_agent | >>> MCP Session Ready. 16 tools active.
+2026-07-04 15:57:44 | INFO     | sciparser | Discovered 16 tools for execution.
+2026-07-04 15:57:44 | INFO     | sciparser | Discovered 16 tools for execution.
+2026-07-04 15:57:44 | WARNING  | sciparser | [brain] Camoufox → Chrome fallback detected for user c06c5096-a5d2-4b4e-b4fd-f40709712713, notifying chat thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 (reason: camoufox not installed)
+2026-07-04 15:57:44 | WARNING  | sciparser | [brain] Camoufox → Chrome fallback detected for user c06c5096-a5d2-4b4e-b4fd-f40709712713, notifying chat thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 (reason: camoufox not installed)
+2026-07-04 15:57:44 | INFO     | sciparser | Starting raw-CDP screenshot stream: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 port=60655
+2026-07-04 15:57:44 | INFO     | sciparser | Starting raw-CDP screenshot stream: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 port=60655
+2026-07-04 15:57:44 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+2026-07-04 15:57:44 | INFO     | sciparser | Executing via MCP Tool Graph (Attempt 1)...
+[92m15:57:44 - LiteLLM:INFO[0m: utils.py:3258 - 
+LiteLLM completion() model= google/gemini-3-flash-preview; provider = openrouter
+2026-07-04 15:57:44 | INFO     | LiteLLM | 
+LiteLLM completion() model= google/gemini-3-flash-preview; provider = openrouter
+2026-07-04 15:57:45 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+[92m15:57:48 - LiteLLM:INFO[0m: utils.py:1260 - Wrapper: Completed Call, calling success_handler
+2026-07-04 15:57:48 | INFO     | LiteLLM | Wrapper: Completed Call, calling success_handler
+2026-07-04 15:57:50 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+Bridge [patch]: waiting for Chrome at http://localhost:60655...
+Bridge: Chrome (fallback) ready at http://localhost:60655
+Bridge [patch]: Chrome ready — connecting
+Bridge [patch]: creating BrowserSession(cdp_url=http://localhost:60655, is_local=False)
+2026-07-04 15:57:52 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=31735
+2026-07-04 15:57:52 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=31735
+2026-07-04 15:57:52 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=31735
+2026-07-04 15:57:52 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=31735
+Bridge [patch]: BrowserSession started successfully
+Bridge: stealth — no context found on session
+2026-07-04 15:57:54 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:57:54 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:57:54 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:57:54 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:57:55 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:57:55 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:57:55 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:57:55 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:57:56 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:57:56 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:57:56 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:57:56 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:57:57 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:57:57 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:57:57 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:57:57 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:57:58 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:57:58 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:57:58 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:57:58 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:57:59 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:57:59 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:57:59 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:57:59 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:00 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:00 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:00 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:00 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:01 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:01 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:01 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:01 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:02 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:02 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:02 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:02 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:03 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-04 15:58:03 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:03 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:03 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:03 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:04 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:04 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:04 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:04 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:05 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:05 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:05 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:05 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:05 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-04 15:58:06 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:06 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:06 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:06 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:07 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-04 15:58:07 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:07 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:07 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:07 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:08 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:08 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:08 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:08 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:09 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-04 15:58:09 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:09 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:09 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:09 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:10 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:10 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:10 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:10 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:10 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-04 15:58:11 | INFO     | sciparser | [SessionState] Saved for chat thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391: url=https://example.com
+2026-07-04 15:58:11 | INFO     | sciparser | [SessionState] Saved for chat thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391: url=https://example.com
+2026-07-04 15:58:11 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:11 | INFO     | sciparser | Broadcasting browser frame: user=c06c5096-a5d2-4b4e-b4fd-f40709712713 chat=thread-9dfdacd9-3c14-4232-bd4b-db48a39b4391 len=29367
+2026-07-04 15:58:11 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:11 | INFO     | sciparser | broadcast_frame: user=c06c5096 connections=1 frame_len=29367
+2026-07-04 15:58:11 | INFO     | sciparser | Sent final browser frame for user c06c5096-a5d2-4b4e-b4fd-f40709712713
+2026-07-04 15:58:11 | INFO     | sciparser | Sent final browser frame for user c06c5096-a5d2-4b4e-b4fd-f40709712713
+2026-07-04 15:58:12 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-04 15:58:13 | INFO     | sciparser | [Memory] Stored SUCCESS episode for domain 'example.com'
+2026-07-04 15:58:13 | INFO     | sciparser | [Memory] Stored SUCCESS episode for domain 'example.com'
+[32mINFO[0m:     10.60.13.66:0 - "[1mPOST /sciparser/v1/chat/message HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     Shutting down
+[32mINFO[0m:     Waiting for application shutdown.
+2026-07-04 15:58:32 | INFO     | src.agents.mcp_agent | >>> Closing MCP Session for http://localhost:60655...
+2026-07-04 15:58:32 | INFO     | apscheduler.scheduler | Scheduler has been shut down
+Bridge: shutting down...
+Bridge: cleanup complete
+2026-07-04 15:58:34 | ERROR    | sciparser | [User c06c5096-a5d2-4b4e-b4fd-f40709712713] Error closing browser: Attempted to exit cancel scope in a different task than it was entered in
+2026-07-04 15:58:34 | ERROR    | sciparser | [User c06c5096-a5d2-4b4e-b4fd-f40709712713] Error closing browser: Attempted to exit cancel scope in a different task than it was entered in
+2026-07-04 15:58:34 | INFO     | sciparser | Session for user c06c5096-a5d2-4b4e-b4fd-f40709712713 fully cleaned up.
+2026-07-04 15:58:34 | INFO     | sciparser | Session for user c06c5096-a5d2-4b4e-b4fd-f40709712713 fully cleaned up.
+[32mINFO[0m:     Application shutdown complete.
+[32mINFO[0m:     Finished server process [[36m14353[0m]

@@ -13,6 +13,7 @@ formatter = logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT)
 # 1. Console Handler (Prints to terminal — keeps live workflow log output)
 console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setFormatter(formatter)
+console_handler.setLevel(logging.INFO)
 
 # 2. Database Handler (Persists log records to the `app_logs` table instead
 # of a rotating log file — see src/utils/db_log_handler.py for the

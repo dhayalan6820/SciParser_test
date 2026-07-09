@@ -70,6 +70,9 @@ class SessionManager:
         the browser process and marks mcp_manager as None so it will be
         re-initialised on the next task, without destroying the whole session.
         """
+        import traceback
+        caller_stack = "".join(traceback.format_stack())
+        logger.info(f"[SessionManager] close_browser called for user {user_id}. Caller stack:\n{caller_stack}")
         if user_id not in self.sessions:
             return
         # Serialize concurrent closers for this user — see the comment on

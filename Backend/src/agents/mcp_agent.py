@@ -52,6 +52,14 @@ def load_extra_mcp_servers() -> Dict[str, Any]:
         return {}
 
 
+def find_free_port() -> int:
+    """Dynamically finds an available free port on the host machine."""
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('', 0))
+        return s.getsockname()[1]
+
+
 class MCPToolManager:
     """
     Manages the MCP Server connection using langchain_mcp_adapters. 
@@ -65,11 +73,11 @@ class MCPToolManager:
         if hasattr(self, '_initialized_base') and self._initialized_base:
             return
 
+        # Dynamic port assignment for multi-user isolation
+        self.port = port or find_free_port()
+
         # Accept direct WebSocket or HTTP CDP URL
-        self.cdp_url = cdp_url or (
-            f"http://{config.BROWSER_DEFAULT_CDP_HOST}:{port}" if port
-            else f"http://{config.BROWSER_DEFAULT_CDP_HOST}:{config.BROWSER_DEFAULT_CDP_PORT}"
-        )
+        self.cdp_url = cdp_url or f"http://{config.BROWSER_DEFAULT_CDP_HOST}:{self.port}"
 
         # Configure the browser-use MCP server via the local bridge script
         # This ensures the browser is launched with the correct CDP port and config
@@ -78,7 +86,7 @@ class MCPToolManager:
         # Create a unique user data directory for this user/session to ensure isolation
         # and prevent "two browsers" or profile lock issues.
         base_temp_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "temp"))
-        user_data_dir = os.path.join(base_temp_dir, f"user_{port}")
+        user_data_dir = os.path.join(base_temp_dir, f"user_{self.port}")
         os.makedirs(user_data_dir, exist_ok=True)
 
         # NOTE: the vars below marked "per-session override" are intentional
@@ -102,7 +110,7 @@ class MCPToolManager:
                     "BROWSER_USE_MODEL": config.OPENROUTER_MODEL,
                     "MCP_BROWSER_CDP_URL": self.cdp_url,  # per-session override
                     "BROWSER_CDP_URL": self.cdp_url, # Standard env var for some MCP servers
-                    "BROWSER_USE_CDP_PORT": str(port) if port else str(config.BROWSER_DEFAULT_CDP_PORT),  # per-session override
+                    "BROWSER_USE_CDP_PORT": str(self.port),  # per-session override
                     "BROWSER_USER_DATA_DIR": user_data_dir, # per-session override — unique profile dir per user
                     "MCP_BROWSER_USE_OWN_BROWSER": "true" if own_browser else "false",  # per-session override
                     "BROWSER_PROXY_URL": proxy_url or "",  # per-session override
@@ -110,6 +118,7 @@ class MCPToolManager:
                     "BROWSER_USE_HEADLESS": os.getenv("BROWSER_USE_HEADLESS", "false"),
                     "BROWSER_USE_DISABLE_SECURITY": "true",
                     "BROWSER_USER_AGENT_INDEX": str(user_agent_index),
+                    "BROWSER_USE_KEEP_ALIVE": os.getenv("BROWSER_USE_KEEP_ALIVE", "true"),
                 },
                 "transport": "stdio",
             }

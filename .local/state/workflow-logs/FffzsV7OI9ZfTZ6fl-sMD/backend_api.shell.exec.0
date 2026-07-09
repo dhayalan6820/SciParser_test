@@ -1,0 +1,24 @@
+[start.sh] LD_LIBRARY_PATH set (19 Nix lib paths injected)
+[start.sh] BROWSER_ENGINE=camoufox — fetching camoufox browser binary...
+[32m[1mCamoufox binaries up to date![0m
+[32m[1mCurrent version: v135.0.1-beta.24[0m
+[32mINFO[0m:     Started server process [[36m67[0m]
+[32mINFO[0m:     Waiting for application startup.
+2026-07-09 00:05:42 | INFO     | sciparser | Creating/verifying database tables...
+2026-07-09 00:05:42 | INFO     | sciparser | Creating/verifying database tables...
+2026-07-09 00:05:42 | INFO     | sciparser | Database tables checked/created successfully.
+2026-07-09 00:05:42 | INFO     | sciparser | Database tables checked/created successfully.
+2026-07-09 00:05:42 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-07-09 00:05:42 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-07-09 00:05:43 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-07-09 00:05:43 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-07-09 00:05:43 | INFO     | apscheduler.scheduler | Scheduler started
+2026-07-09 00:05:43 | INFO     | apscheduler.scheduler | Added job "_purge_old_app_logs" to job store "default"
+[32mINFO[0m:     Application startup complete.
+[32mINFO[0m:     Uvicorn running on [1mhttp://0.0.0.0:8000[0m (Press CTRL+C to quit)
+2026-07-09 00:05:43 | INFO     | sciparser | APScheduler: registered 0 active schedule(s).
+2026-07-09 00:05:43 | INFO     | sciparser | APScheduler: registered 0 active schedule(s).
+[32mINFO[0m:     10.60.6.85:0 - "WebSocket /sciparser/v1/ws/plan/thread-41a1a576-b1c2-44c9-9b35-b048f634c385?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     10.60.12.18:0 - "WebSocket /sciparser/v1/browser/stream?chat_id=thread-41a1a576-b1c2-44c9-9b35-b048f634c385&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open

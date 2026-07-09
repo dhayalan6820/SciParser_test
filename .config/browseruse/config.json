@@ -1,0 +1,12 @@
+{
+  "browser_profile": {
+    "bridge-default": {
+      "id": "bridge-default",
+      "default": true,
+      "headless": false,
+      "cdp_url": "http://localhost:52307"
+    }
+  },
+  "llm": {},
+  "agent": {}
+}

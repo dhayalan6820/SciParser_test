@@ -1,0 +1,126 @@
+[start.sh] LD_LIBRARY_PATH set (19 Nix lib paths injected)
+[start.sh] BROWSER_ENGINE=camoufox — fetching camoufox browser binary...
+[32m[1mCamoufox binaries up to date![0m
+[32m[1mCurrent version: v135.0.1-beta.24[0m
+[32mINFO[0m:     Started server process [[36m9609[0m]
+[32mINFO[0m:     Waiting for application startup.
+2026-07-09 07:58:10 | INFO     | sciparser | Creating/verifying database tables...
+2026-07-09 07:58:10 | INFO     | sciparser | Creating/verifying database tables...
+2026-07-09 07:58:10 | INFO     | sciparser | Database tables checked/created successfully.
+2026-07-09 07:58:10 | INFO     | sciparser | Database tables checked/created successfully.
+2026-07-09 07:58:10 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-07-09 07:58:10 | INFO     | sciparser | Initializing multi-agent orchestrator system...
+2026-07-09 07:58:12 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-07-09 07:58:12 | INFO     | sciparser | Multi-agent orchestrator initialization complete.
+2026-07-09 07:58:12 | INFO     | apscheduler.scheduler | Scheduler started
+2026-07-09 07:58:12 | INFO     | apscheduler.scheduler | Added job "_purge_old_app_logs" to job store "default"
+[32mINFO[0m:     Application startup complete.
+[32mINFO[0m:     Uvicorn running on [1mhttp://0.0.0.0:8000[0m (Press CTRL+C to quit)
+2026-07-09 07:58:12 | INFO     | sciparser | APScheduler: registered 0 active schedule(s).
+2026-07-09 07:58:12 | INFO     | sciparser | APScheduler: registered 0 active schedule(s).
+[32mINFO[0m:     10.60.1.233:0 - "WebSocket /sciparser/v1/ws/plan/thread-8b070ce3-92cb-4008-8da3-10277304f8c3?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     127.0.0.1:53822 - "[1mGET / HTTP/1.1[0m" [31m404 Not Found[0m
+[32mINFO[0m:     127.0.0.1:53822 - "[1mGET /favicon.ico HTTP/1.1[0m" [31m404 Not Found[0m
+[32mINFO[0m:     10.60.0.141:0 - "WebSocket /sciparser/v1/browser/stream?chat_id=thread-8b070ce3-92cb-4008-8da3-10277304f8c3&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     127.0.0.1:49376 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:49382 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.6.116:0 - "WebSocket /sciparser/v1/browser/stream?chat_id=thread-8b070ce3-92cb-4008-8da3-10277304f8c3&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     127.0.0.1:40996 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:41004 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.12.54:0 - "WebSocket /sciparser/v1/ws/plan/thread-8b070ce3-92cb-4008-8da3-10277304f8c3?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     127.0.0.1:45410 - "[1mPOST /sciparser/v1/signup HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:45410 - "[1mPOST /sciparser/v1/login HTTP/1.1[0m" [31m404 Not Found[0m
+[32mINFO[0m:     127.0.0.1:53986 - "[1mPOST /sciparser/v1/login HTTP/1.1[0m" [31m404 Not Found[0m
+[32mINFO[0m:     127.0.0.1:51310 - "[1mPOST /sciparser/v1/login HTTP/1.1[0m" [31m404 Not Found[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/admin/metrics/overview?days=30 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/admin/users?page=1&page_size=8 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.233:0 - "[1mGET /sciparser/v1/admin/activity?limit=15 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/admin/metrics/overview?days=30 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/admin/users?page=1&page_size=8 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/admin/activity?limit=15 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:37146 - "[1mPOST /sciparser/v1/signup HTTP/1.1[0m" [31m400 Bad Request[0m
+[32mINFO[0m:     127.0.0.1:37146 - "[1mPOST /sciparser/v1/login HTTP/1.1[0m" [31m404 Not Found[0m
+[32mINFO[0m:     127.0.0.1:37146 - "[1mPOST /sciparser/v1/token HTTP/1.1[0m" [31m404 Not Found[0m
+[32mINFO[0m:     127.0.0.1:39122 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:44292 - "[1mPOST /sciparser/v1/signin HTTP/1.1[0m" [32m200 OK[0m
+2026-07-09 08:01:55 | INFO     | httpx | HTTP Request: GET https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json "HTTP/1.1 200 OK"
+[92m08:01:58 - LiteLLM:INFO[0m: utils.py:3258 - 
+LiteLLM completion() model= openai/gpt-5.4-nano; provider = openrouter
+2026-07-09 08:01:58 | INFO     | LiteLLM | 
+LiteLLM completion() model= openai/gpt-5.4-nano; provider = openrouter
+2026-07-09 08:01:59 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+[92m08:02:02 - LiteLLM:INFO[0m: utils.py:1260 - Wrapper: Completed Call, calling success_handler
+2026-07-09 08:02:02 | INFO     | LiteLLM | Wrapper: Completed Call, calling success_handler
+2026-07-09 08:02:02 | INFO     | sciparser | [Memory] Stored FAIL episode for domain 'general'
+2026-07-09 08:02:02 | INFO     | sciparser | [Memory] Stored FAIL episode for domain 'general'
+[32mINFO[0m:     127.0.0.1:44292 - "[1mPOST /sciparser/v1/chat/message HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:51894 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:51896 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:34652 - "[1mPOST /sciparser/v1/signin HTTP/1.1[0m" [32m200 OK[0m
+[92m08:02:20 - LiteLLM:INFO[0m: utils.py:3258 - 
+LiteLLM completion() model= openai/gpt-5.4-nano; provider = openrouter
+2026-07-09 08:02:20 | INFO     | LiteLLM | 
+LiteLLM completion() model= openai/gpt-5.4-nano; provider = openrouter
+2026-07-09 08:02:21 | INFO     | httpx | HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+[92m08:02:24 - LiteLLM:INFO[0m: utils.py:1260 - Wrapper: Completed Call, calling success_handler
+2026-07-09 08:02:24 | INFO     | LiteLLM | Wrapper: Completed Call, calling success_handler
+2026-07-09 08:02:24 | INFO     | sciparser | [Memory] Stored FAIL episode for domain 'general'
+2026-07-09 08:02:24 | INFO     | sciparser | [Memory] Stored FAIL episode for domain 'general'
+[32mINFO[0m:     127.0.0.1:34652 - "[1mPOST /sciparser/v1/chat/message HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:34652 - "[1mGET /sciparser/v1/chat/history?chat_id=thread-test-123 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:34652 - "[1mPATCH /sciparser/v1/chat/messages/4a3a9fc4-a6e5-4386-90fd-3ddb830f34ea HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:34652 - "[1mGET /sciparser/v1/chat/history?chat_id=thread-test-123 HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:34660 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:34674 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.233:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.233:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.233:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/chat/sessions HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.233:0 - "[1mGET /sciparser/v1/browser/cdp-status HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/settings/browser-engine HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.233:0 - "[1mGET /sciparser/v1/chat/sessions HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.233:0 - "[1mGET /sciparser/v1/browser/cdp-status HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "[1mGET /sciparser/v1/settings/browser-engine HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.1.233:0 - "WebSocket /sciparser/v1/browser/stream?chat_id=thread-76efe18f-299b-4165-a56e-2edd47a5abda&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     10.60.2.42:0 - "WebSocket /sciparser/v1/ws/plan/thread-76efe18f-299b-4165-a56e-2edd47a5abda?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     127.0.0.1:56458 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:56468 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:55904 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:55920 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:60722 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:60724 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:50180 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:50194 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     connection closed
+[32mINFO[0m:     10.60.6.116:0 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/chat/sessions HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.6.116:0 - "[1mGET /sciparser/v1/me HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.2.42:0 - "[1mGET /sciparser/v1/browser/cdp-status HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/settings/browser-engine HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.6.116:0 - "[1mGET /sciparser/v1/chat/sessions HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.2.42:0 - "[1mGET /sciparser/v1/browser/cdp-status HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.0.141:0 - "[1mGET /sciparser/v1/settings/browser-engine HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.60.9.234:0 - "WebSocket /sciparser/v1/browser/stream?chat_id=thread-8e1544a1-1f9f-4e87-9e31-d41c492c1f78&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     10.60.0.141:0 - "WebSocket /sciparser/v1/ws/plan/thread-8e1544a1-1f9f-4e87-9e31-d41c492c1f78?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZWZlOGU4ZS00NWZhLTQ3ODItOGJlYS1iNzAyMzUzZDg4M2UiLCJleHAiOjE3ODQwOTU2MjJ9.HYZ_hhOWUkF8YubcFtTfWzm3Maptweny8AAK5rdgWtk" [accepted]
+[32mINFO[0m:     connection open
+[32mINFO[0m:     127.0.0.1:53984 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:53996 - "[1mGET /sciparser/v1/health HTTP/1.1[0m" [32m200 OK[0m

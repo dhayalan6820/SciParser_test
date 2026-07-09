@@ -110,9 +110,18 @@ DATABASE_URL = _require("DATABASE_URL") if IS_PRODUCTION else os.getenv("DATABAS
 # ---------------------------------------------------------------------------
 OPENROUTER_API_KEY = _require("OPENROUTER_API_KEY") if IS_PRODUCTION else os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = _str("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-OPENROUTER_MODEL = _str("OPENROUTER_MODEL", "openai/gpt-5.4-nano")
+OPENROUTER_MODEL = _str("OPENROUTER_MODEL", "google/gemini-3-flash-preview")
 
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
+
+# ---------------------------------------------------------------------------
+# LLM cost pricing (per million tokens) — used for analytics and credit billing.
+# Update these when the provider changes pricing. These are the single source of
+# truth; ATAG.py's LLM_PRICING dict reads from here at import time.
+# ---------------------------------------------------------------------------
+LLM_INPUT_COST_PER_MILLION = _float("LLM_INPUT_COST_PER_MILLION", 0.1)
+LLM_OUTPUT_COST_PER_MILLION = _float("LLM_OUTPUT_COST_PER_MILLION", 0.4)
+
 
 # ---------------------------------------------------------------------------
 # CORS
@@ -168,7 +177,7 @@ PROXY_TEST_TIMEOUT_SECONDS = _float("PROXY_TEST_TIMEOUT_SECONDS", 10)
 # ---------------------------------------------------------------------------
 # Browser automation
 # ---------------------------------------------------------------------------
-BROWSER_ENGINE = _str("BROWSER_ENGINE", "camoufox")
+BROWSER_ENGINE = _str("BROWSER_ENGINE", "chrome")
 BROWSER_DEFAULT_CDP_HOST = _str("BROWSER_DEFAULT_CDP_HOST", "localhost")
 BROWSER_DEFAULT_CDP_PORT = _int("BROWSER_DEFAULT_CDP_PORT", 9222)
 BROWSER_CDP_READY_TIMEOUT_SECONDS = _float("BROWSER_CDP_READY_TIMEOUT_SECONDS", 90)
@@ -214,14 +223,6 @@ def browser_use_own_browser() -> bool:
 
 
 # ---------------------------------------------------------------------------
-# LLM cost pricing (per million tokens) — used for analytics and credit billing.
-# Update these when the provider changes pricing. These are the single source of
-# truth; ATAG.py's LLM_PRICING dict reads from here at import time.
-# ---------------------------------------------------------------------------
-LLM_INPUT_COST_PER_MILLION = _float("LLM_INPUT_COST_PER_MILLION", 0.1)
-LLM_OUTPUT_COST_PER_MILLION = _float("LLM_OUTPUT_COST_PER_MILLION", 0.4)
-
-# ---------------------------------------------------------------------------
 # Third-party check endpoints / defaults
 # ---------------------------------------------------------------------------
 IP_CHECK_URL = _str("IP_CHECK_URL", "https://api.ipify.org?format=json")
@@ -237,3 +238,4 @@ IP_CHECK_URLS = [
         "https://api.ipify.org?format=json,https://ipinfo.io/json,https://ifconfig.me/all.json,https://httpbin.org/ip",
     ).split(",") if u.strip()
 ]
+

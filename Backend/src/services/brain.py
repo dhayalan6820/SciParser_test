@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import os
+import sys
 import json
 import re
 import time
@@ -24,7 +25,6 @@ from langchain_core.messages import (
 from langchain_core.tools import BaseTool 
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
 
 # Database and Utilities
 from src.database.chat_db import AsyncSessionLocal, Message, ChatSession, AgentExecutionLog, ToolExecutionLog, User
@@ -341,7 +341,6 @@ class Brain:
         self.atag_processor: Optional[ATAGProcessor] = None
         self.llm = None
         self.initialized = False
-        self.checkpointer = MemorySaver()
         self.active_tasks: Dict[str, asyncio.Task] = {}
         self.active_plans: Dict[str, List[Dict]] = {}
         # Real (unredacted) confirmed_inputs for a paused obstacle run, kept
@@ -621,7 +620,8 @@ class Brain:
             return
 
         parsed = urlparse(cdp_url)
-        host = parsed.hostname or config.BROWSER_DEFAULT_CDP_HOST
+        # Force 127.0.0.1 instead of localhost to avoid IPv6 resolution issues on Windows
+        host = "127.0.0.1" if parsed.hostname in ("localhost", "127.0.0.1") else (parsed.hostname or "127.0.0.1")
         port = parsed.port
         json_endpoint = f"http://{host}:{port}/json"
 
@@ -637,12 +637,20 @@ class Brain:
                         json_endpoint,
                         timeout=aiohttp.ClientTimeout(total=config.CDP_JSON_TIMEOUT_SECONDS),
                     ) as resp:
+                        if resp.status != 200:
+                            logger.debug(f"CDP /json returned status {resp.status} for user {user_id}")
+                            return None
                         targets = await resp.json(content_type=None)
+                
+                if not targets:
+                    return None
+                    
+                # Prefer the active/visible page
                 for t in targets:
                     if t.get("type") == "page" and t.get("webSocketDebuggerUrl"):
                         return t["webSocketDebuggerUrl"]
             except Exception as exc:
-                logger.debug(f"CDP /json failed for user {user_id}: {exc}")
+                logger.debug(f"CDP /json connection failed for user {user_id} at {json_endpoint}: {exc}")
             return None
 
         async def _take_screenshot(ws_url: str) -> Optional[str]:
@@ -679,7 +687,8 @@ class Brain:
             """Read the bridge's mouse-state temp file for this user's CDP port."""
             try:
                 import time as _time
-                state_path = f"/tmp/agent_mouse_{port}.json"
+                import tempfile
+                state_path = os.path.join(tempfile.gettempdir(), f"agent_mouse_{port}.json")
                 p = Path(state_path)
                 if p.exists():
                     data = json.loads(p.read_text())
@@ -780,7 +789,9 @@ class Brain:
                 if b64:
                     # Delete the mouse state file so the final frame has no cursor dot
                     try:
-                        Path(f"/tmp/agent_mouse_{port}.json").unlink(missing_ok=True)
+                        import tempfile
+                        state_path = os.path.join(tempfile.gettempdir(), f"agent_mouse_{port}.json")
+                        Path(state_path).unlink(missing_ok=True)
                     except Exception:
                         pass
                     await _broadcast_frame(b64)
@@ -965,8 +976,25 @@ class Brain:
         browser_spec = spec_loader.load_spec("browser")
         filtered_tools = spec_loader.filter_tools(tools, browser_spec.tool_filter)
 
-        # Bind tools to the LLM (per-user override if configured)
+        # Get the LLM first so it's available for semantic tool filtering
         _llm = await self._get_user_llm(user_id)
+
+        # Apply tool semantic memory to filter tools dynamically based on context/history
+        from src.services.tool_memory import filter_tools_semantically
+        try:
+            _domain = self._extract_domain_from_task(task_summary, confirmed_inputs)
+            filtered_tools = await filter_tools_semantically(
+                tools=filtered_tools,
+                task_summary=task_summary,
+                user_id=user_id,
+                domain=_domain,
+                memory_service=self.memory_service,
+                llm=_llm
+            )
+        except Exception as e:
+            logger.warning(f"Semantic tool filtering failed (falling back to all tools): {e}")
+
+        # Bind tools to the LLM
         llm_with_tools = _llm.bind_tools(filtered_tools)
 
         # Build one static system message PER STAGE, once per execution — never
@@ -1705,15 +1733,13 @@ class Brain:
         )
         workflow.add_edge("tools", "agent")
 
-        app = workflow.compile(checkpointer=self.checkpointer)
+        app = workflow.compile()
         
         try:
-            # Execute the graph with a thread_id for persistence, and an
-            # explicit recursion_limit as a backstop against runaway
-            # agent<->tools loops that slip past our domain-specific retry
-            # guards (see GRAPH_RECURSION_LIMIT for rationale).
+            # Execute the graph with an explicit recursion_limit as a backstop
+            # against runaway agent<->tools loops that slip past our domain-specific
+            # retry guards (see GRAPH_RECURSION_LIMIT for rationale).
             config = {
-                "configurable": {"thread_id": chat_id},
                 "recursion_limit": GRAPH_RECURSION_LIMIT,
             }
             final_state = await app.ainvoke(graph_input, config=config)
@@ -1722,19 +1748,20 @@ class Brain:
             # Propagate the cancellation so callers can react.
             raise
         finally:
-            # If this graph was cancelled (user hit "Stop"), the browser/MCP
-            # process may still be alive.  Ask the session manager to close it
-            # so the next run starts fresh and the old Chrome process doesn't
-            # leak.  We use a timeout so a stuck manager can't block the
-            # cleanup path indefinitely.
-            try:
-                await asyncio.wait_for(
-                    self.session_manager.close_browser(user_id), timeout=5.0
-                )
-            except asyncio.TimeoutError:
-                pass
-            except Exception:
-                pass
+            # If this graph was cancelled (user hit "Stop") or keep_alive is disabled,
+            # ask the session manager to close it so old Chrome processes don't leak.
+            # Otherwise, keep it open/alive for reuse or user inspection.
+            keep_alive = os.getenv("BROWSER_USE_KEEP_ALIVE", "true").lower() != "false"
+            is_cancelled = (sys.exc_info()[0] is asyncio.CancelledError) or (chat_id in self.cancelled_chats)
+            if not keep_alive or is_cancelled:
+                try:
+                    await asyncio.wait_for(
+                        self.session_manager.close_browser(user_id), timeout=5.0
+                    )
+                except asyncio.TimeoutError:
+                    pass
+                except Exception:
+                    pass
 
     async def process_chat_message(
         self,

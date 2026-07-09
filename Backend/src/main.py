@@ -473,7 +473,15 @@ async def _run_schedule_task(schedule_id: str, run_id: str) -> None:
                 f.write(current_script)
                 temp_path = f.name
 
-            run_env = {**os.environ, "BROWSER_USE_HEADLESS": "false" if not headless else "true"}
+            # Pass browser configuration to the subprocess environment
+            run_env = {
+                **os.environ,
+                "BROWSER_USE_HEADLESS": "false" if not headless else "true",
+                "BROWSER_EXECUTABLE_PATH": config.BROWSER_EXECUTABLE_PATH,
+                "BROWSER_USER_DATA_DIR": config.BROWSER_USER_DATA_DIR,
+                "BROWSER_PROXY_URL": config.BROWSER_PROXY_URL or "",
+                "BROWSER_ENGINE": config.BROWSER_ENGINE,
+            }
             process = subprocess.Popen(
                 [sys.executable, "-u", temp_path],
                 stdout=subprocess.PIPE,
@@ -1119,7 +1127,8 @@ async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db), current_use
             "content": ai_msg_data.get("content", ""),
             "timestamp": ai_msg_data.get("timestamp", datetime.now(timezone.utc).isoformat()),
             "plan": result.get("plan", []),
-            "log_id": str(uuid.uuid4()) # FIX: Added missing log_id for validation
+            "log_id": str(uuid.uuid4()), # FIX: Added missing log_id for validation
+            "tool_calls": ai_msg_data.get("tool_calls", [])
         },
         "chat_id": chat_id,
         "plan": result.get("plan", [])
@@ -1392,7 +1401,9 @@ async def update_schedule(schedule_id: str, req: Dict[str, Any], db: AsyncSessio
     if "schedule_type" in req or "schedule_time" in req or "timezone" in req or "schedule_day_of_week" in req:
         sched_tz = schedule.timezone or "UTC"
         sched_dow = schedule.schedule_day_of_week or "mon"
-        schedule.next_run = _calculate_next_run(schedule.schedule_type, schedule.schedule_time, sched_tz, sched_dow)
+        schedule.next_run = _calculate_next_run(
+            schedule.schedule_type, schedule.schedule_time, sched_tz, sched_dow
+        )
         if schedule.schedule_type not in ("manual", None):
             _register_schedule_job(schedule_id, schedule.schedule_type, schedule.schedule_time, sched_tz, sched_dow)
         else:
@@ -1632,9 +1643,13 @@ async def websocket_plan_endpoint(
     except WebSocketDisconnect:
         plan_stream_manager.disconnect(chat_id, websocket)
         # Auto-cancel the running agent when the last client disconnects (e.g. page reload,
-        # or a suspension forcing the socket closed)
+        # or a suspension forcing the socket closed).
+        # Guard: only cancel if the task is still actively running — not if it just
+        # finished at the same moment the WS closed (which would incorrectly close
+        # the browser even though the task completed successfully).
         remaining = plan_stream_manager.active_connections.get(chat_id, [])
-        if not remaining and chat_id in brain.active_tasks:
+        _task = brain.active_tasks.get(chat_id)
+        if not remaining and _task is not None and not _task.done():
             logger.info(f"Last WS for {chat_id} closed — auto-cancelling agent task.")
             asyncio.create_task(brain.stop_process(chat_id, user_id=user.user_id))
     except Exception as e:
@@ -1647,7 +1662,8 @@ async def websocket_plan_endpoint(
             logger.error(f"Plan stream error: {e}")
         plan_stream_manager.disconnect(chat_id, websocket)
         remaining = plan_stream_manager.active_connections.get(chat_id, [])
-        if not remaining and chat_id in brain.active_tasks:
+        _task = brain.active_tasks.get(chat_id)
+        if not remaining and _task is not None and not _task.done():
             logger.info(f"Last WS for {chat_id} closed — auto-cancelling agent task.")
             asyncio.create_task(brain.stop_process(chat_id, user_id=user.user_id))
     finally:

@@ -1,0 +1,39 @@
+VERDICT: APPROVED_WITH_COMMENTS
+The diff implements the three requested plan-panel behaviors with no blocking functional issues.
+
+Critical findings / analysis:
+- **Blank sub-step labels fixed:** subtask rows now render `subLabel = sub.title || \`Step ${si + 1}\``, so loading rows no longer show icon-only blanks when title is falsy.
+- **Reasoning moved inline:** the reasoning block is removed from the fixed bottom location for tasks with subtasks and is now rendered immediately after the active sub-step (`subActive && thought`), matching the required inline behavior.
+- **No-subtask fallback preserved:** when a task has no subtasks, reasoning still renders under description (`!hasSubs && thought`), preserving prior fallback behavior per requirement.
+- **Persistent active-stage indicator added:** a header strip is now shown while any task is running (`anyRunning && activeTask`), including step index and task title. This satisfies the persistent “what is executing now” objective.
+
+Comments (non-blocking):
+1) The new indicator text shows `Step NN · {title}` but does not explicitly include wording like “Executing”/“Currently running.” Functionally it works, but adding explicit text would improve clarity and alignment with the spec language.
+2) Sub-step fallback uses a simple falsy check; whitespace-only titles would still appear visually blank. If this occurs in data, consider trimming before fallback.
+
+Security:
+- None observed.
+
+Next actions:
+1) Optional UX refinement: prepend “Executing” in the stage-indicator label for unambiguous status.
+2) Optional hardening: use `sub.title?.trim() || \`Step ${si + 1}\`` for whitespace-only titles.
+3) Ship as-is if strict spec wording is not required.VERDICT: APPROVED_WITH_COMMENTS
+The diff implements the three requested plan-panel behaviors with no blocking functional issues.
+
+Critical findings / analysis:
+- **Blank sub-step labels fixed:** subtask rows now render `subLabel = sub.title || \`Step ${si + 1}\``, so loading rows no longer show icon-only blanks when title is falsy.
+- **Reasoning moved inline:** the reasoning block is removed from the fixed bottom location for tasks with subtasks and is now rendered immediately after the active sub-step (`subActive && thought`), matching the required inline behavior.
+- **No-subtask fallback preserved:** when a task has no subtasks, reasoning still renders under description (`!hasSubs && thought`), preserving prior fallback behavior per requirement.
+- **Persistent active-stage indicator added:** a header strip is now shown while any task is running (`anyRunning && activeTask`), including step index and task title. This satisfies the persistent “what is executing now” objective.
+
+Comments (non-blocking):
+1) The new indicator text shows `Step NN · {title}` but does not explicitly include wording like “Executing”/“Currently running.” Functionally it works, but adding explicit text would improve clarity and alignment with the spec language.
+2) Sub-step fallback uses a simple falsy check; whitespace-only titles would still appear visually blank. If this occurs in data, consider trimming before fallback.
+
+Security:
+- None observed.
+
+Next actions:
+1) Optional UX refinement: prepend “Executing” in the stage-indicator label for unambiguous status.
+2) Optional hardening: use `sub.title?.trim() || \`Step ${si + 1}\`` for whitespace-only titles.
+3) Ship as-is if strict spec wording is not required.
