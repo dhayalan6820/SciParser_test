@@ -580,7 +580,7 @@ export function BrowserPreview({
               )}
 
               {/* Hover controls */}
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 px-2 py-1.5 rounded-xl bg-background/70 backdrop-blur-md border border-border opacity-0 hover:opacity-100 focus-within:opacity-100 transition-opacity shadow-xl group">
+              <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-1 px-2 py-1.5 rounded-xl bg-background/70 backdrop-blur-md border border-border opacity-0 hover:opacity-100 focus-within:opacity-100 transition-opacity shadow-xl group">
                 <Button variant="ghost" size="icon" onClick={() => setZoom(z => Math.max(50, z - 10))} className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent">
                   <ZoomOut className="h-3.5 w-3.5" />
                 </Button>
@@ -596,27 +596,21 @@ export function BrowserPreview({
                   <RefreshCw className="h-3 w-3" />
                 </Button>
               </div>
-            </div>
-          ) : null}
 
-          {/* ── Live activity notification — friendly, at-a-glance summary of the
-              agent's most recent tool action, shown just below the preview
-              image only while a run is actually in progress (isAiTyping).
-              Gating on isAiTyping (not just isActive/panel-open) prevents the
-              strip from showing stale activity once a run has finished but
-              the preview panel is still open. This intentionally mirrors
-              only the LATEST entry from `toolLogs`; the full history stays in
-              the separate Tool Log popup above. */}
-          <AnimatePresence mode="wait">
-            {isActive && frame && isAiTyping && latestToolLog && (
-              <motion.div
-                key={latestToolLog.id}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.2, ease: 'easeOut' }}
-                className="shrink-0 px-4 py-2 border-t border-border bg-card/60 backdrop-blur-sm flex items-center gap-2"
-              >
+              {/* ── Live activity notification — overlaid at the bottom edge of
+                  the browser preview image so it feels like an in-screen HUD
+                  rather than a detached panel strip. Gated on isAiTyping so it
+                  disappears once the run finishes. */}
+              <AnimatePresence mode="wait">
+                {isActive && frame && isAiTyping && latestToolLog && (
+                  <motion.div
+                    key={latestToolLog.id}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.2, ease: 'easeOut' }}
+                    className="absolute bottom-0 left-0 right-0 z-40 px-4 py-2 bg-card/75 backdrop-blur-md border-t border-border/60 flex items-center gap-2"
+                  >
                 {latestToolLog.status === 'IN_PROGRESS' ? (
                   <Loader2 className={cn("h-3 w-3 shrink-0 animate-spin", isLatestStepSlow ? "text-amber-400" : "text-sky-400")} />
                 ) : latestToolLog.status === 'FAILED' ? (
@@ -677,6 +671,8 @@ export function BrowserPreview({
               </motion.div>
             )}
           </AnimatePresence>
+            </div>
+          ) : null}
 
           {!frame && (
             <div className="flex-1 flex flex-col items-center justify-center gap-5 text-muted-foreground/30">
