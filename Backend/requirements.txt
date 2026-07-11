@@ -4,6 +4,7 @@ langchain-community
 langchain-openai
 tavily-python
 langgraph
+langsmith
 tavily
 groq
 langchain-tavily
@@ -22,3 +23,4 @@ PyJWT
 passlib[bcrypt]
 Pillow
 camoufox
+pgvector

@@ -41,17 +41,50 @@ except ImportError:
 # ---------------------------------------------------------------------------
 STEALTH_JS = """
 (function() {
-    try {
-        Object.defineProperty(navigator, 'webdriver', { get: () => undefined, configurable: true });
-    } catch(e) {}
+    // 1. Webdriver
+    try { Object.defineProperty(navigator, 'webdriver', { get: () => undefined, configurable: true }); } catch(e) {}
+    
+    // 2. Playwright markers
     try { delete window.__playwright; delete window.__pwInitScripts; delete window.__PWDEBUGGER__; } catch(e) {}
+    try { Object.getOwnPropertyNames(window).forEach(function(key) { if (key.startsWith('cdc_')) { try { delete window[key]; } catch(e) {} } }); } catch(e) {}
+    
+    // 3. Languages
+    try { Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'], configurable: true }); } catch(e) {}
+    
+    // 4. Plugins
     try {
-        Object.getOwnPropertyNames(window).forEach(function(key) {
-            if (key.startsWith('cdc_')) { try { delete window[key]; } catch(e) {} }
+        Object.defineProperty(navigator, 'plugins', {
+            get: () => [1, 2, 3], // Mock length to bypass empty check
+            configurable: true
         });
     } catch(e) {}
+    
+    // 5. Chrome runtime object
     try {
-        Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'], configurable: true });
+        window.chrome = {
+            runtime: {},
+            loadTimes: function() {},
+            csi: function() {},
+            app: {}
+        };
+    } catch(e) {}
+    
+    // 6. Permissions API
+    try {
+        const originalQuery = window.navigator.permissions.query;
+        window.navigator.permissions.query = parameters => (
+            parameters.name === 'notifications' ?
+            Promise.resolve({ state: Notification.permission }) :
+            originalQuery(parameters)
+        );
+    } catch(e) {}
+    
+    // 7. OuterHeight / OuterWidth (Playwright defaults to 0 in headless)
+    try {
+        if (window.outerWidth === 0) {
+            Object.defineProperty(window, 'outerWidth', { get: () => window.innerWidth, configurable: true });
+            Object.defineProperty(window, 'outerHeight', { get: () => window.innerHeight, configurable: true });
+        }
     } catch(e) {}
 })();
 """
@@ -91,7 +124,22 @@ def _patch_mcp_server(browser_session: 'BrowserSession', get_cdp_url_func, headl
             from browser_use import Tools
             self.tools = Tools()
 
-
+            # Initialize LLM for extraction
+            try:
+                from langchain_openai import ChatOpenAI
+                import os
+                api_key = os.environ.get("OPENAI_API_KEY")
+                base_url = os.environ.get("OPENAI_BASE_URL")
+                model = os.environ.get("BROWSER_USE_MODEL", "gpt-4o-mini")
+                if api_key:
+                    kwargs_llm = {}
+                    if base_url: kwargs_llm["base_url"] = base_url
+                    self.llm = ChatOpenAI(model=model, api_key=api_key, **kwargs_llm)
+                else:
+                    self.llm = None
+            except Exception as e:
+                print(f"Bridge [patch]: LLM init warning: {e}", file=sys.stderr)
+                self.llm = None
 
             # Initialize FileSystem for extraction actions
             try:
@@ -131,6 +179,24 @@ def _patch_mcp_server(browser_session: 'BrowserSession', get_cdp_url_func, headl
                 "properties": {"milliseconds": {"type": "integer", "default": 500}},
             },
         ),
+        mcp_types.Tool(
+            name="browser_extract_raw",
+            description="Extract data from a page by bypassing the DOM accessibility tree. Best used when 'browser_extract_content' fails due to non-semantic HTML.",
+            inputSchema={
+                "type": "object",
+                "properties": {"query": {"type": "string", "description": "What to extract (e.g. 'All laptop stands with price and rating')."}},
+                "required": ["query"],
+            },
+        ),
+        mcp_types.Tool(
+            name="browser_extract_vision",
+            description="Extract data using a screenshot and Vision LLM. Best used as a last resort when DOM/Raw extraction fails entirely (e.g., bot protection, canvas rendering, empty lists).",
+            inputSchema={
+                "type": "object",
+                "properties": {"query": {"type": "string", "description": "What to extract (e.g. 'All products with name and price from this image')."}},
+                "required": ["query"],
+            },
+        ),
     ]
 
     async def _exec_key_press(srv, args: dict) -> str:
@@ -149,10 +215,79 @@ def _patch_mcp_server(browser_session: 'BrowserSession', get_cdp_url_func, headl
         await asyncio.sleep(ms / 1000.0)
         return f"Waited {ms}ms"
 
+    async def _exec_extract_raw(srv, args: dict) -> str:
+        if not srv.browser_session: await srv._init_browser_session()
+        query = args.get("query", "")
+        try:
+            page = await srv.browser_session.get_current_page()
+            # Prune junk elements temporarily to get clean text and reduce tokens
+            js_script = """
+            () => {
+                let junk = document.querySelectorAll('script, style, svg, iframe, noscript, nav, footer, header, aside, form, [style*="display: none"], [style*="visibility: hidden"]');
+                let hiddenStates = [];
+                junk.forEach(n => {
+                    hiddenStates.push(n.style.display);
+                    n.style.display = 'none';
+                });
+                
+                let mainNode = document.querySelector('main') || document.body;
+                let text = mainNode.innerText || "";
+                
+                junk.forEach((n, i) => {
+                    n.style.display = hiddenStates[i];
+                });
+                
+                return text.split('\\n').map(l => l.trim()).filter(l => l.length > 0).join('\\n');
+            }
+            """
+            raw_text = await page.evaluate(js_script)
+            
+            if not srv.llm:
+                return f"Error: No LLM configured in bridge to parse raw text. Raw text length: {len(raw_text)}"
+            
+            from langchain_core.messages import HumanMessage
+            prompt = (
+                f"You are a Data Extractor. Extract the following information from the raw page text:\n"
+                f"QUERY: {query}\n\n"
+                f"PAGE TEXT:\n{raw_text[:12000]}\n\n"
+                f"Return ONLY valid JSON. Return an array of objects if there are multiple matches."
+            )
+            resp = await srv.llm.ainvoke([HumanMessage(content=prompt)])
+            return resp.content
+        except Exception as e:
+            return f"Error extracting raw text: {e}"
+
+    async def _exec_extract_vision(srv, args: dict) -> str:
+        if not srv.browser_session: await srv._init_browser_session()
+        query = args.get("query", "")
+        try:
+            page = await srv.browser_session.get_current_page()
+            b64_image = await page.screenshot(format='png')
+            
+            if not srv.llm:
+                return "Error: No LLM configured in bridge to parse screenshot."
+            
+            from langchain_core.messages import HumanMessage
+            prompt = (
+                f"You are a Data Extractor. Extract the following information purely from the provided image of a webpage:\n"
+                f"QUERY: {query}\n\n"
+                f"Return ONLY valid JSON. Return an array of objects if there are multiple matches."
+            )
+            msg = HumanMessage(content=[
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64_image}"}}
+            ])
+            resp = await srv.llm.ainvoke([msg])
+            return resp.content
+        except Exception as e:
+            return f"Error extracting via vision: {e}"
+
     _orig_execute = BrowserUseServer._execute_tool
     async def _patched_execute_tool(self, tool_name: str, arguments: dict):
         if tool_name == "browser_key_press": return await _exec_key_press(self, arguments)
         if tool_name == "browser_wait": return await _exec_wait(self, arguments)
+        if tool_name == "browser_extract_raw": return await _exec_extract_raw(self, arguments)
+        if tool_name == "browser_extract_vision": return await _exec_extract_vision(self, arguments)
         return await _orig_execute(self, tool_name, arguments)
 
     BrowserUseServer._execute_tool = _patched_execute_tool
@@ -164,7 +299,9 @@ def _patch_mcp_server(browser_session: 'BrowserSession', get_cdp_url_func, headl
         if orig_lt:
             async def _extended_list_tools(req):
                 result = await orig_lt(req)
-                if isinstance(result, mcp_types.ListToolsResult):
+                if hasattr(result, 'root') and isinstance(result.root, mcp_types.ListToolsResult):
+                    result.root.tools = list(result.root.tools) + NEW_TOOL_SCHEMAS
+                elif isinstance(result, mcp_types.ListToolsResult):
                     result.tools = list(result.tools) + NEW_TOOL_SCHEMAS
                 return result
             self.server.request_handlers[mcp_types.ListToolsRequest] = _extended_list_tools
@@ -205,6 +342,9 @@ async def run_bridge():
 
     engine = os.getenv("BROWSER_ENGINE", "chrome").lower()
     executable_path = os.getenv("BROWSER_EXECUTABLE_PATH")
+    # Initialise to None so the finally block never hits NameError when the
+    # Camoufox branch falls back to Chrome without assigning the variable.
+    camoufox_instance = None
 
     if engine == "camoufox":
         import json
@@ -222,19 +362,64 @@ async def run_bridge():
         print("Bridge [Camoufox]: Camoufox (Firefox) is not supported via browser-use CDP. Falling back to Chrome.", file=sys.stderr)
         engine = "chrome"
 
-    profile = BrowserProfile(
-        headless=headless,
-        user_data_dir=user_data_dir,
-        chromium_args=[
-            "--remote-allow-origins=*",
-            f"--remote-debugging-port={port}",
-        ],
-        proxy={'server': proxy_url} if proxy_url else None,
-        keep_alive=keep_alive,
-        executable_path=executable_path if executable_path else None
-    )
-    browser_session = BrowserSession(browser_profile=profile, keep_alive=keep_alive)
-    await browser_session.start()
+    use_system_chrome = os.getenv("BROWSER_USE_SYSTEM_CHROME", "false").lower() == "true"
+    system_chrome_profile = os.getenv("BROWSER_USE_PROFILE_DIR", "Default")
+
+    if use_system_chrome:
+        import socket
+        import subprocess
+        import ctypes
+        import asyncio
+
+        port = 9222  # System Chrome default CDP port
+        
+        def is_port_open(port):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                return s.connect_ex(('localhost', port)) == 0
+
+        if not is_port_open(port):
+            msg = (
+                "SciParser needs to use your System Chrome for anti-detection, but it isn't running with debugging enabled.\n\n"
+                "Please completely CLOSE ALL open Chrome windows first, then click OK to allow SciParser to launch it."
+            )
+            print("Bridge: Prompting user to allow System Chrome launch...", file=sys.stderr)
+            res = ctypes.windll.user32.MessageBoxW(0, msg, "SciParser - System Chrome Setup", 1 | 0x40)
+            
+            if res == 1:  # OK
+                chrome_path = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+                if not os.path.exists(chrome_path):
+                    chrome_path = r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
+                
+                try:
+                    subprocess.Popen([
+                        chrome_path,
+                        f"--remote-debugging-port={port}",
+                        f"--profile-directory={system_chrome_profile}"
+                    ])
+                    await asyncio.sleep(2.5)  # Give Chrome time to start and bind the port
+                except Exception as e:
+                    print(f"Bridge: Failed to launch System Chrome: {e}", file=sys.stderr)
+            else:
+                print("Bridge: User cancelled System Chrome launch.", file=sys.stderr)
+
+        from browser_use import Browser
+        print(f"Bridge: Using system Chrome with profile: {system_chrome_profile}", file=sys.stderr)
+        browser_session = Browser.from_system_chrome(profile_directory=system_chrome_profile)
+        await browser_session.start()
+    else:
+        profile = BrowserProfile(
+            headless=headless,
+            user_data_dir=user_data_dir,
+            chromium_args=[
+                "--remote-allow-origins=*",
+                f"--remote-debugging-port={port}",
+            ],
+            proxy={'server': proxy_url} if proxy_url else None,
+            keep_alive=keep_alive,
+            executable_path=executable_path if executable_path else None
+        )
+        browser_session = BrowserSession(browser_profile=profile, keep_alive=keep_alive)
+        await browser_session.start()
 
     # Inject Stealth JS
     try:

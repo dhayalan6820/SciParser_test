@@ -80,6 +80,7 @@ class AgentState(TypedDict):
     browser_session_id: Optional[str] # New field to store browser session ID
     execution_history: List[Dict[str, Any]] # Memory of tool successes/failures
     validation_result: Optional[Dict[str, Any]] # Verifier's outcome for the most recent tool call
+    obstacle_failures: List[str]  # Track failed obstacle resolution plans
 
 
 PROMPT_6_CONTEXT_SUMMARIZER = """
@@ -327,7 +328,7 @@ class ATAGProcessor:
         confirmed_inputs_list = "\n".join(
             [f"- {k.replace('_', ' ').title()}: {v}" for k, v in confirmed_inputs.items()]
         ) if confirmed_inputs else "None"
-        target_info = f"https://{confirmed_inputs.get('website', app_config.DEFAULT_TARGET_DOMAIN)}"
+        target_info = confirmed_inputs.get('website') or "No specific URL provided. Use the discovery strategy to find the target."
 
         description = (
             f"{design_principles}\n\n{output_format}\n\n"
@@ -550,8 +551,11 @@ class ATAGProcessor:
                 output    = item.get("output") or "(no output)"
                 tool_context_lines.append(f"  [{i}] {tool_name}:\n      {output}")
             tool_context_section = (
-                "\nTOOL EXECUTION LOG (real outputs from successful tools — "
-                "use these URL patterns, selectors, and data values directly in the script):\n"
+                "\nTOOL EXECUTION LOG (real outputs from successful tools):\n"
+                "REUSE from this log: URLs, CSS selectors, XPaths, page structure.\n"
+                "DO NOT REUSE: extracted data values (prices, names, counts, etc.) — "
+                "these are from ONE point in time. Your script must extract them "
+                "dynamically on each run.\n"
                 + "\n".join(tool_context_lines) + "\n"
             )
 
@@ -593,6 +597,10 @@ Generate the complete {framework} script.
 Rules: every quote paired, 4-space indentation, correct browser lifecycle management.
 If the web research above provides a direct URL for the target service, use it — do NOT
 hardcode placeholder URLs like "https://example.com".
+CRITICAL: For data extraction tasks, write DYNAMIC extraction logic using selectors and
+page structure from the trace. NEVER hardcode the extracted data values as Python
+literals or fallback dicts — the whole point of automation is to capture CURRENT data on
+each run. If extraction fails, return an error or empty result, not stale hardcoded data.
 """
 
         # ── 4. Initial LLM generation ─────────────────────────────────────────

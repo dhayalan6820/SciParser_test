@@ -17,6 +17,12 @@ from src.database.chat_db import (
 from src.utils.logger import logger
 from langchain_core.messages import HumanMessage
 
+# RAG Memory Imports
+try:
+    from langchain_huggingface import HuggingFaceEmbeddings
+except ImportError:
+    HuggingFaceEmbeddings = None
+
 
 class MemoryContext:
     def __init__(self):
@@ -144,6 +150,23 @@ def _strip_query_and_fragment(url: str) -> str:
 class MemoryService:
     def __init__(self, llm=None):
         self.llm = llm
+        
+        # Initialize embedding model lazily for RAG Memory
+        self.embeddings = None
+        if HuggingFaceEmbeddings is not None:
+            # We use a lightweight, powerful local model for embeddings so no extra API keys are needed
+            self.embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+            
+    async def _get_embedding(self, text: str) -> Optional[List[float]]:
+        if not self.embeddings:
+            return None
+        # all-MiniLM-L6-v2 produces a 384-dimensional vector
+        try:
+            # Depending on if embed_query is async, wrap it
+            return await asyncio.to_thread(self.embeddings.embed_query, text)
+        except Exception as e:
+            logger.warning(f"Failed to generate embedding: {e}")
+            return None
 
     # ── helpers ──────────────────────────────────────────────────────────────
 
@@ -172,18 +195,21 @@ class MemoryService:
     async def retrieve(self, user_id: str, domain: str, task_summary: str) -> MemoryContext:
         ctx = MemoryContext()
         try:
+            import asyncio # Ensure asyncio is available for _get_embedding
+            query_text = f"{domain} {task_summary}"
+            query_embedding = await self._get_embedding(query_text)
+
             async with AsyncSessionLocal() as db:
-                # Episodic: top 3 by confidence for this user+domain
-                ep_res = await db.execute(
-                    select(MemoryEpisodic)
-                    .where(and_(
-                        MemoryEpisodic.user_id == user_id,
-                        MemoryEpisodic.domain == domain,
-                        MemoryEpisodic.confidence_score > 0.1,
-                    ))
-                    .order_by(MemoryEpisodic.confidence_score.desc())
-                    .limit(3)
-                )
+                # Episodic: top 3 by confidence or semantic similarity
+                ep_query = select(MemoryEpisodic).where(MemoryEpisodic.user_id == user_id)
+                if query_embedding:
+                    # RAG retrieval based on semantic similarity (<=> is cosine distance in pgvector)
+                    ep_query = ep_query.order_by(MemoryEpisodic.embedding.cosine_distance(query_embedding))
+                else:
+                    # Fallback to exact domain match
+                    ep_query = ep_query.where(MemoryEpisodic.domain == domain).order_by(MemoryEpisodic.confidence_score.desc())
+                
+                ep_res = await db.execute(ep_query.limit(3))
                 for ep in ep_res.scalars().all():
                     ctx.episodes.append({
                         "outcome": ep.outcome,
@@ -194,16 +220,13 @@ class MemoryService:
                     ep.last_accessed = datetime.now(timezone.utc)
 
                 # Semantic: all facts for user+domain with confidence > 0.2
-                sem_res = await db.execute(
-                    select(MemorySemantic)
-                    .where(and_(
-                        MemorySemantic.user_id == user_id,
-                        MemorySemantic.domain == domain,
-                        MemorySemantic.confidence_score > 0.2,
-                    ))
-                    .order_by(MemorySemantic.confidence_score.desc())
-                    .limit(10)
-                )
+                sem_query = select(MemorySemantic).where(MemorySemantic.user_id == user_id)
+                if query_embedding:
+                    sem_query = sem_query.order_by(MemorySemantic.embedding.cosine_distance(query_embedding))
+                else:
+                    sem_query = sem_query.where(MemorySemantic.domain == domain).order_by(MemorySemantic.confidence_score.desc())
+                
+                sem_res = await db.execute(sem_query.limit(10))
                 for fact in sem_res.scalars().all():
                     ctx.semantic_facts.append({
                         "fact_key": fact.fact_key,
@@ -213,16 +236,15 @@ class MemoryService:
                     fact.access_count = (fact.access_count or 0) + 1
 
                 # Procedural: domain-specific + universal skills
-                proc_res = await db.execute(
-                    select(MemoryProcedural)
-                    .where(and_(
-                        or_(MemoryProcedural.user_id == user_id, MemoryProcedural.user_id.is_(None)),
-                        or_(MemoryProcedural.domain == domain, MemoryProcedural.domain.is_(None)),
-                        MemoryProcedural.confidence_score > 0.1,
-                    ))
-                    .order_by(MemoryProcedural.confidence_score.desc())
-                    .limit(5)
+                proc_query = select(MemoryProcedural).where(
+                    or_(MemoryProcedural.user_id == user_id, MemoryProcedural.user_id.is_(None))
                 )
+                if query_embedding:
+                    proc_query = proc_query.order_by(MemoryProcedural.embedding.cosine_distance(query_embedding))
+                else:
+                    proc_query = proc_query.where(or_(MemoryProcedural.domain == domain, MemoryProcedural.domain.is_(None))).order_by(MemoryProcedural.confidence_score.desc())
+
+                proc_res = await db.execute(proc_query.limit(5))
                 for skill in proc_res.scalars().all():
                     proc = json.loads(skill.procedure) if skill.procedure else {}
                     ctx.procedural_skills.append({
@@ -274,6 +296,9 @@ class MemoryService:
     ) -> str:
         episode_id = str(uuid.uuid4())
         try:
+            import asyncio
+            embedding = await self._get_embedding(f"{domain} {task_summary} {outcome}")
+            
             async with AsyncSessionLocal() as db:
                 db.add(MemoryEpisodic(
                     id=episode_id,
@@ -286,6 +311,7 @@ class MemoryService:
                     confidence_score=1.0 if outcome == "SUCCESS" else 0.5,
                     access_count=0,
                     created_at=datetime.now(timezone.utc),
+                    embedding=embedding,
                 ))
                 await db.commit()
 
@@ -380,6 +406,8 @@ class MemoryService:
                         row.confidence_score = min(1.0, (row.confidence_score or 0.5) + 0.1)
                         row.last_validated = datetime.now(timezone.utc)
                     else:
+                        import asyncio
+                        embedding = await self._get_embedding(f"{domain} {fact_key} {fact_value}")
                         db.add(MemorySemantic(
                             user_id=user_id,
                             domain=domain,
@@ -389,6 +417,7 @@ class MemoryService:
                             source_episode_id=episode_id,
                             access_count=0,
                             created_at=datetime.now(timezone.utc),
+                            embedding=embedding,
                         ))
                 await db.commit()
         except Exception as e:
@@ -419,6 +448,9 @@ class MemoryService:
                         skill.success_count = (skill.success_count or 0) + 1
                         skill.last_success = now
                         skill.procedure = json.dumps(procedure_data)
+                        
+                        import asyncio
+                        skill.embedding = await self._get_embedding(f"{domain} {skill_name} {procedure_data['summary']}")
                     else:
                         skill.failure_count = (skill.failure_count or 0) + 1
                     total = (skill.success_count or 0) + (skill.failure_count or 0)
@@ -431,6 +463,9 @@ class MemoryService:
                     skill.confidence_score = raw_confidence
                     skill.last_used = now
                 else:
+                    import asyncio
+                    embedding = await self._get_embedding(f"{domain} {skill_name} {procedure_data['summary']}")
+                    
                     db.add(MemoryProcedural(
                         user_id=user_id,
                         skill_name=skill_name,
@@ -438,10 +473,11 @@ class MemoryService:
                         procedure=json.dumps(procedure_data),
                         success_count=1 if success else 0,
                         failure_count=0 if success else 1,
-                        confidence_score=0.8 if success else 0.2,
+                        confidence_score=0.7,
                         last_used=now,
                         last_success=now if success else None,
                         created_at=now,
+                        embedding=embedding,
                     ))
                 await db.commit()
         except Exception as e:

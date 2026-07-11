@@ -104,9 +104,9 @@ class MCPToolManager:
                 "env": {
                     **os.environ,
                     "PYTHONPATH": os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")),
-                    "OPENAI_API_KEY": config.OPENROUTER_API_KEY,
-                    "OPENAI_BASE_URL": config.OPENROUTER_BASE_URL,
-                    "OPENAI_API_BASE": config.OPENROUTER_BASE_URL,
+                    "OPENAI_API_KEY": config.OPENROUTER_API_KEY or os.getenv("OPENAI_API_KEY", ""),
+                    "OPENAI_BASE_URL": config.OPENROUTER_BASE_URL or os.getenv("OPENAI_BASE_URL", ""),
+                    "OPENAI_API_BASE": config.OPENROUTER_BASE_URL or os.getenv("OPENAI_API_BASE", ""),
                     "BROWSER_USE_MODEL": config.OPENROUTER_MODEL,
                     "MCP_BROWSER_CDP_URL": self.cdp_url,  # per-session override
                     "BROWSER_CDP_URL": self.cdp_url, # Standard env var for some MCP servers
@@ -115,7 +115,10 @@ class MCPToolManager:
                     "MCP_BROWSER_USE_OWN_BROWSER": "true" if own_browser else "false",  # per-session override
                     "BROWSER_PROXY_URL": proxy_url or "",  # per-session override
                     "BROWSER_ENGINE": browser_engine or config.BROWSER_ENGINE,
-                    "BROWSER_USE_HEADLESS": os.getenv("BROWSER_USE_HEADLESS", "false"),
+                    "BROWSER_USE_REAL_CHROME": "true" if config.BROWSER_USE_REAL_CHROME else "false",
+                    "BROWSER_EXECUTABLE_PATH": config.BROWSER_EXECUTABLE_PATH,
+                    "BROWSER_PROFILE_DIRECTORY": config.BROWSER_PROFILE_DIRECTORY,
+                    "BROWSER_USE_HEADLESS": "false" if config.BROWSER_USE_REAL_CHROME else os.getenv("BROWSER_USE_HEADLESS", "false"),
                     "BROWSER_USE_DISABLE_SECURITY": "true",
                     "BROWSER_USER_AGENT_INDEX": str(user_agent_index),
                     "BROWSER_USE_KEEP_ALIVE": os.getenv("BROWSER_USE_KEEP_ALIVE", "true"),

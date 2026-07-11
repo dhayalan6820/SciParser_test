@@ -1,10 +1,13 @@
 import os
+# Fix protobuf/tensorflow "GetPrototype" incompatibility crash
+os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import re
 import io
 import csv
 import sys
 import uuid
-import json
+import json 
 import asyncio
 import smtplib
 import tempfile

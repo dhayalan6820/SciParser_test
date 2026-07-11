@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 from urllib.parse import urlparse
 
-from sqlalchemy import select, insert
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from langchain_core.messages import (
@@ -35,9 +35,7 @@ from src.utils.session_manager import SessionManager
 from src.services.memory_service import MemoryService
 from src.services.obstacle_handler import (
     detect_captcha_type,
-    detect_obstacle,
     detect_obstacle_from_observed,
-    ObstacleMatch,
     ObstacleInputNeeded,
     build_input_form,
 )
@@ -45,9 +43,11 @@ from src.services import address_agent
 from src.services import calendar_agent
 from src.services import login_agent
 from src.services import booking_agent
+from src.services import aggregator_agent
 from src.services.observer import observe as observe_state, ObservedState
 from src.services.verifier import verify_action, ValidationResult
 from src.services.recovery import classify_failure, format_hint
+from src.services.deep_agent import DeepAgent, ObstaclePlanner
 
 # ATAG Models
 from src.services.ATAG import (
@@ -86,7 +86,7 @@ MAX_OBSERVATION_CHARS_FOR_LLM = 12000
 # above the expected worst case (long multi-page tasks with a couple of
 # recoveries) so it only trips on a genuine runaway loop, not a legitimate
 # long task.
-GRAPH_RECURSION_LIMIT = 100
+GRAPH_RECURSION_LIMIT = 40
 
 # How many of the MOST RECENT tool-result messages are kept verbatim in the
 # LLM message chain. Older tool messages are collapsed to a short pointer —
@@ -608,10 +608,26 @@ class Brain:
         import json as json_lib
         from urllib.parse import urlparse
 
-        session_obj = self.session_manager.get_session(user_id)
-        mcp_manager = session_obj.get("mcp_manager")
-        if not mcp_manager:
-            logger.warning(f"No MCP manager for user {user_id}, live preview disabled.")
+        # ── Wait for the MCP manager to be ready (race-condition guard) ──────
+        # asyncio.create_task schedules this coroutine to run, but the manager
+        # is stored in session_obj only after get_tools() completes a few lines
+        # later.  If this task executes first, the old code returned immediately
+        # and no frames were ever sent ("Initializing Stream" hang).  Poll up to
+        # 15 s so we gracefully handle any startup timing.
+        _wait_attempts = 0
+        while _wait_attempts < 30:  # 30 × 0.5 s = 15 s
+            session_obj = self.session_manager.get_session(user_id)
+            mcp_manager = session_obj.get("mcp_manager")
+            if mcp_manager:
+                break
+            if stop_event.is_set():
+                return  # task cancelled before manager was ready
+            await asyncio.sleep(0.5)
+            _wait_attempts += 1
+        else:
+            logger.warning(
+                f"No MCP manager for user {user_id} after 15 s — live preview disabled."
+            )
             return
 
         cdp_url = getattr(mcp_manager, "cdp_url", None)
@@ -622,7 +638,9 @@ class Brain:
         parsed = urlparse(cdp_url)
         # Force 127.0.0.1 instead of localhost to avoid IPv6 resolution issues on Windows
         host = "127.0.0.1" if parsed.hostname in ("localhost", "127.0.0.1") else (parsed.hostname or "127.0.0.1")
-        port = parsed.port
+        # parsed.port is None when the URL has no explicit port (e.g. http://127.0.0.1);
+        # default to 9222 to avoid building "http://127.0.0.1:None/json"
+        port = parsed.port or 9222
         json_endpoint = f"http://{host}:{port}/json"
 
         logger.info(f"Starting raw-CDP screenshot stream: user={user_id} chat={chat_id} port={port}")
@@ -630,28 +648,70 @@ class Brain:
         msg_id_counter = [0]
 
         async def _get_page_ws_url() -> Optional[str]:
-            """Return the WS debugger URL of the first available page target."""
+            """Return the WS debugger URL of the first available page target.
+
+            Retries up to 3 times with a 0.5 s gap between attempts so that
+            transient browser startup delays (Chromium binding the port a few
+            hundred ms after the bridge process starts) don't cause the stream
+            loop to silently do nothing on the first few ticks.
+            """
+            for _attempt in range(3):
+                try:
+                    async with aiohttp.ClientSession() as http:
+                        async with http.get(
+                            json_endpoint,
+                            timeout=aiohttp.ClientTimeout(total=config.CDP_JSON_TIMEOUT_SECONDS),
+                        ) as resp:
+                            if resp.status != 200:
+                                logger.debug(
+                                    f"CDP /json returned status {resp.status} for user {user_id} "
+                                    f"(attempt {_attempt + 1})"
+                                )
+                                await asyncio.sleep(0.5)
+                                continue
+                            targets = await resp.json(content_type=None)
+
+                    if targets:
+                        # Prefer the active/visible page
+                        for t in targets:
+                            if t.get("type") == "page" and t.get("webSocketDebuggerUrl"):
+                                return t["webSocketDebuggerUrl"]
+                    # targets is empty — browser is still loading its first page
+                    await asyncio.sleep(0.5)
+                except Exception as exc:
+                    logger.debug(
+                        f"CDP /json connection failed for user {user_id} at {json_endpoint} "
+                        f"(attempt {_attempt + 1}): {exc}"
+                    )
+                    await asyncio.sleep(0.5)
+            return None
+
+        async def _bring_to_front(ws_url: str):
+            """Issue Page.bringToFront to ensure window is visible."""
+            msg_id_counter[0] += 1
+            mid = msg_id_counter[0]
+            cmd = json_lib.dumps({
+                "id": mid,
+                "method": "Page.bringToFront"
+            })
             try:
                 async with aiohttp.ClientSession() as http:
-                    async with http.get(
-                        json_endpoint,
-                        timeout=aiohttp.ClientTimeout(total=config.CDP_JSON_TIMEOUT_SECONDS),
-                    ) as resp:
-                        if resp.status != 200:
-                            logger.debug(f"CDP /json returned status {resp.status} for user {user_id}")
-                            return None
-                        targets = await resp.json(content_type=None)
-                
-                if not targets:
-                    return None
-                    
-                # Prefer the active/visible page
-                for t in targets:
-                    if t.get("type") == "page" and t.get("webSocketDebuggerUrl"):
-                        return t["webSocketDebuggerUrl"]
-            except Exception as exc:
-                logger.debug(f"CDP /json connection failed for user {user_id} at {json_endpoint}: {exc}")
-            return None
+                    async with http.ws_connect(ws_url, timeout=aiohttp.ClientTimeout(total=config.CDP_SCREENSHOT_TIMEOUT_SECONDS)) as ws:
+                        await ws.send_str(cmd)
+                        async def _recv():
+                            async for msg in ws:
+                                if msg.type == aiohttp.WSMsgType.TEXT:
+                                    data = json_lib.loads(msg.data)
+                                    if data.get("id") == mid:
+                                        break
+                                elif msg.type in (aiohttp.WSMsgType.ERROR, aiohttp.WSMsgType.CLOSE):
+                                    break
+                        try:
+                            await asyncio.wait_for(_recv(), timeout=1.0)
+                        except asyncio.TimeoutError:
+                            pass
+            except Exception:
+                pass
 
         async def _take_screenshot(ws_url: str) -> Optional[str]:
             """Issue Page.captureScreenshot over CDP and return base64 JPEG string."""
@@ -669,16 +729,25 @@ class Brain:
                         timeout=aiohttp.ClientTimeout(total=config.CDP_SCREENSHOT_TIMEOUT_SECONDS),
                     ) as ws:
                         await ws.send_str(cmd)
-                        async for msg in ws:
-                            if msg.type == aiohttp.WSMsgType.TEXT:
-                                data = json_lib.loads(msg.data)
-                                if data.get("id") == mid:
-                                    if "result" in data:
-                                        return data["result"].get("data")
-                                    logger.debug(f"CDP screenshot error: {data.get('error')}")
-                                    return None
-                            elif msg.type in (aiohttp.WSMsgType.ERROR, aiohttp.WSMsgType.CLOSE):
-                                break
+                        
+                        async def _recv():
+                            async for msg in ws:
+                                if msg.type == aiohttp.WSMsgType.TEXT:
+                                    data = json_lib.loads(msg.data)
+                                    if data.get("id") == mid:
+                                        if "result" in data:
+                                            return data["result"].get("data")
+                                        logger.debug(f"CDP screenshot error: {data.get('error')}")
+                                        return None
+                                elif msg.type in (aiohttp.WSMsgType.ERROR, aiohttp.WSMsgType.CLOSE):
+                                    break
+                            return None
+                            
+                        try:
+                            return await asyncio.wait_for(_recv(), timeout=2.0)
+                        except asyncio.TimeoutError:
+                            logger.debug("Screenshot timed out (window likely minimized)")
+                            return None
             except Exception as exc:
                 logger.debug(f"CDP screenshot WS failed for user {user_id}: {exc}")
             return None
@@ -758,10 +827,14 @@ class Brain:
 
         # ── Main capture loop ─────────────────────────────────────────────────────
         try:
+            brought_to_front = False
             while not stop_event.is_set():
                 try:
                     ws_url = await _get_page_ws_url()
                     if ws_url:
+                        if not brought_to_front:
+                            await _bring_to_front(ws_url)
+                            brought_to_front = True
                         b64 = await _take_screenshot(ws_url)
                         if b64:
                             await _broadcast_frame(b64)
@@ -1128,6 +1201,37 @@ class Brain:
         except Exception as _spec_exc:
             logger.warning(f"Failed to load booking agent spec (non-fatal): {_spec_exc}")
 
+        # Deterministic Aggregator/Data-Extraction Agent context — tracks item
+        # count and page progress across turns for scraping/extraction tasks so a
+        # stalled pagination loop (Next clicked but no new items appeared) is
+        # detected and stopped before consuming the full retry budget. Only
+        # activated when the task looks like a data extraction mission (keyword-
+        # gated, consistent with address/calendar/login agents).
+        _aggregator_state = aggregator_agent.ExtractionProgressState()
+        _is_extraction_task = aggregator_agent.detect_extraction_task(task_summary, confirmed_inputs)
+        _aggregator_target_count: int = int(confirmed_inputs.get("count", 0) or confirmed_inputs.get("limit", 0) or 0)
+        _aggregator_spec_guidance: Optional[str] = None
+        
+        # FAST PATH: If this is an extraction task and has no address/calendar/login credentials,
+        # we skip the heavy noise of the other deterministic agents running their regexes on every turn.
+        _skip_irrelevant_agents = _is_extraction_task and not _requested_address and not _requested_dates and not _requested_credentials
+        
+        if _is_extraction_task:
+            try:
+                _agg_spec = spec_loader.load_spec("aggregator")
+                _agg_spec_parts: List[str] = []
+                if _agg_spec.sections.get("Decision Tree"):
+                    _agg_spec_parts.append(f"Decision Tree:\n{_agg_spec.sections['Decision Tree']}")
+                if _agg_spec.sections.get("Hard Rules"):
+                    _agg_spec_parts.append(f"Hard Rules:\n{_agg_spec.sections['Hard Rules']}")
+                if _agg_spec_parts:
+                    _aggregator_spec_guidance = (
+                        "\n\n[AGGREGATOR_AGENT_SPEC — " + _agg_spec.role + "]\n"
+                        + "\n\n".join(_agg_spec_parts)
+                    )
+            except Exception as _spec_exc:
+                logger.warning(f"Failed to load aggregator agent spec (non-fatal): {_spec_exc}")
+
         # Known secret values for THIS run (sensitive confirmed_inputs fields +
         # any obstacle answer, e.g. an OTP code, just submitted) — scrubbed out
         # of ToolExecutionLog rows before they're persisted. The LLM still sees
@@ -1260,7 +1364,11 @@ class Brain:
                 return _u, _cost
 
             _t0 = time.monotonic()
-            response = await llm_with_tools.ainvoke(current_messages)
+            
+            # Use DeepAgent for actor-critic reflection on the tool calls
+            deep_agent = DeepAgent(llm_with_tools)
+            response = await deep_agent.execute(current_messages)
+            
             _first_latency_ms = int((time.monotonic() - _t0) * 1000)
 
             # Record the first LLM call immediately (one row per actual API call)
@@ -1321,9 +1429,9 @@ class Brain:
                     thought_text = re.sub(r"`{1,3}[^`\n]*`{1,3}", "", thought_text)         # code spans
                     thought_text = re.sub(r"^[-*+]\s+", "", thought_text, flags=re.MULTILINE) # bullets
                     thought_text = re.sub(r"^\d+\.\s+", "", thought_text, flags=re.MULTILINE) # numbered lists
-                    # Collapse blank lines and cap at 6 lines
+                    # Collapse blank lines (no longer capping to 6 lines to support Deep Situational Analysis)
                     lines = [l.rstrip() for l in thought_text.splitlines() if l.strip()]
-                    thought_text = "\n".join(lines[:6]).strip()
+                    thought_text = "\n".join(lines).strip()
                     if thought_text:
                         await self.stream_manager.broadcast_thought(chat_id, thought_text)
 
@@ -1468,12 +1576,53 @@ class Brain:
                 except Exception as _ie:
                     logger.warning(f"Continue-interstitial detection error (non-fatal): {_ie}")
 
+                # ── Metacognitive Nudge: Modal/Popup Overlay ────────────────────────────
+                # Actively wake up the agent if an overlay is blocking the main content
+                # instead of letting it passively fail at clicking blocked background elements.
+                if _observed.has_modal and not _captcha_type and not _observed.interstitial_type:
+                    _planner = ObstaclePlanner(llm_with_tools)
+                    _failures = state.get("obstacle_failures", [])
+                    _plan = await _planner.generate_plan("modal", str(observation), _failures)
+                    
+                    if len(execution_history) > 0:
+                        _last_tool = execution_history[-1].get("tool")
+                        _last_args = execution_history[-1].get("args")
+                        _failures.append(f"Tried tool '{_last_tool}' with args '{_last_args}' but the modal is still present.")
+                        state["obstacle_failures"] = _failures
+
+                    observation = str(observation) + (
+                        f"\n\n[SYSTEM NUDGE: DYNAMIC OBSTACLE PLAN]\n"
+                        f"An active modal, popup, or login overlay is blocking the page.\n"
+                        f"EXECUTE THIS PLAN TO DISMISS IT:\n{_plan}\n"
+                        f"Do NOT blindly proceed with your main task until this is dismissed."
+                    )
+
+                # ── Metacognitive Nudge: Stuck / Repetitive Actions ─────────────────────
+                # If the agent is issuing the exact same tool call sequentially and failing
+                # to change the DOM, it is mechanically stuck. Inject a nudge to break out.
+                if len(execution_history) >= 2:
+                    _last_call = execution_history[-1]
+                    _prev_call = execution_history[-2]
+                    # Check if the last two calls were identical to the current one and failed
+                    if (tool_call["name"] == _last_call.get("tool") and 
+                        tool_call["name"] == _prev_call.get("tool") and
+                        str(tool_call.get("args", {})) == str(_last_call.get("args", {})) and
+                        str(tool_call.get("args", {})) == str(_prev_call.get("args", {})) and
+                        "Error" in str(observation)):
+                        observation = str(observation) + (
+                            f"\n\n[SYSTEM NUDGE: REPETITIVE ACTION DETECTED]\n"
+                            f"You have attempted this exact same action 3 times in a row without progress. "
+                            f"The standard DOM approach is failing here. Think outside the box: "
+                            f"can you use your Vision capabilities to calculate coordinate clicks? "
+                            f"Can you navigate via keyboard? Re-evaluate your Alternative Strategies."
+                        )
+
                 # ── Address Agent: deterministic address-autocomplete handling ─────────
                 # Only runs when the task actually supplied an address to enter and no
                 # CAPTCHA is blocking the page. See src/services/address_agent.py for the
                 # scoring/verification logic and address.agent.md for the agent's rules.
                 try:
-                    if not _captcha_type and _requested_address:
+                    if not _skip_irrelevant_agents and not _captcha_type and _requested_address:
                         _addr_dropdown_open = address_agent.detect_address_autocomplete_context(str(observation))
 
                         if _addr_dropdown_open:
@@ -1500,7 +1649,7 @@ class Brain:
                 # CAPTCHA is blocking the page. See src/services/calendar_agent.py for the
                 # scoring/verification logic and calendar.agent.md for the agent's rules.
                 try:
-                    if not _captcha_type and _requested_dates:
+                    if not _skip_irrelevant_agents and not _captcha_type and _requested_dates:
                         _calendar_open = calendar_agent.detect_calendar_widget_context(str(observation))
 
                         if _calendar_open:
@@ -1527,7 +1676,7 @@ class Brain:
                 # CAPTCHA is blocking the page. See src/services/login_agent.py for the
                 # field-mapping/failure logic and login.agent.md for the agent's rules.
                 try:
-                    if not _captcha_type and _requested_credentials:
+                    if not _skip_irrelevant_agents and not _captcha_type and _requested_credentials:
                         _login_form_open = login_agent.detect_login_form_context(str(observation))
                         if _login_form_open:
                             observation = login_agent.handle_login_form_observation(
@@ -1547,7 +1696,7 @@ class Brain:
                 # stalled checkout/booking wizard escalates instead of looping. See
                 # src/services/booking_agent.py and booking.agent.md for the rules.
                 try:
-                    if not _captcha_type and booking_agent.detect_multistep_context(str(observation)):
+                    if not _skip_irrelevant_agents and not _captcha_type and booking_agent.detect_multistep_context(str(observation)):
                         observation = booking_agent.handle_booking_progress_observation(
                             str(observation),
                             _booking_state,
@@ -1558,6 +1707,33 @@ class Brain:
                     raise
                 except Exception as _boe:
                     logger.warning(f"Booking agent detection error (non-fatal): {_boe}")
+
+                # ── Aggregator/Data-Extraction Agent: pagination & item-count tracking ──
+                # Only runs when the task is an extraction mission (keyword-gated) and the
+                # current page observation contains data-listing or pagination signals.
+                # Tracks item count and page progress across turns so a stalled "Load More"
+                # / Next-page loop is detected and stopped before consuming the full retry
+                # budget. See src/services/aggregator_agent.py and aggregator.agent.md.
+                try:
+                    if (
+                        not _captcha_type
+                        and _is_extraction_task
+                        and (
+                            aggregator_agent.detect_data_extraction_context(str(observation))
+                            or aggregator_agent.detect_pagination_context(str(observation))
+                        )
+                    ):
+                        observation = aggregator_agent.handle_aggregator_observation(
+                            str(observation),
+                            _aggregator_state,
+                            _task_domain,
+                            target_count=_aggregator_target_count,
+                            spec_guidance=_aggregator_spec_guidance,
+                        )
+                except ObstacleInputNeeded:
+                    raise
+                except Exception as _agge:
+                    logger.warning(f"Aggregator agent detection error (non-fatal): {_agge}")
 
                 # ── Obstacle detection (generic framework) — human-input types like OTP ──
                 # CAPTCHA is handled above (agent attempts to self-solve). Obstacles that
@@ -1623,7 +1799,16 @@ class Brain:
                     observation = str(observation) + _validation.to_prompt_note()
 
                 # Clean observation for logs (remove large base64 data)
-                clean_obs = re.sub(r'\[SCREENSHOT\].*?\[/SCREENSHOT\]', '[Image Data]', str(observation), flags=re.DOTALL)
+                _obs_str = str(observation)
+                
+                # Extract and stream the screenshot frame to the UI if present
+                screenshot_match = re.search(r'\[SCREENSHOT\](.*?)\[/SCREENSHOT\]', _obs_str, flags=re.DOTALL)
+                if screenshot_match and self.stream_manager:
+                    _b64 = screenshot_match.group(1)
+                    # Use asyncio.create_task to not block the main loop
+                    asyncio.create_task(self.stream_manager.broadcast_frame(_b64, user_id, is_tool=False))
+                    
+                clean_obs = re.sub(r'\[SCREENSHOT\].*?\[/SCREENSHOT\]', '[Image Data]', _obs_str, flags=re.DOTALL)
 
                 # Scrub any known secret values (passwords, OTP codes, card/CVV, etc.)
                 # out of BOTH the tool args and the observation text before they are
@@ -1707,6 +1892,7 @@ class Brain:
                 # instead of minting a disconnected uuid4() per entry.
                 execution_history.append({
                     "tool": tool_call["name"],
+                    "args": tool_call.get("args", {}),
                     "status": status,
                     "result": llm_observation[:500],
                     "id": _db_log_id,

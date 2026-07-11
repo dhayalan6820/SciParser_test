@@ -171,6 +171,10 @@ _STAGE_SECTION_MAP: Dict[str, List[str]] = {
         "Stealth Behavior (mandatory on every mission)",
         "Form Handling",
         "Safety Rules",
+        # aggregator-specific execution sections
+        "Extraction Strategy",
+        "Pagination & Infinite Scroll",
+        "Data Cleaning Rules",
     ],
     "verify": [
         "Observation Rules",

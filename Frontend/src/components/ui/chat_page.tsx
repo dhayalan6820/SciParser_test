@@ -478,10 +478,10 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       setCdpConnected(s.connected);
       setCdpConnectedUrl(s.cdp_url);
       if (s.cdp_url) setCdpUrlInput(s.cdp_url);
-    }).catch(() => {});
+    }).catch(() => { });
     sciparserApi.getBrowserEngine().then((r) => {
       setActiveBrowserEngine((r.engine as "camoufox" | "chrome") || "camoufox");
-    }).catch(() => {});
+    }).catch(() => { });
   }, [userProfile]);
 
   const handleConnectCdp = async () => {
@@ -502,7 +502,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const handleDisconnectCdp = async () => {
     try {
       await sciparserApi.disconnectCdp();
-    } catch (_) {}
+    } catch (_) { }
     setCdpConnected(false);
     setCdpConnectedUrl(null);
     setCdpUrlInput(DEFAULT_CDP_URL);
@@ -604,6 +604,11 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             const frameChatId = frameData.chat_id
               ? String(frameData.chat_id)
               : null;
+
+            // Task #182: Remove strict chat_id mismatch check. The stream is already
+            // isolated by user_id via the WebSocket URL. Dropping frames due to
+            // temporary/changing thread IDs causes the "INITIALIZING STREAM" hang.
+            /*
             const activeId = activeThreadId ? String(activeThreadId) : null;
             if (frameChatId && activeId && frameChatId !== activeId) {
               console.log(
@@ -614,6 +619,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               );
               return;
             }
+            */
 
             let actualFrame = frameData.frame;
             if (typeof actualFrame === "object" && actualFrame !== null) {
@@ -674,6 +680,12 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               const toolMsg =
                 typeof rawData === "string" ? JSON.parse(rawData) : rawData;
               if (toolMsg.type === "tool_start") {
+                // Fallback: open the browser panel on first tool activity in case
+                // the proactive open in handleSendMessage was overridden by the
+                // userInterruptedBrowser guard or a reconnect cycle.
+                if (isFirstFrame.current && !userInterruptedBrowser) {
+                  setBrowserActive(true);
+                }
                 setToolLogs((prev) => {
                   if (prev.some((log) => log.id === toolMsg.tool_call_id))
                     return prev;
@@ -702,12 +714,12 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   prev.map((log) =>
                     log.id === toolMsg.tool_call_id
                       ? {
-                          ...log,
-                          id: finalId,
-                          status: toolMsg.status,
-                          tool_output: toolMsg.output,
-                          error_message: toolMsg.error,
-                        }
+                        ...log,
+                        id: finalId,
+                        status: toolMsg.status,
+                        tool_output: toolMsg.output,
+                        error_message: toolMsg.error,
+                      }
                       : log,
                   ),
                 );
@@ -715,8 +727,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   setSelectedToolIds((prev) =>
                     prev.includes(toolMsg.tool_call_id)
                       ? prev.map((id) =>
-                          id === toolMsg.tool_call_id ? toolMsg.db_id : id,
-                        )
+                        id === toolMsg.tool_call_id ? toolMsg.db_id : id,
+                      )
                       : prev,
                   );
                 }
@@ -1153,10 +1165,17 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     isFirstFrame.current = true; // Reset for new message
     setToolLogs([]); // Clear tool logs for the new live process
     setCurrentPlan(null); // Clear old plan steps immediately
+    // Proactively open the browser preview panel as soon as the user sends
+    // a message — eliminates the chicken-and-egg where the panel only opened
+    // after the first frame, but frames were never seen because the panel was
+    // closed.  The user can still manually close it.
+    if (!userInterruptedBrowser) {
+      setBrowserActive(true);
+    }
     // Refresh the active engine badge so it reflects what the backend will actually use
     sciparserApi.getBrowserEngine().then((r) => {
       setActiveBrowserEngine((r.engine as "camoufox" | "chrome") || "camoufox");
-    }).catch(() => {});
+    }).catch(() => { });
 
     try {
       const response = await sciparserApi.sendChatMessage(
@@ -1261,7 +1280,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         const parsed = JSON.parse(errText);
         errText = parsed?.detail || parsed?.message || errText;
         if (typeof errText === "object") errText = JSON.stringify(errText);
-      } catch {}
+      } catch { }
       const errorMsg: ChatMessage = {
         id: uuidv4(),
         role: "assistant",
@@ -1479,8 +1498,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     ? "bg-amber-50/80 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40 text-amber-900 dark:text-amber-100 rounded-tl-none"
                     : "bg-card border-border text-card-foreground rounded-tl-none hover:border-accent",
                 isSelectionMode &&
-                  isSelected &&
-                  "ring-2 ring-indigo-500 border-indigo-500",
+                isSelected &&
+                "ring-2 ring-indigo-500 border-indigo-500",
               )}
             >
               <div
@@ -1565,9 +1584,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
             {/* AI Response Stats (tokens · cost · time) */}
             {!isUser && msg.plan && msg.plan.length > 0 && (() => {
-              const totalInput  = msg.plan.reduce((s: number, t: Task) => s + (t.token_usage?.input  ?? 0), 0);
+              const totalInput = msg.plan.reduce((s: number, t: Task) => s + (t.token_usage?.input ?? 0), 0);
               const totalOutput = msg.plan.reduce((s: number, t: Task) => s + (t.token_usage?.output ?? 0), 0);
-              const totalCost   = msg.plan.reduce((s: number, t: Task) => s + ((t.token_usage as any)?.cost ?? 0), 0);
+              const totalCost = msg.plan.reduce((s: number, t: Task) => s + ((t.token_usage as any)?.cost ?? 0), 0);
               if (totalInput === 0 && totalOutput === 0) return null;
 
               const fmtTokens = (n: number) =>
@@ -2200,8 +2219,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     setIsNavigating(true);
     setLoaderText(
       view === "chat" ? "Switching to Chat" :
-      view === "schedules" ? "Opening Schedules" :
-      "Opening Settings"
+        view === "schedules" ? "Opening Schedules" :
+          "Opening Settings"
     );
 
     setTimeout(() => {
@@ -2636,20 +2655,20 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           "flex flex-col shrink-0 overflow-hidden border-border backdrop-blur-xl bg-background/95",
           isMobile
             ? cn(
-                "fixed inset-y-0 left-0 z-50 h-full w-[320px] max-w-[85vw] border-r transition-transform duration-300",
-                isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full",
-              )
+              "fixed inset-y-0 left-0 z-50 h-full w-[320px] max-w-[85vw] border-r transition-transform duration-300",
+              isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full",
+            )
             : "relative h-full z-20 border-r transition-[width] duration-300",
         )}
         style={
           !isMobile
             ? {
-                width: isSidebarCollapsed
-                  ? "56px"
-                  : currentView === "schedules" || currentView === "settings"
-                    ? "64px"
-                    : `${sidebarWidth}px`,
-              }
+              width: isSidebarCollapsed
+                ? "56px"
+                : currentView === "schedules" || currentView === "settings"
+                  ? "64px"
+                  : `${sidebarWidth}px`,
+            }
             : undefined
         }
       >
@@ -2801,8 +2820,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           className={cn(
             "relative flex h-full flex-col bg-background/95",
             !isMobile &&
-              (isSidebarCollapsed || currentView === "schedules") &&
-              "hidden",
+            (isSidebarCollapsed || currentView === "schedules") &&
+            "hidden",
           )}
         >
           <div className="pointer-events-none absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_28%),radial-gradient(circle_at_bottom,rgba(16,185,129,0.06),transparent_22%)]" />
@@ -2979,9 +2998,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                           <span className="text-[10px] text-muted-foreground">
                             {t.createdAt
                               ? new Date(t.createdAt).toLocaleDateString([], {
-                                  month: "short",
-                                  day: "numeric",
-                                })
+                                month: "short",
+                                day: "numeric",
+                              })
                               : ""}
                           </span>
                         </div>
@@ -3273,7 +3292,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     className={cn(
                       "gap-1.5 text-xs font-semibold shrink-0",
                       isSelectionMode &&
-                        "bg-indigo-600 hover:bg-indigo-700 text-white border-none",
+                      "bg-indigo-600 hover:bg-indigo-700 text-white border-none",
                     )}
                   >
                     <CheckCircle2 className="w-4 h-4" />
@@ -3322,11 +3341,11 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     className={cn(
                       "gap-1.5 text-xs font-semibold shrink-0 transition-all duration-500",
                       browserActive &&
-                        "bg-emerald-600 hover:bg-emerald-700 text-white border-none",
+                      "bg-emerald-600 hover:bg-emerald-700 text-white border-none",
                       browserBlink === "green" &&
-                        "ring-4 ring-emerald-500 animate-pulse border-emerald-500",
+                      "ring-4 ring-emerald-500 animate-pulse border-emerald-500",
                       browserBlink === "red" &&
-                        "ring-4 ring-red-500 animate-pulse border-red-500",
+                      "ring-4 ring-red-500 animate-pulse border-red-500",
                     )}
                   >
                     <Globe className="w-4 h-4" />

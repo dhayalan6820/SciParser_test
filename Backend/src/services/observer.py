@@ -18,6 +18,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from typing import List, Optional
+from urllib.parse import urlparse
 
 from src.services.obstacle_handler import detect_captcha_type, detect_continue_interstitial, detect_otp
 
@@ -28,6 +29,8 @@ _LOADING_PATTERNS = [
 _MODAL_PATTERNS = [
     r"\bmodal\b", r"\bdialog\b", r"\bpop[- ]?up\b", r"\boverlay\b",
     r"\bcookie (?:consent|banner|notice)\b", r"\baccept (?:all )?cookies\b",
+    r"\bno thanks\b", r"\bnot now\b", r"\bmaybe later\b", r"\bclose\b",
+    r"\bget access to your\b", r"\bsign up for\b", r"\bexclusive offers\b"
 ]
 _LOGIN_PATTERNS = [
     r"\bsign[- ]?in\b", r"\blog[- ]?in\b", r"\busername\b",
@@ -100,12 +103,16 @@ def observe(observation_text: str) -> ObservedState:
 
     error_signals = [p for p in _ERROR_PATTERNS if re.search(p, t, re.MULTILINE)]
 
+    has_login_form = any(re.search(p, t) for p in _LOGIN_PATTERNS)
+    is_homepage = bool(url and urlparse(url).path in ("", "/"))
+    has_modal = any(re.search(p, t) for p in _MODAL_PATTERNS) or (has_login_form and is_homepage)
+
     return ObservedState(
         raw_text=text,
         url=url,
         is_loading=any(re.search(p, t) for p in _LOADING_PATTERNS),
-        has_modal=any(re.search(p, t) for p in _MODAL_PATTERNS),
-        has_login_form=any(re.search(p, t) for p in _LOGIN_PATTERNS),
+        has_modal=has_modal,
+        has_login_form=has_login_form,
         has_error=bool(error_signals),
         error_signals=error_signals,
         captcha_type=detect_captcha_type(text),

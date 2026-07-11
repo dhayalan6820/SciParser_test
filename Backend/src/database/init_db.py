@@ -50,6 +50,22 @@ async def create_database_if_not_exists():
         logger.error(f"Error checking/creating database '{db_name}': {e}")
     finally:
         await temp_engine.dispose()
+        
+    # Attempt to install pgvector on the actual database
+    try:
+        app_url_autocommit = config.DATABASE_URL
+        if app_url_autocommit.startswith("postgresql://"):
+            app_url_autocommit = app_url_autocommit.replace("postgresql://", "postgresql+asyncpg://", 1)
+        elif app_url_autocommit.startswith("postgres://"):
+            app_url_autocommit = app_url_autocommit.replace("postgres://", "postgresql+asyncpg://", 1)
+        
+        pg_engine = create_async_engine(app_url_autocommit, isolation_level="AUTOCOMMIT")
+        async with pg_engine.connect() as conn:
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+            logger.info("pgvector extension verified.")
+        await pg_engine.dispose()
+    except Exception as e:
+        logger.warning(f"Failed to initialize pgvector. RAG memory may not work. Error: {e}")
 
 async def init_database():
     """
@@ -61,6 +77,7 @@ async def init_database():
         logger.info("Creating/verifying database tables...")
         async with app_engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+
             # Add session_state column to existing tables if it doesn't exist yet
             await conn.execute(text(
                 "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS session_state TEXT"
@@ -220,6 +237,16 @@ async def init_database():
                 END $$;
             """))
             logger.info("Database tables checked/created successfully.")
+
+        # Attempt to add RAG embedding columns in an isolated transaction
+        try:
+            async with app_engine.begin() as conn_rag:
+                await conn_rag.execute(text("ALTER TABLE memory_episodic ADD COLUMN IF NOT EXISTS embedding vector(384)"))
+                await conn_rag.execute(text("ALTER TABLE memory_semantic ADD COLUMN IF NOT EXISTS embedding vector(384)"))
+                await conn_rag.execute(text("ALTER TABLE memory_procedural ADD COLUMN IF NOT EXISTS embedding vector(384)"))
+                logger.info("RAG memory embedding columns verified.")
+        except Exception as e:
+            logger.warning(f"RAG embedding columns could not be created (likely missing pgvector extension). Error: {e}")
 
         # Bootstrap: if no admin exists yet, promote the earliest-created user
         # to admin so there's always a way into the Admin Dashboard. Runs in

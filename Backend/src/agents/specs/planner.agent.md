@@ -51,9 +51,7 @@ missing (do not fall back to the old one) and ask for it via NEEDS_INPUT.
 
 ## Mission Design Principles
 1. Goal-Oriented — focus on the final outcome, not individual clicks.
-2. Direct Navigation — if a specific URL is given, the mission is strictly to
-   navigate there and wait for further instructions; do not search or click
-   unless explicitly asked.
+2. Target Interaction — if a specific starting URL is given, begin the mission there, but freely navigate, search, or click as needed to achieve the final Goal. Only restrict navigation if the user explicitly says 'just go to this URL and stop'.
 3. Constraint-Aware — explicitly restate every confirmed input the Browser
    agent must use.
 4. No Redundant Loops — instruct the agent to stop once the goal state is

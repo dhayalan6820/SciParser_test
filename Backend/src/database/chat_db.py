@@ -9,6 +9,13 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, declarative_base, relationship
 from enum import Enum as PyEnum
 
+try:
+    from pgvector.sqlalchemy import Vector
+except ImportError:
+    # Fallback for systems where pgvector isn't installed yet, to not break imports
+    Vector = String
+
+
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
 from src import config
@@ -264,6 +271,7 @@ class MemoryEpisodic(Base):
     access_count = Column(Integer, default=0)
     last_accessed = Column(TIMESTAMP(timezone=True), nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
+    embedding = Column(Vector(384), nullable=True)
 
     __table_args__ = (
         Index("ix_memory_episodic_user_confidence", "user_id", "confidence_score"),
@@ -284,6 +292,7 @@ class MemorySemantic(Base):
     access_count = Column(Integer, default=0)
     last_validated = Column(TIMESTAMP(timezone=True), nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
+    embedding = Column(Vector(384), nullable=True)
 
     __table_args__ = (
         Index("ix_memory_semantic_user_confidence", "user_id", "confidence_score"),
@@ -305,6 +314,7 @@ class MemoryProcedural(Base):
     last_used = Column(TIMESTAMP(timezone=True), nullable=True)
     last_success = Column(TIMESTAMP(timezone=True), nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
+    embedding = Column(Vector(384), nullable=True)
 
 
 class AppLog(Base):

@@ -110,7 +110,35 @@ DATABASE_URL = _require("DATABASE_URL") if IS_PRODUCTION else os.getenv("DATABAS
 # ---------------------------------------------------------------------------
 OPENROUTER_API_KEY = _require("OPENROUTER_API_KEY") if IS_PRODUCTION else os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = _str("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-OPENROUTER_MODEL = _str("OPENROUTER_MODEL", "google/gemini-3-flash-preview")
+OPENROUTER_MODEL = _str("OPENROUTER_MODEL", "openai/gpt-5.4-nano")
+
+# ---------------------------------------------------------------------------
+# LangSmith Tracing (optional)
+# ---------------------------------------------------------------------------
+# LangChain's auto-tracing reads LANGCHAIN_TRACING_V2, LANGCHAIN_API_KEY,
+# LANGCHAIN_PROJECT, and LANGCHAIN_ENDPOINT directly from os.environ at
+# import time — we just surface them here for visibility and to log whether
+# tracing is active. No code changes needed in brain.py / deep_agent.py;
+# every ChatOpenAI call, LangGraph ainvoke, and tool invocation is traced
+# automatically when LANGCHAIN_TRACING_V2=true.
+LANGSMITH_TRACING_ENABLED = _bool("LANGCHAIN_TRACING_V2", False)
+LANGSMITH_API_KEY = os.getenv("LANGCHAIN_API_KEY", "")
+LANGSMITH_PROJECT = _str("LANGCHAIN_PROJECT", "SciParser-AI")
+LANGSMITH_ENDPOINT = _str("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com")
+
+# Ensure the env vars are set back for LangChain's auto-detection (in case
+# they were loaded from .env but not yet in the real os.environ).
+if LANGSMITH_TRACING_ENABLED and LANGSMITH_API_KEY:
+    os.environ.setdefault("LANGCHAIN_TRACING_V2", "true")
+    os.environ.setdefault("LANGCHAIN_API_KEY", LANGSMITH_API_KEY)
+    os.environ.setdefault("LANGCHAIN_PROJECT", LANGSMITH_PROJECT)
+    os.environ.setdefault("LANGCHAIN_ENDPOINT", LANGSMITH_ENDPOINT)
+    _logger.info(
+        "LangSmith tracing ENABLED — project '%s', endpoint '%s'",
+        LANGSMITH_PROJECT, LANGSMITH_ENDPOINT,
+    )
+else:
+    _logger.debug("LangSmith tracing is disabled (LANGCHAIN_TRACING_V2 is not 'true' or LANGCHAIN_API_KEY is empty).")
 
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 
@@ -184,6 +212,21 @@ BROWSER_CDP_READY_TIMEOUT_SECONDS = _float("BROWSER_CDP_READY_TIMEOUT_SECONDS", 
 BROWSER_NAVIGATION_TIMEOUT_MS = _int("BROWSER_NAVIGATION_TIMEOUT_MS", 30000)
 BROWSER_USE_HEADLESS_DEFAULT = _bool("BROWSER_USE_HEADLESS", True)
 BROWSER_USER_AGENT_INDEX_DEFAULT = _int("BROWSER_USER_AGENT_INDEX", 0)
+
+
+
+# Whether to use the user's primary system Chrome instead of launching a fresh Chromium via Playwright
+BROWSER_USE_SYSTEM_CHROME = _bool("BROWSER_USE_SYSTEM_CHROME", False)
+BROWSER_EXECUTABLE_PATH = _str("BROWSER_EXECUTABLE_PATH", "")
+BROWSER_PROFILE_DIRECTORY = _str("BROWSER_PROFILE_DIRECTORY", "Default")
+
+# Paths for Playwright fallback
+_base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_default_user_data_dir = os.path.join(_base_dir, ".browser_data")
+BROWSER_USER_DATA_DIR = _str("BROWSER_USER_DATA_DIR", _default_user_data_dir)
+
+BROWSER_USE_REAL_CHROME = _bool("BROWSER_USE_REAL_CHROME", bool(BROWSER_EXECUTABLE_PATH))
+BROWSER_PROXY_URL = _str("BROWSER_PROXY_URL", "")
 
 # ---------------------------------------------------------------------------
 # Browser automation — per-session runtime overrides
