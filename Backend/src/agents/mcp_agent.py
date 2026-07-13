@@ -115,10 +115,12 @@ class MCPToolManager:
                     "MCP_BROWSER_USE_OWN_BROWSER": "true" if own_browser else "false",  # per-session override
                     "BROWSER_PROXY_URL": proxy_url or "",  # per-session override
                     "BROWSER_ENGINE": browser_engine or config.BROWSER_ENGINE,
+                    "BROWSER_USE_SYSTEM_CHROME": "true" if config.BROWSER_USE_SYSTEM_CHROME else "false",
+                    "BROWSER_USE_PROFILE_DIR": config.BROWSER_PROFILE_DIRECTORY,
                     "BROWSER_USE_REAL_CHROME": "true" if config.BROWSER_USE_REAL_CHROME else "false",
                     "BROWSER_EXECUTABLE_PATH": config.BROWSER_EXECUTABLE_PATH,
                     "BROWSER_PROFILE_DIRECTORY": config.BROWSER_PROFILE_DIRECTORY,
-                    "BROWSER_USE_HEADLESS": "false" if config.BROWSER_USE_REAL_CHROME else os.getenv("BROWSER_USE_HEADLESS", "false"),
+                    "BROWSER_USE_HEADLESS": "false" if config.BROWSER_USE_SYSTEM_CHROME or config.BROWSER_USE_REAL_CHROME else os.getenv("BROWSER_USE_HEADLESS", "false"),
                     "BROWSER_USE_DISABLE_SECURITY": "true",
                     "BROWSER_USER_AGENT_INDEX": str(user_agent_index),
                     "BROWSER_USE_KEEP_ALIVE": os.getenv("BROWSER_USE_KEEP_ALIVE", "true"),

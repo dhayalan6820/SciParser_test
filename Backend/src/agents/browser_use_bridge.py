@@ -367,41 +367,21 @@ async def run_bridge():
 
     if use_system_chrome:
         import socket
-        import subprocess
-        import ctypes
-        import asyncio
-
         port = 9222  # System Chrome default CDP port
         
         def is_port_open(port):
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                return s.connect_ex(('localhost', port)) == 0
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.settimeout(1.0)
+                    return s.connect_ex(('localhost', port)) == 0
+            except Exception:
+                return False
 
         if not is_port_open(port):
-            msg = (
-                "SciParser needs to use your System Chrome for anti-detection, but it isn't running with debugging enabled.\n\n"
-                "Please completely CLOSE ALL open Chrome windows first, then click OK to allow SciParser to launch it."
-            )
-            print("Bridge: Prompting user to allow System Chrome launch...", file=sys.stderr)
-            res = ctypes.windll.user32.MessageBoxW(0, msg, "SciParser - System Chrome Setup", 1 | 0x40)
-            
-            if res == 1:  # OK
-                chrome_path = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
-                if not os.path.exists(chrome_path):
-                    chrome_path = r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
-                
-                try:
-                    subprocess.Popen([
-                        chrome_path,
-                        f"--remote-debugging-port={port}",
-                        f"--profile-directory={system_chrome_profile}"
-                    ])
-                    await asyncio.sleep(2.5)  # Give Chrome time to start and bind the port
-                except Exception as e:
-                    print(f"Bridge: Failed to launch System Chrome: {e}", file=sys.stderr)
-            else:
-                print("Bridge: User cancelled System Chrome launch.", file=sys.stderr)
+            print("Bridge: System Chrome debug port 9222 is not open. Automatically falling back to normal Chromium.", file=sys.stderr)
+            use_system_chrome = False
 
+    if use_system_chrome:
         from browser_use import Browser
         print(f"Bridge: Using system Chrome with profile: {system_chrome_profile}", file=sys.stderr)
         browser_session = Browser.from_system_chrome(profile_directory=system_chrome_profile)
@@ -413,6 +393,11 @@ async def run_bridge():
             chromium_args=[
                 "--remote-allow-origins=*",
                 f"--remote-debugging-port={port}",
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--skip-first-run-ui",
+                "--disable-search-engine-choice-screen",
+                "--disable-features=Translate,OptimizationHints"
             ],
             proxy={'server': proxy_url} if proxy_url else None,
             keep_alive=keep_alive,
@@ -441,14 +426,39 @@ async def run_bridge():
     _patch_mcp_server(browser_session, get_cdp_url, headless, proxy_url)
     
     try:
-        from browser_use.mcp.server import main
-        import inspect
-        # print("Bridge: starting MCP server...", file=sys.stderr)
-        if inspect.iscoroutinefunction(main):
-            await main()
-        else:
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, main)
+        from browser_use.mcp.server import BrowserUseServer
+        import logging
+        logging.disable(logging.NOTSET) # Restore logging
+        from mcp.server.stdio import stdio_server
+        from mcp.server.models import InitializationOptions
+        from mcp.server import NotificationOptions
+        from browser_use.utils import get_browser_use_version
+
+        # Instantiate server directly
+        mcp_srv = BrowserUseServer()
+        mcp_srv.browser_session = browser_session
+
+        version = "0.1.0"
+        try:
+            version = get_browser_use_version()
+        except Exception:
+            pass
+
+        init_options = InitializationOptions(
+            server_name="browser-use",
+            server_version=version,
+            capabilities=mcp_srv.server.get_capabilities(
+                notification_options=NotificationOptions(),
+                experimental_capabilities={},
+            ),
+        )
+
+        async with stdio_server() as (read_stream, write_stream):
+            await mcp_srv.server.run(
+                read_stream,
+                write_stream,
+                init_options
+            )
     except KeyboardInterrupt:
         print("Bridge: Shutting down...", file=sys.stderr)
     finally:

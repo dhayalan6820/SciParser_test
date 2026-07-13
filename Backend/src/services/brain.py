@@ -1,3126 +1,422 @@
 import asyncio
-import base64
 import os
-import sys
-import json
-import re
-import time
 import uuid
-import httpx
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Optional, Dict, Any, List
-from urllib.parse import urlparse
+import re
+import traceback
+from typing import Dict, Any, List
 
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
-
-from langchain_core.messages import (
-    HumanMessage, 
-    AIMessage, 
-    SystemMessage, 
-    ToolMessage
-)
-
-from langchain_core.tools import BaseTool 
-from langchain_openai import ChatOpenAI
-from langgraph.graph import StateGraph, END
-
-# Database and Utilities
-from src.database.chat_db import AsyncSessionLocal, Message, ChatSession, AgentExecutionLog, ToolExecutionLog, User
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
+from langchain_openrouter import ChatOpenRouter
+from langgraph.prebuilt import create_react_agent
+from deepagents import create_deep_agent
 from src.utils.logger import logger
-from src import config
 from src.agents.mcp_agent import MCPToolManager
 from src.utils.session_manager import SessionManager
-from src.services.memory_service import MemoryService
-from src.services.obstacle_handler import (
-    detect_captcha_type,
-    detect_obstacle_from_observed,
-    ObstacleInputNeeded,
-    build_input_form,
-)
-from src.services import address_agent
-from src.services import calendar_agent
-from src.services import login_agent
-from src.services import booking_agent
-from src.services import aggregator_agent
-from src.services.observer import observe as observe_state, ObservedState
-from src.services.verifier import verify_action, ValidationResult
-from src.services.recovery import classify_failure, format_hint
-from src.services.deep_agent import DeepAgent, ObstaclePlanner
-
-# ATAG Models
-from src.services.ATAG import (
-    AgentState, 
-    ATAGProcessor, 
-    serialize_state,
-    calculate_llm_cost
-)
-from src.agents import spec_loader
-from src.utils.llm_instrumentation import count_message_tokens, record_llm_request
-
-# --- Token/cost optimization knobs ---
-# Trigger history summarization much earlier than the model's context limit so
-# large tool observations (e.g. raw page content from "Navigate ..." steps)
-# get compressed away after a few turns instead of being carried forward in
-# every subsequent LLM call for the rest of the run. This was previously
-# 600,000 (near the whole context window), which meant bulky observations
-# lingered for a long time before ever being summarized, inflating per-run
-# token/cost totals on navigation-heavy tasks.
-SUMMARIZE_HISTORY_TOKEN_THRESHOLD = 60000
-
-# Maximum characters of a single tool observation kept verbatim in LLM
-# history. Large page dumps beyond this are truncated — the LLM only needs
-# enough of the page/DOM to decide its next action, not the entire raw
-# content repeated on every subsequent turn. Lowered from 30,000 (~7,500
-# tokens) to reduce the size of the heaviest "Navigate ..." steps.
-MAX_OBSERVATION_CHARS_FOR_LLM = 12000
-
-# Hard ceiling on LangGraph super-steps (agent -> tools -> agent -> ...) for a
-# single run. This is a backstop, not the primary loop control — normal runs
-# are already bounded by domain-specific guards (max_retries=3 for recovery
-# attempts, obstacle escalation after 2 attempts). Without an explicit limit
-# here, the graph falls back to LangGraph's implicit default (25), which is
-# an accidental cap rather than a deliberate one tied to our own retry
-# budget, and could silently change across LangGraph versions. Set generously
-# above the expected worst case (long multi-page tasks with a couple of
-# recoveries) so it only trips on a genuine runaway loop, not a legitimate
-# long task.
-GRAPH_RECURSION_LIMIT = 40
-
-# How many of the MOST RECENT tool-result messages are kept verbatim in the
-# LLM message chain. Older tool messages are collapsed to a short pointer —
-# their outcome is already preserved (up to 500 chars each) in the
-# "EXECUTION MEMORY" block that call_model injects every turn, so keeping
-# their full, often-large raw observation text around too is pure
-# duplication that gets re-sent on every subsequent LLM call for the rest
-# of the run.
-NUM_RECENT_TOOL_MESSAGES_TO_KEEP_FULL = 6
-
-# Placeholder swapped in for a collapsed older tool message. Kept short and
-# explicit so the model knows to rely on the EXECUTION MEMORY summary
-# instead of expecting the original raw content here.
-_COLLAPSED_TOOL_MESSAGE_PLACEHOLDER = (
-    "[Older tool result collapsed to save tokens — see EXECUTION MEMORY in "
-    "the TASK CONTEXT message for a short summary of this step's outcome.]"
-)
-
-
-def _compress_observation_for_llm(text: str, max_chars: int) -> str:
-    """Shrinks a tool observation before it enters LLM history.
-
-    Raw page/accessibility-tree dumps are frequently dominated by repeated
-    blank lines and long runs of identical lines (e.g. repeated menu items,
-    empty table rows). Collapsing that duplication first means the character
-    budget below is spent on unique, decision-relevant content instead of
-    being burned on literal repetition — a flat `text[:max_chars]` cutoff
-    would otherwise just as likely truncate mid-way through useful content
-    while all the earlier noise is preserved verbatim.
-
-    Only truncates (with an explicit marker) if still over budget after
-    compression, so no content is silently dropped without a signal to the
-    model that something was cut.
-    """
-    if not text:
-        return text
-
-    # Collapse runs of 3+ blank lines down to a single blank line.
-    compressed = re.sub(r'\n{3,}', '\n\n', text)
-
-    # De-duplicate consecutive identical (non-blank) lines, keeping the first
-    # occurrence and a short note of how many repeats were omitted.
-    lines = compressed.split('\n')
-    deduped: List[str] = []
-    prev_stripped: Optional[str] = None
-    repeat_count = 0
-    for line in lines:
-        stripped = line.strip()
-        if stripped and stripped == prev_stripped:
-            repeat_count += 1
-            continue
-        if repeat_count > 0:
-            deduped.append(f"...[{repeat_count} more identical line(s) omitted]...")
-            repeat_count = 0
-        deduped.append(line)
-        prev_stripped = stripped
-    if repeat_count > 0:
-        deduped.append(f"...[{repeat_count} more identical line(s) omitted]...")
-    compressed = '\n'.join(deduped)
-
-    if len(compressed) > max_chars:
-        compressed = compressed[:max_chars] + "... [TRUNCATED DUE TO SIZE TO PREVENT CRASH]"
-    return compressed
-
-
-def _detect_captcha(observation_text: str) -> Optional[str]:
-    """Return CAPTCHA type string if a known CAPTCHA signal is present, else None.
-
-    Thin wrapper kept for backward compatibility (existing tests call this by
-    name) — the canonical detector now lives in the generic obstacle-handling
-    framework (`src.services.obstacle_handler`) alongside the other obstacle
-    detectors (e.g. OTP), so detection logic isn't duplicated per type.
-    """
-    return detect_captcha_type(observation_text)
-
-
-def _extract_form_answer(user_message: str) -> str:
-    """Pull the raw value out of a NEEDS_INPUT form submission like
-    'Verification Code: 123456' — falls back to the full message if no
-    'Label: value' pattern is found."""
-    m = re.search(r":\s*(.+)$", (user_message or "").strip())
-    return m.group(1).strip() if m else (user_message or "").strip()
-
+from src.database.chat_db import AsyncSessionLocal, Message, ChatSession, ToolExecutionLog
+from sqlalchemy import select
+from src.services.tool_selector import ToolSelector
+from langchain_core.tools import StructuredTool
+from datetime import datetime, timezone
+import json
 
 class DatabaseManager:
-    """Manages transaction-scoped database operations securely to prevent locking connection pools."""
-    
-    async def log_agent_execution(self, user_id: str, chat_id: str, stage: str, name: str, status: str, input_data: Any = None, output_data: Any = None, error: str = None, token_usage: Dict[str, int] = None, cost: float = None):
-        async with AsyncSessionLocal() as db:
-            try:
-                log = AgentExecutionLog(
-                    user_id=user_id,
-                    chat_id=chat_id,
-                    agent_stage=stage,
-                    stage_name=name,
-                    status=status,
-                    input_data=json.dumps(input_data) if input_data else None,
-                    output_data=json.dumps(output_data) if output_data else None,
-                    error_message=error,
-                    token_usage=json.dumps(token_usage) if token_usage else None,
-                    cost=str(cost) if cost is not None else None
-                )
-                db.add(log)
-                await db.commit()
-                return log.id
-            except Exception as e:
-                logger.error(f"Error logging agent execution: {e}")
+    # Minimal stub just for main.py compatibility
+    async def get_or_create_chat_session(self, user_id: str, chat_id: str):
+        pass
 
-    async def log_tool_execution(self, chat_id: str, agent_id: str, tool_name: str, status: str, tool_input: Any = None, tool_output: Any = None, error: str = None):
-        async with AsyncSessionLocal() as db:
-            try:
-                log = ToolExecutionLog(
-                    chat_id=chat_id,
-                    agent_id=agent_id,
-                    tool_name=tool_name,
-                    status=status,
-                    tool_input=json.dumps(tool_input) if tool_input else None,
-                    tool_output=json.dumps(tool_output) if tool_output else None,
-                    error_message=error
-                )
-                db.add(log)
-                await db.commit()
-                return log.id
-            except Exception as e:
-                logger.error(f"Error logging tool execution: {e}")
-
-    async def get_user_credit_balance(self, user_id: str) -> float:
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(select(User.credit_balance).where(User.user_id == user_id))
-            val = result.scalar_one_or_none()
-            return float(val) if val is not None else 0.0
-
-    async def deduct_credits(self, user_id: str, amount: float):
-        """Deduct actual usage cost (in credits, 1 credit == $1) from a user's
-        balance after a run. Never goes below zero. No-op for non-positive amounts."""
-        if not amount or amount <= 0:
-            return
-        async with AsyncSessionLocal() as db:
-            try:
-                result = await db.execute(select(User).where(User.user_id == user_id))
-                user = result.scalar_one_or_none()
-                if user:
-                    user.credit_balance = round(max(0.0, (user.credit_balance or 0.0) - amount), 6)
-                    await db.commit()
-            except Exception as e:
-                logger.error(f"Error deducting credits for user {user_id}: {e}")
-
-    async def get_or_create_chat_session(self, user_id: str, chat_id: str) -> ChatSession:
-        async with AsyncSessionLocal() as db:
-            try:
-                result = await db.execute(select(ChatSession).where(ChatSession.id == chat_id))
-                session = result.scalar_one_or_none()
-                if session:
-                    db.expunge(session)
-                    return session
-                
-                new_session = ChatSession(
-                    id=chat_id,
-                    user_id=user_id,
-                    title="New Chat",
-                    state_data=json.dumps({})
-                )
-                db.add(new_session)
-                await db.commit()
-                await db.refresh(new_session)
-                db.expunge(new_session)
-                return new_session
-            except IntegrityError:
-                await db.rollback()
-                result = await db.execute(select(ChatSession).where(ChatSession.id == chat_id))
-                session = result.scalar_one_or_none()
-                if session:
-                    db.expunge(session)
-                    return session
-                raise Exception(f"Failed to create or retrieve session for chat_id={chat_id}, user_id={user_id}")
-            except Exception as e:
-                logger.error(f"Error getting/creating session: {e}")
-                raise
-
-
-def _sanitize_browser_observation(observation: Any, tool_call: Dict[str, Any]) -> Any:
-    """
-    Inspect a browser tool observation and replace known error/proxy pages
-    with a clean, actionable error string.
-
-    IMPORTANT: Only flag observations that match SPECIFIC known-bad patterns.
-    Do NOT flag legitimate website HTML — the old approach used `is_html_page`
-    which incorrectly blocked real page content from reaching the agent.
-    """
-    text = str(observation)
-    url_attempted = tool_call.get("args", {}).get("url", "")
-
-    # --- Known-bad pattern matching (order matters — most specific first) ---
-
-    # 1. Replit proxy "couldn't reach this app" page
-    if re.search(r"couldn't reach|couldn\u2019t reach|We couldn't reach|couldn\u2019t connect", text, re.IGNORECASE):
-        reason = "Replit proxy blocked the request — this URL is unreachable inside the sandbox."
-
-    # 2. Browser-level connection errors (typically in error page text or tool output)
-    elif re.search(r'ERR_NAME_NOT_RESOLVED|ERR_CONNECTION_REFUSED|ERR_CONNECTION_TIMED_OUT|ERR_TUNNEL_CONNECTION_FAILED', text):
-        reason = "DNS/connection error — the host could not be reached."
-
-    # 3. Verizon / ISP / enterprise bot-protection "Access denied" pages
-    elif re.search(r'Access\s+denied.*(?:Verizon|Security\s+Policy|Information\s+Security)|(?:Verizon|Security\s+Policy).*Access\s+denied', text, re.IGNORECASE | re.DOTALL):
-        reason = "The website blocked automated browser access (Verizon/enterprise security policy). Try searching for an alternative URL."
-
-    # 4. Cloudflare / generic bot-challenge page (only if it's a full HTML block)
-    elif re.search(r'<!DOCTYPE|<html', text, re.IGNORECASE) and re.search(r'403\s+Forbidden', text, re.IGNORECASE):
-        reason = "The server returned 403 Forbidden."
-
-    elif re.search(r'<!DOCTYPE|<html', text, re.IGNORECASE) and re.search(r'404\s+Not\s+Found', text, re.IGNORECASE):
-        reason = "The server returned 404 Not Found."
-
-    # 5. Replit proxy error page signature (CSS background color used in the Replit error page)
-    elif re.search(r'background:\s*#1c2333', text, re.IGNORECASE):
-        reason = "Replit internal proxy error page returned — this URL is blocked inside the sandbox."
-
-    else:
-        # No known error pattern — pass the observation through unchanged.
-        # Legitimate website HTML, accessibility-tree output, etc. must NOT be blocked.
-        return observation
-
-    # Build a short human-readable text snippet from any HTML in the observation
-    snippet = re.sub(r'<[^>]+>', ' ', text)
-    snippet = re.sub(r'\s+', ' ', snippet).strip()[:200]
-
-    clean_error = (
-        f"[Navigation Error] {reason}"
-        + (f" URL attempted: {url_attempted}" if url_attempted else "")
-        + f" Page text: \"{snippet}\""
-        + " — Try a different URL or use web search to find an accessible alternative."
-    )
-
-    logger.warning(f"Browser observation sanitized for tool '{tool_call.get('name')}': {reason}")
-    return clean_error
-
-
-class _NavigationCooldownSkip(Exception):
-    """Raised inside _call_tool when browser_navigate is blocked by per-domain cooldown.
-    The observation string is already set; this just short-circuits further execution."""
-    pass
-
+class MockCodeProcessor:
+    # Stub for the scheduler endpoint to prevent crash
+    async def run_script_generation(self, *args, **kwargs):
+        return "# Script generation disabled in simplified ReAct architecture."
 
 class Brain:
-    """
-    Orchestrates the Multi-Agent System (Agent 1, Agent 2, Agent 3) using LangGraph and LangChain.
-    """
-    def __init__(self, stream_manager=None):
-        self.stream_manager = stream_manager
-        self.session_manager = SessionManager(stream_manager=stream_manager)
-        self.db_manager = DatabaseManager()
-        self.atag_processor: Optional[ATAGProcessor] = None
-        self.llm = None
-        self.initialized = False
+    def __init__(self,model_name: str = os.getenv("MAIN_MODEL")):
         self.active_tasks: Dict[str, asyncio.Task] = {}
-        self.active_plans: Dict[str, List[Dict]] = {}
-        # Real (unredacted) confirmed_inputs for a paused obstacle run, kept
-        # ONLY in memory for the lifetime of this process — never written to
-        # the database. Personal/account data must never be persisted; if the
-        # process restarts before the run resumes, we deliberately fall back
-        # to asking the user again rather than reading a stale value back
-        # from disk. Keyed by chat_id, popped (single-use) on resume.
-        self.pending_confirmed_inputs: Dict[str, Dict[str, Any]] = {}
-        # Cooperative cancellation: chat_ids explicitly stopped by the user
-        self.cancelled_chats: set = set()
-        # In-memory tool log buffer: chat_id → list of tool events (capped at 200)
-        self.tool_log_buffer: Dict[str, List[Dict]] = {}
-        # Cognitive memory service (initialized after LLM is ready)
-        self.memory_service: Optional[MemoryService] = None
-
-        # Navigation failure cooldown tracker: domain → {count: int, last_fail_ts: float,
-        # cooldown_until: float}. After 3 consecutive failures on the same domain,
-        # browser_navigate is blocked for COOLDOWN_SECONDS and the agent is told to
-        # back off so it doesn't burn tokens on a blocked site.
-        self._nav_failure_tracker: Dict[str, Dict[str, Any]] = {}
-
-        # Per-user LLM cache: user_id → ChatOpenAI.  Cleared on provider config
-        # change so that the next run picks up the updated base_url/model/api_key.
-        self._user_llm_cache: Dict[str, Any] = {}
-
-    # --- Anti-rush navigation cooldown (per-domain) ---------------------------
-    MAX_NAV_FAILURES = 3
-    NAV_COOLDOWN_SECONDS = 60
-
-    def _extract_domain(self, url: str) -> str:
-        try:
-            return urlparse(url).netloc.lower()
-        except Exception:
-            return ""
-
-    def _record_nav_failure(self, domain: str):
-        """Increment failure count for a domain."""
-        now = time.time()
-        entry = self._nav_failure_tracker.get(domain, {"count": 0, "last_fail_ts": 0, "cooldown_until": 0})
-        entry["count"] += 1
-        entry["last_fail_ts"] = now
-        if entry["count"] >= self.MAX_NAV_FAILURES:
-            entry["cooldown_until"] = now + self.NAV_COOLDOWN_SECONDS
-            logger.warning(
-                f"Navigation cooldown activated for {domain}: "
-                f"{entry['count']} consecutive failures — blocking for {self.NAV_COOLDOWN_SECONDS}s"
-            )
-        self._nav_failure_tracker[domain] = entry
-
-    def _record_nav_success(self, domain: str):
-        """Reset failure count on a successful navigation."""
-        if domain in self._nav_failure_tracker:
-            del self._nav_failure_tracker[domain]
-
-    def _is_nav_blocked(self, domain: str) -> bool:
-        """Return True if this domain is currently in cooldown."""
-        entry = self._nav_failure_tracker.get(domain)
-        if not entry:
-            return False
-        now = time.time()
-        cooldown_until = entry.get("cooldown_until", 0)
-        # If cooldown has been set AND it expired, clean up
-        if cooldown_until > 0 and now > cooldown_until:
-            del self._nav_failure_tracker[domain]
-            return False
-        # Only blocked when cooldown is actively set (count >= MAX_NAV_FAILURES)
-        return cooldown_until > 0
-
-    def _nav_cooldown_message(self, domain: str) -> str:
-        """Return the message the agent sees when a navigation is blocked."""
-        entry = self._nav_failure_tracker.get(domain, {})
-        remaining = max(0, int(entry.get("cooldown_until", 0) - time.time()))
-        return (
-            f"[Navigation Cooldown] {domain} has blocked {entry.get('count', 0)} "
-            f"consecutive navigation attempts. Pausing for {remaining}s to avoid "
-            f"wasting tokens. Try a different approach: use web search, try a "
-            f"mirror/alternative URL, or ask the user for a different starting point."
-        )
-
-    # ------------------------------------------------------------------
-    # Per-user LLM factory (admin-configured provider overrides)
-    # ------------------------------------------------------------------
-    async def _get_user_llm(self, user_id: str) -> Any:
-        """Return a ChatOpenAI configured for this user's custom provider,
-        or the global default (self.llm) when none is configured.
-
-        Results are cached in self._user_llm_cache so repeated calls within
-        the same process are cheap.  The cache is invalidated when the user
-        updates their provider config via the settings endpoints.
-        """
-        cached = self._user_llm_cache.get(user_id)
-        if cached is not None:
-            return cached
-
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(select(User).where(User.user_id == user_id))
-            db_user = result.scalar_one_or_none()
-
-        if not db_user or not db_user.llm_provider or db_user.llm_provider == "openrouter":
-            self._user_llm_cache[user_id] = self.llm
-            return self.llm
-
-        # Resolve default base URLs for known providers
-        provider_defaults = {
-            "groq": "https://api.groq.com/openai/v1",
-            "nvidia": "https://integrate.api.nvidia.com/v1",
-            "ollama": "http://localhost:11434/v1",
-        }
-        base_url = db_user.llm_base_url or provider_defaults.get(
-            db_user.llm_provider, config.OPENROUTER_BASE_URL
-        )
-
-        user_llm = ChatOpenAI(
-            model=db_user.llm_model or config.OPENROUTER_MODEL,
-            openai_api_key=db_user.llm_api_key or config.OPENROUTER_API_KEY,
-            base_url=base_url,
-            temperature=0.3,
+        self.active_plans: Dict[str, Any] = {}
+        self.live_tool_logs: Dict[str, List[Dict[str, Any]]] = {}
+        self.session_manager = SessionManager()
+        self.db_manager = DatabaseManager()
+        self.code_processor = MockCodeProcessor()
+        self.stream_manager = None
+        self.model_name = model_name
+        self.llm = ChatOpenRouter(
+            model_name=self.model_name,
+            openrouter_api_key=os.getenv("OPENROUTER_API_KEY"),
+            temperature=0.8,
+            max_retries=3,
             max_tokens=16384,
         )
-        self._user_llm_cache[user_id] = user_llm
-        return user_llm
-
-    def buffer_tool_event(self, chat_id: str, event: Dict[str, Any]):
-        """Append a tool event to the in-memory buffer (max 200 per chat)."""
-        if chat_id not in self.tool_log_buffer:
-            self.tool_log_buffer[chat_id] = []
-        self.tool_log_buffer[chat_id].append(event)
-        if len(self.tool_log_buffer[chat_id]) > 200:
-            self.tool_log_buffer[chat_id] = self.tool_log_buffer[chat_id][-200:]
-
-    def get_live_tool_logs(self, chat_id: str) -> List[Dict]:
-        return list(self.tool_log_buffer.get(chat_id, []))
-
-    def clear_live_tool_logs(self, chat_id: str):
-        self.tool_log_buffer.pop(chat_id, None)
-
-    async def _evaluate_captcha_outcome(
-        self,
-        captcha_state: Dict[str, Any],
-        observation: Any,
-        user_id: str,
-        task_domain: str,
-    ) -> None:
-        """Evaluate whether the previous CAPTCHA bypass attempt succeeded.
-
-        Pops the ``captcha_state["pending"]`` entry (if present), inspects
-        *observation* for lingering CAPTCHA signals, and updates procedural
-        memory accordingly.  A MemoryReflection lesson is written on failure.
-
-        This is extracted from the ``_call_tool`` closure so that it can be
-        unit-tested independently of the full agent graph.
-        """
-        if not captcha_state.get("pending") or not self.memory_service:
-            return
-
-        _prev_captcha = captcha_state.pop("pending")
-        _still_has_captcha = bool(_detect_captcha(str(observation)))
-        _obs_is_error = str(observation)[:500].startswith("Error")
-        _captcha_resolved = not _still_has_captcha and not _obs_is_error
-
-        try:
-            await self.memory_service._update_procedural(
-                user_id,
-                _prev_captcha["skill_name"],
-                task_domain,
-                [],
-                success=_captcha_resolved,
-            )
-            if not _captcha_resolved:
-                await self.memory_service.store_reflection(
-                    user_id,
-                    task_domain,
-                    (
-                        f"CAPTCHA skill '{_prev_captcha['skill_name']}' failed to bypass "
-                        f"{_prev_captcha['captcha_type']} CAPTCHA on {task_domain}. "
-                        f"The CAPTCHA was still present after executing the stored steps. "
-                        f"Try a different bypass approach or wait longer before retrying."
-                    ),
-                    category="CAPTCHA",
-                    severity="HIGH",
-                )
-                logger.info(
-                    f"[CAPTCHA] Recorded FAILURE for skill '{_prev_captcha['skill_name']}' "
-                    f"on domain '{task_domain}' — confidence decreased."
-                )
-            else:
-                logger.info(
-                    f"[CAPTCHA] Recorded SUCCESS for skill '{_prev_captcha['skill_name']}' "
-                    f"on domain '{task_domain}' — confidence increased."
-                )
-        except Exception as _cap_upd_err:
-            captcha_state["pending"] = _prev_captcha
-            logger.warning(f"[CAPTCHA] outcome update failed (non-fatal): {_cap_upd_err}")
+        self.tool_selector = ToolSelector(model_name=self.model_name)
 
     async def initialize(self):
-        """Eagerly initializes execution LLMs, search utilities, and subprocess processors."""
-        if self.initialized:
-            return
-        
-        logger.info("Initializing multi-agent orchestrator system...")
-        api_key = config.OPENROUTER_API_KEY
-        if not api_key:
-            raise ValueError("OPENROUTER_API_KEY not found in environment variables")
-
-        self.llm = ChatOpenAI(
-            model=config.OPENROUTER_MODEL,
-            openai_api_key=api_key,
-            base_url=config.OPENROUTER_BASE_URL,
-            temperature=0.3,
-            max_tokens=16384,
-            default_headers={"x-or-cache": "1"},
-        )
-        
-        # Specialized model for code generation
-        self.code_llm = ChatOpenAI(
-            model=config.OPENROUTER_MODEL,
-            openai_api_key=api_key,
-            base_url=config.OPENROUTER_BASE_URL,
-            temperature=0.1,
-            max_tokens=8192,
-            default_headers={"x-or-cache": "1"},
-        )
-
-        # Note: no direct (non-MCP) tool is added to the agent's tool-calling
-        # loop here. Every tool available to the browser agent is sourced
-        # exclusively from `mcp_manager.get_tools()` — see
-        # `Backend/src/agents/mcp_agent.py` / `mcp_servers.json` to add
-        # capabilities. ATAGProcessor's own Tavily usage (below) is a
-        # separate, non-tool text-enrichment step for standalone script
-        # generation, not part of the live agent's bound tool list.
-        self.atag_processor = ATAGProcessor(self.llm)
-        self.code_processor = ATAGProcessor(self.code_llm, tavily_api_key=config.TAVILY_API_KEY)
-
-        # Cognitive memory service
-        self.memory_service = MemoryService(llm=self.llm)
-        await self.memory_service.seed_captcha_skills()
-
-        self.initialized = True
-        logger.info("Multi-agent orchestrator initialization complete.")
-
-    def _compress_screenshot(self, png_bytes: bytes, max_width: int = 1280, quality: int = 80) -> str:
-        """Resize to max_width and encode as JPEG to keep WS payload within proxy limits."""
-        import io
-        from PIL import Image
-        img = Image.open(io.BytesIO(png_bytes))
-        if img.width > max_width:
-            ratio = max_width / img.width
-            img = img.resize((max_width, int(img.height * ratio)), Image.LANCZOS)
-        buf = io.BytesIO()
-        img.convert("RGB").save(buf, format="JPEG", quality=quality, optimize=True)
-        b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
-        return f"data:image/jpeg;base64,{b64}"
-
-    async def _stream_browser_frames(self, user_id: str, chat_id: str, stop_event: asyncio.Event):
-        """
-        Capture screenshots from Chrome via raw CDP HTTP + WebSocket (aiohttp).
-
-        Replaces the old Playwright connect_over_cdp approach, which only saw
-        contexts created by the *same* Playwright session.  Raw CDP /json lists
-        ALL page targets regardless of which client created them, so we reliably
-        see pages opened by the bridge subprocess's browser-use agent.
-        """
-        import aiohttp
-        import json as json_lib
-        from urllib.parse import urlparse
-
-        # ── Wait for the MCP manager to be ready (race-condition guard) ──────
-        # asyncio.create_task schedules this coroutine to run, but the manager
-        # is stored in session_obj only after get_tools() completes a few lines
-        # later.  If this task executes first, the old code returned immediately
-        # and no frames were ever sent ("Initializing Stream" hang).  Poll up to
-        # 15 s so we gracefully handle any startup timing.
-        _wait_attempts = 0
-        while _wait_attempts < 30:  # 30 × 0.5 s = 15 s
-            session_obj = self.session_manager.get_session(user_id)
-            mcp_manager = session_obj.get("mcp_manager")
-            if mcp_manager:
-                break
-            if stop_event.is_set():
-                return  # task cancelled before manager was ready
-            await asyncio.sleep(0.5)
-            _wait_attempts += 1
-        else:
-            logger.warning(
-                f"No MCP manager for user {user_id} after 15 s — live preview disabled."
-            )
-            return
-
-        cdp_url = getattr(mcp_manager, "cdp_url", None)
-        if not cdp_url:
-            logger.warning(f"No CDP URL for user {user_id}, live preview disabled.")
-            return
-
-        parsed = urlparse(cdp_url)
-        # Force 127.0.0.1 instead of localhost to avoid IPv6 resolution issues on Windows
-        host = "127.0.0.1" if parsed.hostname in ("localhost", "127.0.0.1") else (parsed.hostname or "127.0.0.1")
-        # parsed.port is None when the URL has no explicit port (e.g. http://127.0.0.1);
-        # default to 9222 to avoid building "http://127.0.0.1:None/json"
-        port = parsed.port or 9222
-        json_endpoint = f"http://{host}:{port}/json"
-
-        logger.info(f"Starting raw-CDP screenshot stream: user={user_id} chat={chat_id} port={port}")
-
-        msg_id_counter = [0]
-
-        async def _get_page_ws_url() -> Optional[str]:
-            """Return the WS debugger URL of the first available page target.
-
-            Retries up to 3 times with a 0.5 s gap between attempts so that
-            transient browser startup delays (Chromium binding the port a few
-            hundred ms after the bridge process starts) don't cause the stream
-            loop to silently do nothing on the first few ticks.
-            """
-            for _attempt in range(3):
-                try:
-                    async with aiohttp.ClientSession() as http:
-                        async with http.get(
-                            json_endpoint,
-                            timeout=aiohttp.ClientTimeout(total=config.CDP_JSON_TIMEOUT_SECONDS),
-                        ) as resp:
-                            if resp.status != 200:
-                                logger.debug(
-                                    f"CDP /json returned status {resp.status} for user {user_id} "
-                                    f"(attempt {_attempt + 1})"
-                                )
-                                await asyncio.sleep(0.5)
-                                continue
-                            targets = await resp.json(content_type=None)
-
-                    if targets:
-                        # Prefer the active/visible page
-                        for t in targets:
-                            if t.get("type") == "page" and t.get("webSocketDebuggerUrl"):
-                                return t["webSocketDebuggerUrl"]
-                    # targets is empty — browser is still loading its first page
-                    await asyncio.sleep(0.5)
-                except Exception as exc:
-                    logger.debug(
-                        f"CDP /json connection failed for user {user_id} at {json_endpoint} "
-                        f"(attempt {_attempt + 1}): {exc}"
-                    )
-                    await asyncio.sleep(0.5)
-            return None
-
-        async def _bring_to_front(ws_url: str):
-            """Issue Page.bringToFront to ensure window is visible."""
-            msg_id_counter[0] += 1
-            mid = msg_id_counter[0]
-            cmd = json_lib.dumps({
-                "id": mid,
-                "method": "Page.bringToFront"
-            })
-            try:
-                async with aiohttp.ClientSession() as http:
-                    async with http.ws_connect(ws_url, timeout=aiohttp.ClientTimeout(total=config.CDP_SCREENSHOT_TIMEOUT_SECONDS)) as ws:
-                        await ws.send_str(cmd)
-                        async def _recv():
-                            async for msg in ws:
-                                if msg.type == aiohttp.WSMsgType.TEXT:
-                                    data = json_lib.loads(msg.data)
-                                    if data.get("id") == mid:
-                                        break
-                                elif msg.type in (aiohttp.WSMsgType.ERROR, aiohttp.WSMsgType.CLOSE):
-                                    break
-                        try:
-                            await asyncio.wait_for(_recv(), timeout=1.0)
-                        except asyncio.TimeoutError:
-                            pass
-            except Exception:
-                pass
-
-        async def _take_screenshot(ws_url: str) -> Optional[str]:
-            """Issue Page.captureScreenshot over CDP and return base64 JPEG string."""
-            msg_id_counter[0] += 1
-            mid = msg_id_counter[0]
-            cmd = json_lib.dumps({
-                "id": mid,
-                "method": "Page.captureScreenshot",
-                "params": {"format": "jpeg", "quality": 75, "captureBeyondViewport": False},
-            })
-            try:
-                async with aiohttp.ClientSession() as http:
-                    async with http.ws_connect(
-                        ws_url,
-                        timeout=aiohttp.ClientTimeout(total=config.CDP_SCREENSHOT_TIMEOUT_SECONDS),
-                    ) as ws:
-                        await ws.send_str(cmd)
-                        
-                        async def _recv():
-                            async for msg in ws:
-                                if msg.type == aiohttp.WSMsgType.TEXT:
-                                    data = json_lib.loads(msg.data)
-                                    if data.get("id") == mid:
-                                        if "result" in data:
-                                            return data["result"].get("data")
-                                        logger.debug(f"CDP screenshot error: {data.get('error')}")
-                                        return None
-                                elif msg.type in (aiohttp.WSMsgType.ERROR, aiohttp.WSMsgType.CLOSE):
-                                    break
-                            return None
-                            
-                        try:
-                            return await asyncio.wait_for(_recv(), timeout=2.0)
-                        except asyncio.TimeoutError:
-                            logger.debug("Screenshot timed out (window likely minimized)")
-                            return None
-            except Exception as exc:
-                logger.debug(f"CDP screenshot WS failed for user {user_id}: {exc}")
-            return None
-
-        def _read_mouse_state() -> Optional[dict]:
-            """Read the bridge's mouse-state temp file for this user's CDP port."""
-            try:
-                import time as _time
-                import tempfile
-                state_path = os.path.join(tempfile.gettempdir(), f"agent_mouse_{port}.json")
-                p = Path(state_path)
-                if p.exists():
-                    data = json.loads(p.read_text())
-                    if _time.time() - data.get("ts", 0) < 30:
-                        return data
-            except Exception:
-                pass
-            return None
-
-        async def _broadcast_frame(b64: str):
-            # At screenshot cadence, also emit a mouse event so the frontend
-            # overlay stays in sync even when the 150ms loop is behind.
-            mouse_state = _read_mouse_state()
-            if mouse_state and self.stream_manager:
-                await self.stream_manager.broadcast_mouse(
-                    {
-                        "chat_id": chat_id,
-                        "x": mouse_state["x"],
-                        "y": mouse_state["y"],
-                        "event": mouse_state.get("event", "move"),
-                        "vpW": mouse_state.get("vpW", 1280),
-                        "vpH": mouse_state.get("vpH", 800),
-                    },
-                    user_id,
-                )
-            # Ensure the frame has the data-URL prefix the frontend expects
-            if not b64.startswith("data:"):
-                b64 = f"data:image/jpeg;base64,{b64}"
-            logger.info(
-                f"Broadcasting browser frame: user={user_id} chat={chat_id} len={len(b64)}"
-            )
-            if self.stream_manager:
-                await self.stream_manager.broadcast_frame(
-                    {"chat_id": chat_id, "frame": b64}, user_id
-                )
-
-        # ── High-frequency mouse event loop (~7 fps, independent of screenshots) ──
-        async def _mouse_event_loop() -> None:
-            """Poll mouse state at ~150 ms intervals; broadcast on any change."""
-            last_ts: float = 0.0
-            while not stop_event.is_set():
-                try:
-                    ms = _read_mouse_state()
-                    if ms and ms.get("ts", 0.0) != last_ts:
-                        last_ts = ms["ts"]
-                        if self.stream_manager:
-                            await self.stream_manager.broadcast_mouse(
-                                {
-                                    "chat_id": chat_id,
-                                    "x":       ms["x"],
-                                    "y":       ms["y"],
-                                    "event":   ms.get("event", "move"),
-                                    "vpW":     ms.get("vpW", 1280),
-                                    "vpH":     ms.get("vpH", 800),
-                                },
-                                user_id,
-                            )
-                except Exception as exc:
-                    logger.debug(f"Mouse event loop error for user {user_id}: {exc}")
-                try:
-                    await asyncio.wait_for(stop_event.wait(), timeout=0.15)
-                    break
-                except asyncio.TimeoutError:
-                    pass
-
-        mouse_loop_task = asyncio.create_task(_mouse_event_loop())
-
-        # ── Main capture loop ─────────────────────────────────────────────────────
+        logger.info("Pre-initializing MCP tools and generating embeddings cache...")
         try:
-            brought_to_front = False
-            while not stop_event.is_set():
-                try:
-                    ws_url = await _get_page_ws_url()
-                    if ws_url:
-                        if not brought_to_front:
-                            await _bring_to_front(ws_url)
-                            brought_to_front = True
-                        b64 = await _take_screenshot(ws_url)
-                        if b64:
-                            await _broadcast_frame(b64)
-                    # If no page yet, silently wait and retry next tick
-                except Exception as exc:
-                    logger.error(f"Error in raw-CDP frame capture for user {user_id}: {exc}")
-
-                try:
-                    await asyncio.wait_for(stop_event.wait(), timeout=1.0)
-                    break
-                except asyncio.TimeoutError:
-                    pass
-        finally:
-            mouse_loop_task.cancel()
-            try:
-                await mouse_loop_task
-            except asyncio.CancelledError:
-                pass
-
-        # ── Final frame after task completes ─────────────────────────────────────
-        try:
-            ws_url = await _get_page_ws_url()
-            if ws_url:
-                b64 = await _take_screenshot(ws_url)
-                if b64:
-                    # Delete the mouse state file so the final frame has no cursor dot
-                    try:
-                        import tempfile
-                        state_path = os.path.join(tempfile.gettempdir(), f"agent_mouse_{port}.json")
-                        Path(state_path).unlink(missing_ok=True)
-                    except Exception:
-                        pass
-                    await _broadcast_frame(b64)
-                    logger.info(f"Sent final browser frame for user {user_id}")
-        except Exception as exc:
-            logger.debug(f"Could not send final frame for user {user_id}: {exc}")
-
-    @staticmethod
-    def _is_reset_intent(message: str) -> bool:
-        """Return True if the message expresses an intent to start fresh / forget prior work."""
-        lower = message.lower().strip()
-        _RESET_PATTERNS = [
-            "start over", "start fresh", "start again", "start from scratch",
-            "go back to the beginning", "reset", "forget what you did",
-            "forget everything", "clear the session", "new task",
-            "ignore what you did", "scratch that", "discard previous",
-            "discard what you did", "begin again", "wipe the slate",
-        ]
-        return any(pat in lower for pat in _RESET_PATTERNS)
-
-    @staticmethod
-    def _is_credential_override_intent(message: str) -> bool:
-        """Return True if the message signals the user wants to swap the
-        account/credential being used, rather than continue with whatever was
-        confirmed earlier in the conversation.
-
-        This is a best-effort heuristic used to add a stronger directive to
-        Agent 1 (Input Understanding) so it does not silently reuse stale
-        credentials from `history_context` — the model is always told the
-        current message wins on conflicts, but this flag makes that explicit
-        for the common "switch account" phrasing so it isn't left to chance.
-        """
-        lower = message.lower().strip()
-        _OVERRIDE_PATTERNS = [
-            "different account", "another account", "other account",
-            "new account", "switch account", "switch accounts",
-            "different email", "another email", "different username",
-            "another username", "different login", "another login",
-            "different credentials", "new credentials", "not that account",
-            "wrong account", "use this account instead", "use this email instead",
-            "instead use", "actually use", "actually, use", "try a different",
-            "try another account", "not that email", "wrong email",
-        ]
-        return any(pat in lower for pat in _OVERRIDE_PATTERNS)
-
-    @staticmethod
-    def _redact_confirmed_inputs(confirmed_inputs: Dict[str, Any]) -> Dict[str, str]:
-        """Return a version of confirmed_inputs safe to write to durable
-        storage (AgentExecutionLog, ChatSession.session_state).
-
-        User-provided account/credential data must never be persisted to
-        disk — only kept in memory for as long as the current run needs it.
-        Every value is replaced with a redaction marker; only the field
-        names are kept so logs/audits can still show *what kind* of input
-        was used (e.g. "email", "password") without ever storing the value
-        itself.
-        """
-        if not confirmed_inputs:
-            return {}
-        return {k: "[REDACTED]" for k in confirmed_inputs.keys()}
-
-    # ── Generic secret-value redaction (Task #118) ──────────────────────────
-    # Sensitive values (passwords, OTP/verification codes, card/CVV numbers,
-    # PINs, etc.) must never reach ANY durable table — not just the
-    # confirmed_inputs blanket redaction above, but also free-text fields
-    # like Message.content and ToolExecutionLog.tool_input/tool_output. The
-    # helpers below detect likely-sensitive field names generically (rather
-    # than hardcoding one field) and scrub known secret values out of
-    # arbitrary text before it is persisted.
-
-    _SENSITIVE_KEY_PATTERN = re.compile(
-        r"password|passwd|pwd|(?:^|[-_ ])otp(?:[-_ ]|$)|one[-_ ]?time[-_ ]?(?:code|pin|password)"
-        r"|verification[-_ ]?code|security[-_ ]?code|auth(?:entication)?[-_ ]?code"
-        r"|(?:^|[-_ ])cvv(?:[-_ ]|$)|(?:^|[-_ ])cvc(?:[-_ ]|$)|card[-_ ]?(?:number|num)"
-        r"|(?:^|[-_ ])pin(?:[-_ ]|$)|(?:^|[-_ ])ssn(?:[-_ ]|$)|\bsecret\b|\btoken\b",
-        re.IGNORECASE,
-    )
-
-    _LABELED_SECRET_PATTERN = re.compile(
-        r"(password|passwd|pwd|otp|one[-_ ]?time[-_ ]?(?:code|pin|password)|"
-        r"verification[-_ ]?code|security[-_ ]?code|auth(?:entication)?[-_ ]?code|"
-        r"cvv|cvc|card[-_ ]?(?:number|num)|pin|ssn)\s*[:=]\s*(\S+)",
-        re.IGNORECASE,
-    )
-
-    OBSTACLE_ANSWER_PLACEHOLDER_TEMPLATE = "[REDACTED — {label} value provided, not stored]"
-
-    @classmethod
-    def _is_sensitive_key(cls, key: str) -> bool:
-        """Return True if a confirmed_input field name looks like it holds a
-        password/OTP/card-style secret rather than an ordinary task detail."""
-        return bool(key) and bool(cls._SENSITIVE_KEY_PATTERN.search(str(key)))
-
-    @classmethod
-    def _extract_sensitive_values(cls, confirmed_inputs: Optional[Dict[str, Any]]) -> List[str]:
-        """Pull out the literal values of any sensitive-looking fields from a
-        confirmed_inputs dict, so they can be scrubbed out of free-text logs
-        wherever they appear (not just the field they were originally
-        collected under)."""
-        if not confirmed_inputs:
-            return []
-        values = []
-        for k, v in confirmed_inputs.items():
-            if v and cls._is_sensitive_key(k):
-                values.append(str(v))
-        return values
-
-    @staticmethod
-    def _redact_secret_values_in_text(text: Any, secret_values: List[str]) -> Any:
-        """Replace every literal occurrence of a known secret value inside
-        text with a redaction marker. Non-string input is returned as-is.
-        Values shorter than 3 chars are skipped to avoid mass-redacting
-        common short substrings by accident."""
-        if not isinstance(text, str) or not secret_values:
-            return text
-        scrubbed = text
-        for val in sorted({v for v in secret_values if v and len(v) >= 3}, key=len, reverse=True):
-            if val in scrubbed:
-                scrubbed = scrubbed.replace(val, "[REDACTED]")
-        return scrubbed
-
-    @classmethod
-    def _mask_labeled_secrets(cls, text: str) -> str:
-        """Best-effort scrub of free-text chat messages for the common
-        'Label: value' disclosure pattern (e.g. 'password: hunter2',
-        'CVV: 123'), used as defense-in-depth before ANY user message is
-        persisted — independent of whether we already know this turn is
-        answering an obstacle/credential form."""
-        if not text:
-            return text
-        return cls._LABELED_SECRET_PATTERN.sub(lambda m: f"{m.group(1)}: [REDACTED]", text)
-
-    async def _retroactively_redact_message_content(
-        self, message_id: str, stored_content: str, confirmed_inputs: Dict[str, Any]
-    ) -> List[str]:
-        """Once Agent-1 extracts confirmed_inputs (ground-truth sensitive
-        fields), re-check the Message row we already wrote for this turn and
-        scrub any secret value that slipped past the pre-hoc label:value mask
-        (e.g. free-text like "use hunter2 as my password"). Returns the
-        extracted secret values so callers can also seed AgentExecutionLog
-        scrubbing with the same list. Always commits when a row is changed —
-        a silent no-op commit here is exactly how a redaction fix regresses."""
-        secret_values = self._extract_sensitive_values(confirmed_inputs)
-        if secret_values and any(v in stored_content for v in secret_values if v):
-            redacted_content = self._redact_secret_values_in_text(stored_content, secret_values)
-            async with AsyncSessionLocal() as db:
-                upd_stmt = select(Message).where(Message.message_id == message_id)
-                upd_res = await db.execute(upd_stmt)
-                upd_row = upd_res.scalar_one_or_none()
-                if upd_row:
-                    upd_row.content = redacted_content
-                    await db.commit()
-        return secret_values
-
-    def _extract_domain_from_task(self, user_message: str, confirmed_inputs: Dict[str, Any]) -> str:
-        """Extract primary domain from confirmed inputs or raw message."""
-        # Try confirmed inputs first
-        for key in ("website", "url", "site"):
-            val = confirmed_inputs.get(key, "")
-            if val:
-                return MemoryService.extract_domain(str(val))
-        # Fall back to scanning the user message for a URL/domain
-        return MemoryService.extract_domain(user_message)
-
-    def _calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
-        """Calculates the cost of an LLM call based on OpenRouter pricing (approximate).
-
-        Delegates to ATAG.calculate_llm_cost so both the live browsing run
-        (here) and script-generation (ATAG.run_script_generation) bill off
-        the exact same per-model pricing table."""
-        return calculate_llm_cost(model, input_tokens, output_tokens)
-
-    async def _execute_tool_graph(self, graph_input: Dict[str, Any], tools: List[BaseTool], user_id: str, chat_id: str, task_summary: str, confirmed_inputs: Dict[str, Any], update_ui_func=None, memory_block: str = "", obstacle_answer: Optional[str] = None, suppress_address_agent: bool = False) -> Dict[str, Any]:
-        """Executes a LangGraph tool-calling graph for the given input and tools."""
-
-        # `tools` is the LIVE, MCP-discovered tool list for this session (see
-        # get_tools() at the call sites) — never a hardcoded list. It is
-        # filtered through browser.agent.md's `tool_filter` glob pattern
-        # before binding, so adding a new MCP server automatically makes its
-        # tools available here whenever the pattern matches (default "*" =
-        # every discovered tool), with zero code changes.
-        browser_spec = spec_loader.load_spec("browser")
-        filtered_tools = spec_loader.filter_tools(tools, browser_spec.tool_filter)
-
-        # Get the LLM first so it's available for semantic tool filtering
-        _llm = await self._get_user_llm(user_id)
-
-        # Apply tool semantic memory to filter tools dynamically based on context/history
-        from src.services.tool_memory import filter_tools_semantically
-        try:
-            _domain = self._extract_domain_from_task(task_summary, confirmed_inputs)
-            filtered_tools = await filter_tools_semantically(
-                tools=filtered_tools,
-                task_summary=task_summary,
-                user_id=user_id,
-                domain=_domain,
-                memory_service=self.memory_service,
-                llm=_llm
-            )
-        except Exception as e:
-            logger.warning(f"Semantic tool filtering failed (falling back to all tools): {e}")
-
-        # Bind tools to the LLM
-        llm_with_tools = _llm.bind_tools(filtered_tools)
-
-        # Build one static system message PER STAGE, once per execution — never
-        # rebuilt per step. Each stage's prompt (~1-1.5KB) is identical across
-        # every turn that stays in that stage, so Google Gemini's implicit
-        # prefix cache still hits after the first turn in a stage; the prefix
-        # only changes on an actual stage transition (e.g. entering recovery
-        # after a failed action), which is the point of stage-based loading —
-        # the agent gets the Recovery Protocol/Diagnostic sections only when
-        # it's actually recovering, not on every single turn.
-        _browser_spec_for_stage = spec_loader.load_spec("browser")
-        _stage_static_msgs: Dict[str, SystemMessage] = {
-            stage: SystemMessage(content=spec_loader.build_system_prompt(_browser_spec_for_stage, stage=stage))
-            for stage in ("plan", "execute", "recover")
-        }
-
-        def _select_turn_stage(execution_history: List[Dict[str, Any]]) -> str:
-            """Determines which Plan/Execute/Recover stage the upcoming LLM
-            call belongs to, based on state accumulated so far this run."""
-            if not execution_history:
-                return "plan"
-            last_entry = execution_history[-1]
-            if last_entry.get("status") == "FAILED":
-                return "recover"
-            last_validation = last_entry.get("validation") or {}
-            if not last_validation.get("passed", True) and last_validation.get("severity") == "BLOCKING":
-                return "recover"
-            return "execute"
-
-        # Domain for the current run (used by CAPTCHA outcome tracking below)
-        _task_domain = self._extract_domain_from_task(task_summary, confirmed_inputs)
-
-        # Mutable dict shared across _call_tool invocations to track the last detected
-        # CAPTCHA so we can evaluate whether it was bypassed on the next observation.
-        # Shape when set: {"captcha_type": str, "skill_name": str}
-        _captcha_state: Dict[str, Any] = {}
-
-        # Deterministic Address Agent context, shared across _call_tool invocations —
-        # tracks the requested address components (computed once) and the retry
-        # budget for a low-confidence autocomplete suggestion before escalating.
-        _address_state = address_agent.AddressAutocompleteState()
-        # `suppress_address_agent=True` means we just resumed from the user
-        # manually confirming/typing an address after a low-confidence or
-        # verification-failure escalation — per address.agent.md step 7, once
-        # the user has picked a value we use it exactly and do NOT re-run the
-        # deterministic scoring/escalation logic against it this run.
-        _requested_address = (
-            {} if suppress_address_agent
-            else address_agent.extract_requested_address_components(confirmed_inputs)
-        )
-        _address_spec_guidance: Optional[str] = None
-        if _requested_address:
-            try:
-                _addr_spec = spec_loader.load_spec("address")
-                _addr_spec_parts: List[str] = []
-                if _addr_spec.sections.get("Decision Tree"):
-                    _addr_spec_parts.append(f"Decision Tree:\n{_addr_spec.sections['Decision Tree']}")
-                if _addr_spec.sections.get("Hard Rules"):
-                    _addr_spec_parts.append(f"Hard Rules:\n{_addr_spec.sections['Hard Rules']}")
-                if _addr_spec_parts:
-                    _address_spec_guidance = (
-                        "\n\n[ADDRESS_AGENT_SPEC — " + _addr_spec.role + "]\n"
-                        + "\n\n".join(_addr_spec_parts)
-                    )
-            except Exception as _spec_exc:
-                logger.warning(f"Failed to load address agent spec (non-fatal): {_spec_exc}")
-
-        # Deterministic Calendar Agent context — same shape as the Address Agent
-        # above, tracking requested date(s) and the retry budget for a
-        # low-confidence calendar-day selection before escalating.
-        _calendar_state = calendar_agent.CalendarSelectionState()
-        _requested_dates = calendar_agent.extract_requested_dates(confirmed_inputs)
-        _calendar_spec_guidance: Optional[str] = None
-        if _requested_dates:
-            try:
-                _cal_spec = spec_loader.load_spec("calendar")
-                _cal_spec_parts: List[str] = []
-                if _cal_spec.sections.get("Decision Tree"):
-                    _cal_spec_parts.append(f"Decision Tree:\n{_cal_spec.sections['Decision Tree']}")
-                if _cal_spec.sections.get("Hard Rules"):
-                    _cal_spec_parts.append(f"Hard Rules:\n{_cal_spec.sections['Hard Rules']}")
-                if _cal_spec_parts:
-                    _calendar_spec_guidance = (
-                        "\n\n[CALENDAR_AGENT_SPEC — " + _cal_spec.role + "]\n"
-                        + "\n\n".join(_cal_spec_parts)
-                    )
-            except Exception as _spec_exc:
-                logger.warning(f"Failed to load calendar agent spec (non-fatal): {_spec_exc}")
-
-        # Deterministic Login Agent context — tracks the credential values
-        # supplied for this task and the retry budget before an explicit
-        # credential-rejection banner escalates to the user.
-        _login_state = login_agent.LoginFormState()
-        _requested_credentials = login_agent.extract_requested_credentials(confirmed_inputs)
-        _login_spec_guidance: Optional[str] = None
-        if _requested_credentials:
-            try:
-                _login_spec = spec_loader.load_spec("login")
-                _login_spec_parts: List[str] = []
-                if _login_spec.sections.get("Decision Tree"):
-                    _login_spec_parts.append(f"Decision Tree:\n{_login_spec.sections['Decision Tree']}")
-                if _login_spec.sections.get("Hard Rules"):
-                    _login_spec_parts.append(f"Hard Rules:\n{_login_spec.sections['Hard Rules']}")
-                if _login_spec_parts:
-                    _login_spec_guidance = (
-                        "\n\n[LOGIN_AGENT_SPEC — " + _login_spec.role + "]\n"
-                        + "\n\n".join(_login_spec_parts)
-                    )
-            except Exception as _spec_exc:
-                logger.warning(f"Failed to load login agent spec (non-fatal): {_spec_exc}")
-
-        # Deterministic Booking/Pagination Agent context — tracks step/page
-        # progress across turns so a stalled multi-step flow (Next/Continue
-        # clicked without the step number actually advancing) escalates
-        # instead of looping indefinitely. Not gated on confirmed_inputs —
-        # applies to any task that hits a multi-step flow.
-        _booking_state = booking_agent.BookingProgressState()
-        _booking_spec_guidance: Optional[str] = None
-        try:
-            _booking_spec = spec_loader.load_spec("booking")
-            _booking_spec_parts: List[str] = []
-            if _booking_spec.sections.get("Decision Tree"):
-                _booking_spec_parts.append(f"Decision Tree:\n{_booking_spec.sections['Decision Tree']}")
-            if _booking_spec.sections.get("Hard Rules"):
-                _booking_spec_parts.append(f"Hard Rules:\n{_booking_spec.sections['Hard Rules']}")
-            if _booking_spec_parts:
-                _booking_spec_guidance = (
-                    "\n\n[BOOKING_AGENT_SPEC — " + _booking_spec.role + "]\n"
-                    + "\n\n".join(_booking_spec_parts)
-                )
-        except Exception as _spec_exc:
-            logger.warning(f"Failed to load booking agent spec (non-fatal): {_spec_exc}")
-
-        # Deterministic Aggregator/Data-Extraction Agent context — tracks item
-        # count and page progress across turns for scraping/extraction tasks so a
-        # stalled pagination loop (Next clicked but no new items appeared) is
-        # detected and stopped before consuming the full retry budget. Only
-        # activated when the task looks like a data extraction mission (keyword-
-        # gated, consistent with address/calendar/login agents).
-        _aggregator_state = aggregator_agent.ExtractionProgressState()
-        _is_extraction_task = aggregator_agent.detect_extraction_task(task_summary, confirmed_inputs)
-        _aggregator_target_count: int = int(confirmed_inputs.get("count", 0) or confirmed_inputs.get("limit", 0) or 0)
-        _aggregator_spec_guidance: Optional[str] = None
-        
-        # FAST PATH: If this is an extraction task and has no address/calendar/login credentials,
-        # we skip the heavy noise of the other deterministic agents running their regexes on every turn.
-        _skip_irrelevant_agents = _is_extraction_task and not _requested_address and not _requested_dates and not _requested_credentials
-        
-        if _is_extraction_task:
-            try:
-                _agg_spec = spec_loader.load_spec("aggregator")
-                _agg_spec_parts: List[str] = []
-                if _agg_spec.sections.get("Decision Tree"):
-                    _agg_spec_parts.append(f"Decision Tree:\n{_agg_spec.sections['Decision Tree']}")
-                if _agg_spec.sections.get("Hard Rules"):
-                    _agg_spec_parts.append(f"Hard Rules:\n{_agg_spec.sections['Hard Rules']}")
-                if _agg_spec_parts:
-                    _aggregator_spec_guidance = (
-                        "\n\n[AGGREGATOR_AGENT_SPEC — " + _agg_spec.role + "]\n"
-                        + "\n\n".join(_agg_spec_parts)
-                    )
-            except Exception as _spec_exc:
-                logger.warning(f"Failed to load aggregator agent spec (non-fatal): {_spec_exc}")
-
-        # Known secret values for THIS run (sensitive confirmed_inputs fields +
-        # any obstacle answer, e.g. an OTP code, just submitted) — scrubbed out
-        # of ToolExecutionLog rows before they're persisted. The LLM still sees
-        # the real values in `observation`/`llm_observation` below; only the
-        # durable-storage copy is redacted.
-        _run_secret_values: List[str] = self._extract_sensitive_values(confirmed_inputs)
-        if obstacle_answer:
-            _run_secret_values.append(str(obstacle_answer))
-
-        # Define the logic for the agent node
-        async def call_model(state: AgentState):
-            messages = state["messages"]
-            execution_history = state.get("execution_history", [])
+            from src.utils.session_manager import find_free_port
             
-            # Build small dynamic context (~200 tokens) — task + memory only.
-            # The stage-scoped static prompt lives in _stage_static_msgs and is never rebuilt per turn.
-            memory_summary = ""
-            if execution_history:
-                memory_summary = "\nEXECUTION MEMORY (What happened so far):\n"
-                for entry in execution_history:
-                    status_text = "SUCCESS" if entry["status"] == "SUCCESS" else "FAILED"
-                    memory_summary += f"- {status_text} {entry['tool']}: {entry['result'][:100]}...\n"
-
-            memory_prefix = f"{memory_block}\n\n---\n\n" if memory_block else ""
-            dynamic_context = (
-                f"{memory_prefix}"
-                f"TASK: {task_summary}\n"
-                f"CONFIRMED INPUTS: {json.dumps(confirmed_inputs)}"
-                f"{memory_summary}"
-            )
-
-            # --- DEAD CODE MARKER START (kept for grep reference only) ---
-            # system_message_content f-string removed; static prompt is built per
-            # stage by build_system_prompt(spec, stage=...) — see _stage_static_msgs
-            # and _select_turn_stage() above.
-            # --- DEAD CODE MARKER END ---
-
-            # Strip any stale SystemMessages from LangGraph state, then prepend the
-            # stage-appropriate cached static system message (see _select_turn_stage
-            # below). The growing TASK CONTEXT (memory summary
-            # gets longer every turn) is appended as a trailing message instead of
-            # being spliced into an earlier HumanMessage in place. Mutating an
-            # earlier message's content on every call made that message differ from
-            # the previous call's version of it, which broke the LLM provider's
-            # prefix cache for every message that followed it too — the entire
-            # history had to be re-processed as "new" tokens each turn. Appending a
-            # fresh trailing message instead keeps everything before it byte-for-byte
-            # identical to the prior call, so only the new tail is uncached.
-            raw_messages = [m for m in messages if not isinstance(m, SystemMessage)]
-
-            # Older tool results are already captured (up to 500 chars each) in the
-            # EXECUTION MEMORY block below, so keeping their full raw text in the
-            # message chain too is pure duplication that gets re-sent on every
-            # subsequent LLM call for the rest of the run. Collapse all but the most
-            # recent few tool messages to a short placeholder.
-            tool_msg_indices = [i for i, m in enumerate(raw_messages) if isinstance(m, ToolMessage)]
-            if len(tool_msg_indices) > NUM_RECENT_TOOL_MESSAGES_TO_KEEP_FULL:
-                for i in tool_msg_indices[:-NUM_RECENT_TOOL_MESSAGES_TO_KEEP_FULL]:
-                    original = raw_messages[i]
-                    if isinstance(original.content, str) and len(original.content) > len(_COLLAPSED_TOOL_MESSAGE_PLACEHOLDER):
-                        raw_messages[i] = ToolMessage(
-                            content=_COLLAPSED_TOOL_MESSAGE_PLACEHOLDER,
-                            tool_call_id=original.tool_call_id,
-                        )
-
-            context_msg = HumanMessage(
-                content=f"## TASK CONTEXT\n{dynamic_context}\n\n---\n\nContinue working toward the goal above using the conversation so far."
-            )
-            _turn_stage = _select_turn_stage(execution_history)
-            static_sys_msg = _stage_static_msgs[_turn_stage]
-            current_messages = [static_sys_msg] + raw_messages + [context_msg]
-
-            # Token Management & Summarization.
-            # Previously this only triggered at 600k estimated tokens — close to the
-            # model's whole context window — so large tool observations (e.g. raw page
-            # content from "Navigate ..." steps) lingered across many turns before ever
-            # being compressed, driving up per-run token/cost totals. Trigger much
-            # earlier so bulky observations get summarized away quickly instead of
-            # being carried forward turn after turn.
-            full_text = "".join([m.content for m in current_messages if isinstance(m.content, str)])
-            estimated_tokens = self.atag_processor._estimate_tokens(full_text)
-
-            if estimated_tokens > SUMMARIZE_HISTORY_TOKEN_THRESHOLD:
-                logger.info(f"Token count ({estimated_tokens}) exceeded limit. Summarizing history...")
-                summary = await self.atag_processor.summarize_context(execution_history, "History summarized due to token limit.")
-                summary_msg = HumanMessage(content=f"SUMMARY OF PREVIOUS ACTIONS:\n{summary}")
-                new_history = [static_sys_msg, summary_msg]
-                if isinstance(current_messages[-1], HumanMessage):
-                    new_history.append(current_messages[-1])
-                current_messages = new_history
-                logger.info("Conversation history summarized and compressed.")
-
-            _model_name = getattr(_llm, "model_name", None) or getattr(_llm, "model", "unknown")
-
-            def _extract_usage_dict(resp):
-                """Extract (input, output, total) token counts from a LangChain response."""
-                _um = getattr(resp, "usage_metadata", None)
-                if _um and isinstance(_um, dict) and (_um.get("input_tokens") or _um.get("output_tokens")):
-                    _i = int(_um.get("input_tokens", 0) or 0)
-                    _o = int(_um.get("output_tokens", 0) or 0)
-                    return {"input": _i, "output": _o, "total": _i + _o}
-                _rm = getattr(resp, "response_metadata", None) or {}
-                _tu = _rm.get("token_usage") or {}
-                if _tu:
-                    return {
-                        "input": int(_tu.get("prompt_tokens", 0) or 0),
-                        "output": int(_tu.get("completion_tokens", 0) or 0),
-                        "total": int(_tu.get("total_tokens", 0) or 0),
-                    }
-                return {}
-
-            def _fire_record(resp, msgs, lat_ms, src="chat"):
-                """Fire one non-blocking llm_requests row for a single LLM call."""
-                _u = _extract_usage_dict(resp)
-                _fr = (getattr(resp, "response_metadata", None) or {}).get("finish_reason") or \
-                      (getattr(resp, "response_metadata", None) or {}).get("stop_reason")
-                _cost = self._calculate_cost(_model_name, _u.get("input", 0), _u.get("output", 0)) if _u else 0.0
-                asyncio.ensure_future(record_llm_request(
-                    user_id=user_id,
-                    chat_id=chat_id,
-                    model=_model_name,
-                    source=src,
-                    category_tokens=count_message_tokens(msgs),
-                    input_tokens=_u.get("input", 0),
-                    output_tokens=_u.get("output", 0),
-                    cost_usd=_cost,
-                    latency_ms=lat_ms,
-                    finish_reason=_fr,
-                ))
-                return _u, _cost
-
-            _t0 = time.monotonic()
+            # Temporarily force headless and disable system Chrome for startup tools discovery
+            old_headless = os.environ.get("BROWSER_USE_HEADLESS")
+            old_system_chrome = os.environ.get("BROWSER_USE_SYSTEM_CHROME")
+            os.environ["BROWSER_USE_HEADLESS"] = "true"
+            os.environ["BROWSER_USE_SYSTEM_CHROME"] = "false"
             
-            # Use DeepAgent for actor-critic reflection on the tool calls
-            deep_agent = DeepAgent(llm_with_tools)
-            response = await deep_agent.execute(current_messages)
+            temp_port = find_free_port()
+            temp_manager = MCPToolManager(port=temp_port)
+            all_tools = await temp_manager.get_tools()
             
-            _first_latency_ms = int((time.monotonic() - _t0) * 1000)
+            # Restore settings
+            if old_headless is not None:
+                os.environ["BROWSER_USE_HEADLESS"] = old_headless
+            else:
+                os.environ.pop("BROWSER_USE_HEADLESS", None)
 
-            # Record the first LLM call immediately (one row per actual API call)
-            _first_usage, _first_cost = _fire_record(response, current_messages, _first_latency_ms)
-
-            # Guard: if the model wrote a pending-action statement but produced no tool call,
-            # re-invoke once with a nudge so the graph doesn't terminate prematurely.
-            _nudge_response = None
-            if not response.tool_calls and response.content:
-                _pending_patterns = [
-                    r"\bI will now\b", r"\bI'll now\b", r"\bI am going to\b",
-                    r"\bI'm going to\b", r"\bLet me now\b", r"\bNext[,\s]+I will\b",
-                    r"\bI should now\b", r"\bI need to\b", r"\bI'll select\b",
-                    r"\bI'll click\b", r"\bI'll type\b", r"\bI'll navigate\b",
-                ]
-                if any(re.search(p, response.content, re.IGNORECASE) for p in _pending_patterns):
-                    logger.info("Detected incomplete-action response (no tool call). Re-invoking with nudge.")
-                    _nudge = HumanMessage(
-                        content="You described an action you intend to take but did not call any tool. "
-                                "Please call the appropriate browser tool NOW to execute that action."
-                    )
-                    _nudge_msgs = current_messages + [response, _nudge]
-                    _t1 = time.monotonic()
-                    _nudge_response = await llm_with_tools.ainvoke(_nudge_msgs)
-                    _nudge_latency_ms = int((time.monotonic() - _t1) * 1000)
-                    # Record nudge as its own row with source="chat_nudge"
-                    _fire_record(_nudge_response, _nudge_msgs, _nudge_latency_ms, src="chat_nudge")
-                    response = _nudge_response
-
-            _latency_ms = _first_latency_ms + (
-                _nudge_latency_ms if _nudge_response is not None else 0
-            )
-
-            # Capture final token usage and cost for UI/billing reporting.
-            # Use the final response (nudge if it happened, otherwise first call).
-            token_usage = _extract_usage_dict(response)
-            cost = 0.0
-            if token_usage:
-                cost = self._calculate_cost(_model_name, token_usage["input"], token_usage["output"])
-                token_usage["cost"] = cost
-
-            # Broadcast thinking to UI
-            thought_text = None
-            if response.content:
-                # Clean up any leaked internal tool markers (common in some OpenRouter models)
-                clean_content = re.sub(r"<｜tool▁.*?｜>", "", response.content)
-                clean_content = re.sub(r"MMMM+.*", "", clean_content).strip()
+            if old_system_chrome is not None:
+                os.environ["BROWSER_USE_SYSTEM_CHROME"] = old_system_chrome
+            else:
+                os.environ.pop("BROWSER_USE_SYSTEM_CHROME", None)
                 
-                # Broadcast condensed, markdown-free reasoning to UI
-                if self.stream_manager and clean_content:
-                    # Strip THOUGHT:/INSTRUCTION: markers
-                    thought_text = re.sub(r"(?i)^THOUGHT\s*:\s*", "", clean_content.strip())
-                    thought_text = re.sub(r"(?i)\bINSTRUCTION\s*:.*$", "", thought_text, flags=re.DOTALL).strip()
-                    # Strip markdown formatting characters so the UI renders clean prose
-                    thought_text = re.sub(r"#{1,6}\s+", "", thought_text)           # headers
-                    thought_text = re.sub(r"\*{1,3}([^*\n]+)\*{1,3}", r"\1", thought_text)  # bold/italic
-                    thought_text = re.sub(r"_{1,2}([^_\n]+)_{1,2}", r"\1", thought_text)    # underscores
-                    thought_text = re.sub(r"`{1,3}[^`\n]*`{1,3}", "", thought_text)         # code spans
-                    thought_text = re.sub(r"^[-*+]\s+", "", thought_text, flags=re.MULTILINE) # bullets
-                    thought_text = re.sub(r"^\d+\.\s+", "", thought_text, flags=re.MULTILINE) # numbered lists
-                    # Collapse blank lines (no longer capping to 6 lines to support Deep Situational Analysis)
-                    lines = [l.rstrip() for l in thought_text.splitlines() if l.strip()]
-                    thought_text = "\n".join(lines).strip()
-                    if thought_text:
-                        await self.stream_manager.broadcast_thought(chat_id, thought_text)
-
-            # Persist token usage/cost for every LLM call, even tool-call-only
-            # responses with empty content (previously only logged when
-            # response.content was truthy, silently undercounting usage/cost
-            # for calls that produced only a tool call).
-            if update_ui_func:
-                _details = clean_content if response.content and clean_content else None
-                await update_ui_func(1, "in-progress", details=_details, thought=thought_text if thought_text else None, token_usage=token_usage, cost=cost)
-
-            return {"messages": [response]}
-
-        # Define the function to carry out tool interactions
-        async def _call_tool(state: AgentState):
-            tool_map = {tool.name: tool for tool in filtered_tools}
-            last_message = state["messages"][-1]
-            execution_history = state.get("execution_history", [])
-            
-            new_messages = []
-            _last_validation_result: Optional[Dict[str, Any]] = None
-            for tool_call in last_message.tool_calls:
-                tool = tool_map.get(tool_call["name"])
-                # Pre-compute navigation metadata so it's available both inside the
-                # tool-execution block and in the post-execution cooldown tracker.
-                _tool_args = tool_call.get("args", {}) if isinstance(tool_call.get("args"), dict) else {}
-                _nav_url = _tool_args.get("url", "") if tool_call["name"] == "browser_navigate" else ""
-                _nav_domain = self._extract_domain(_nav_url)
-                _is_nav_tool = tool_call["name"] == "browser_navigate" and bool(_nav_domain)
-
-                # 1. Buffer + broadcast tool START to UI
-                _tool_start_event = {
-                    "type": "tool_start",
-                    "tool": tool_call["name"],
-                    "args": tool_call["args"],
-                    "tool_call_id": tool_call["id"],
-                }
-                self.buffer_tool_event(chat_id, _tool_start_event)
-                if self.stream_manager:
-                    await self.stream_manager.broadcast_frame(
-                        json.dumps(_tool_start_event),
-                        user_id,
-                        is_tool=True
-                    )
-
-                if not tool:
-                    observation = f"Error: Tool {tool_call['name']} not found."
-                else:
-                    try:
-                        # Use tool args as-is — injecting chat_id breaks MCP browser tools
-                        # that have strict schemas (browser_get_state, browser_screenshot, etc.)
-                        tool_args = tool_call["args"]
-
-                        # --- Anti-rush cooldown for browser_navigate ---------
-                        # After 3 consecutive failures on the same domain, block
-                        # further navigation for 60 s so we don't burn tokens
-                        # hammering a site that is actively blocking us.
-                        if _is_nav_tool and self._is_nav_blocked(_nav_domain):
-                            observation = self._nav_cooldown_message(_nav_domain)
-                            # Skip actual tool execution — return the cooldown message as-is
-                            # but still fall through to status/observer/logging below.
-                            raise _NavigationCooldownSkip()
-
-                        # 2. Execute the actual tool (Playwright or Tavily) SEQUENTIALLY
-                        observation = await tool.ainvoke(tool_args)
-
-                        # --- Sanitize Replit proxy / network error pages ------
-                        # When Chrome navigates to an unreachable URL, Replit's
-                        # reverse-proxy serves its own HTML error page.  That raw
-                        # HTML must never reach the LLM as-is; replace it with a
-                        # clean, actionable error so the agent can recover.
-                        observation = _sanitize_browser_observation(observation, tool_call)
-
-                    except _NavigationCooldownSkip:
-                        # Cooldown already set observation above; pass through
-                        pass
-                    except Exception as e:
-                        observation = f"Error executing tool: {str(e)}"
-
-                # ── Observer step (Task #154 Step 2) ────────────────────────────────────
-                # Parse the raw observation ONCE into a structured state — every detector
-                # below (CAPTCHA/OTP/address/calendar/login/booking, plus the Verifier and
-                # recovery classification) reads flags off `_observed` instead of each
-                # re-running its own regex pass over `str(observation)`.
-                _observed: ObservedState = observe_state(str(observation))
-
-                # ── CAPTCHA outcome evaluation ────────────────────────────────────────
-                # Delegated to Brain._evaluate_captcha_outcome for testability.
-                await self._evaluate_captcha_outcome(
-                    _captcha_state, observation, user_id, _task_domain
-                )
-
-                # ── CAPTCHA detection (runs after try/except, observation always set) ──
+            for tool in all_tools:
+                tool_text = f"{tool.name} {tool.description or ''}"
                 try:
-                    _captcha_type = _observed.captcha_type
-                    if _captcha_type and self.memory_service:
-                        _skill = await self.memory_service.get_captcha_skill(user_id, _captcha_type)
-                        if _skill:
-                            _steps_txt = json.dumps(_skill.get("steps", []), indent=2)[:1200]
-                            _captcha_note = (
-                                f"\n\n[CAPTCHA_DETECTED: {_captcha_type}]\n"
-                                f"A {_captcha_type} CAPTCHA is present on this page.\n"
-                                f"Stored skill: {_skill.get('summary', '')}\n"
-                                f"Steps to follow:\n{_steps_txt}\n"
-                                f"Execute these steps now to bypass the CAPTCHA before continuing."
-                            )
-                            observation = str(observation) + _captcha_note
-                            # Track this CAPTCHA so we can evaluate the outcome next turn
-                            _captcha_state["pending"] = {
-                                "captcha_type": _captcha_type,
-                                "skill_name": f"captcha_{_captcha_type}",
-                            }
-                        else:
-                            observation = str(observation) + (
-                                f"\n\n[CAPTCHA_DETECTED: {_captcha_type}]\n"
-                                f"No stored skill found — attempt manual bypass."
-                            )
-                except Exception as _ce:
-                    logger.warning(f"CAPTCHA detection error (non-fatal): {_ce}")
-
-                # ── Generic "continue" interstitial detection ───────────────────────────
-                # Site-agnostic full-page confirmation wall (see obstacle_handler.
-                # detect_continue_interstitial) — the agent should treat the entire page
-                # as a blocker, not real content, and click the primary continue-style
-                # control before resuming the original mission. This is NOT hardcoded to
-                # any one site/wording; any page matching the generic "click ... to
-                # continue" phrasing is handled the same way dynamically.
-                try:
-                    _interstitial_type = _observed.interstitial_type
-                    if _interstitial_type and not _captcha_type:
-                        observation = str(observation) + (
-                            f"\n\n[CONTINUE_INTERSTITIAL_DETECTED: {_interstitial_type}]\n"
-                            f"This page is a full-page confirmation wall, not real content — it is "
-                            f"blocking progress toward the actual goal. Do NOT treat this as the "
-                            f"expected destination. Find the single primary button/link that matches "
-                            f"the page's own continue instruction (e.g. 'Continue', 'Continue shopping', "
-                            f"'Proceed') and click it now. After clicking, verify the page actually "
-                            f"changed (new URL or new content) before resuming the original task — if "
-                            f"it is still the same wall, try an alternative element or navigate directly "
-                            f"to the intended URL instead of repeating the same click."
-                        )
-                except Exception as _ie:
-                    logger.warning(f"Continue-interstitial detection error (non-fatal): {_ie}")
-
-                # ── Metacognitive Nudge: Modal/Popup Overlay ────────────────────────────
-                # Actively wake up the agent if an overlay is blocking the main content
-                # instead of letting it passively fail at clicking blocked background elements.
-                if _observed.has_modal and not _captcha_type and not _observed.interstitial_type:
-                    _planner = ObstaclePlanner(llm_with_tools)
-                    _failures = state.get("obstacle_failures", [])
-                    _plan = await _planner.generate_plan("modal", str(observation), _failures)
-                    
-                    if len(execution_history) > 0:
-                        _last_tool = execution_history[-1].get("tool")
-                        _last_args = execution_history[-1].get("args")
-                        _failures.append(f"Tried tool '{_last_tool}' with args '{_last_args}' but the modal is still present.")
-                        state["obstacle_failures"] = _failures
-
-                    observation = str(observation) + (
-                        f"\n\n[SYSTEM NUDGE: DYNAMIC OBSTACLE PLAN]\n"
-                        f"An active modal, popup, or login overlay is blocking the page.\n"
-                        f"EXECUTE THIS PLAN TO DISMISS IT:\n{_plan}\n"
-                        f"Do NOT blindly proceed with your main task until this is dismissed."
-                    )
-
-                # ── Metacognitive Nudge: Stuck / Repetitive Actions ─────────────────────
-                # If the agent is issuing the exact same tool call sequentially and failing
-                # to change the DOM, it is mechanically stuck. Inject a nudge to break out.
-                if len(execution_history) >= 2:
-                    _last_call = execution_history[-1]
-                    _prev_call = execution_history[-2]
-                    # Check if the last two calls were identical to the current one and failed
-                    if (tool_call["name"] == _last_call.get("tool") and 
-                        tool_call["name"] == _prev_call.get("tool") and
-                        str(tool_call.get("args", {})) == str(_last_call.get("args", {})) and
-                        str(tool_call.get("args", {})) == str(_prev_call.get("args", {})) and
-                        "Error" in str(observation)):
-                        observation = str(observation) + (
-                            f"\n\n[SYSTEM NUDGE: REPETITIVE ACTION DETECTED]\n"
-                            f"You have attempted this exact same action 3 times in a row without progress. "
-                            f"The standard DOM approach is failing here. Think outside the box: "
-                            f"can you use your Vision capabilities to calculate coordinate clicks? "
-                            f"Can you navigate via keyboard? Re-evaluate your Alternative Strategies."
-                        )
-
-                # ── Address Agent: deterministic address-autocomplete handling ─────────
-                # Only runs when the task actually supplied an address to enter and no
-                # CAPTCHA is blocking the page. See src/services/address_agent.py for the
-                # scoring/verification logic and address.agent.md for the agent's rules.
-                try:
-                    if not _skip_irrelevant_agents and not _captcha_type and _requested_address:
-                        _addr_dropdown_open = address_agent.detect_address_autocomplete_context(str(observation))
-
-                        if _addr_dropdown_open:
-                            observation = address_agent.handle_address_dropdown_observation(
-                                str(observation),
-                                _requested_address,
-                                _address_state,
-                                _task_domain,
-                                spec_guidance=_address_spec_guidance,
-                            )
-                        elif _address_state.pending_selection:
-                            # Dropdown just closed after an auto-selected suggestion —
-                            # verify the field's own value now reflects it.
-                            observation = address_agent.handle_address_verification_observation(
-                                str(observation), _address_state, _task_domain
-                            )
-                except ObstacleInputNeeded:
-                    raise
-                except Exception as _ae:
-                    logger.warning(f"Address agent detection error (non-fatal): {_ae}")
-
-                # ── Calendar Agent: deterministic date-picker handling ──────────────────
-                # Only runs when the task actually supplied a date to select and no
-                # CAPTCHA is blocking the page. See src/services/calendar_agent.py for the
-                # scoring/verification logic and calendar.agent.md for the agent's rules.
-                try:
-                    if not _skip_irrelevant_agents and not _captcha_type and _requested_dates:
-                        _calendar_open = calendar_agent.detect_calendar_widget_context(str(observation))
-
-                        if _calendar_open:
-                            observation = calendar_agent.handle_calendar_widget_observation(
-                                str(observation),
-                                _requested_dates,
-                                _calendar_state,
-                                _task_domain,
-                                spec_guidance=_calendar_spec_guidance,
-                            )
-                        elif _calendar_state.pending_selection:
-                            # Calendar just closed after an auto-selected day —
-                            # verify the field's own value now reflects it.
-                            observation = calendar_agent.handle_calendar_verification_observation(
-                                str(observation), _calendar_state, _task_domain
-                            )
-                except ObstacleInputNeeded:
-                    raise
-                except Exception as _cale:
-                    logger.warning(f"Calendar agent detection error (non-fatal): {_cale}")
-
-                # ── Login Agent: deterministic credential-field disambiguation ──────────
-                # Only runs when the task actually supplied credentials to enter and no
-                # CAPTCHA is blocking the page. See src/services/login_agent.py for the
-                # field-mapping/failure logic and login.agent.md for the agent's rules.
-                try:
-                    if not _skip_irrelevant_agents and not _captcha_type and _requested_credentials:
-                        _login_form_open = login_agent.detect_login_form_context(str(observation))
-                        if _login_form_open:
-                            observation = login_agent.handle_login_form_observation(
-                                str(observation),
-                                _requested_credentials,
-                                _login_state,
-                                _task_domain,
-                                spec_guidance=_login_spec_guidance,
-                            )
-                except ObstacleInputNeeded:
-                    raise
-                except Exception as _loe:
-                    logger.warning(f"Login agent detection error (non-fatal): {_loe}")
-
-                # ── Booking/Pagination Agent: deterministic step-progress tracking ──────
-                # Runs on any multi-step flow (not gated on confirmed_inputs) so a
-                # stalled checkout/booking wizard escalates instead of looping. See
-                # src/services/booking_agent.py and booking.agent.md for the rules.
-                try:
-                    if not _skip_irrelevant_agents and not _captcha_type and booking_agent.detect_multistep_context(str(observation)):
-                        observation = booking_agent.handle_booking_progress_observation(
-                            str(observation),
-                            _booking_state,
-                            _task_domain,
-                            spec_guidance=_booking_spec_guidance,
-                        )
-                except ObstacleInputNeeded:
-                    raise
-                except Exception as _boe:
-                    logger.warning(f"Booking agent detection error (non-fatal): {_boe}")
-
-                # ── Aggregator/Data-Extraction Agent: pagination & item-count tracking ──
-                # Only runs when the task is an extraction mission (keyword-gated) and the
-                # current page observation contains data-listing or pagination signals.
-                # Tracks item count and page progress across turns so a stalled "Load More"
-                # / Next-page loop is detected and stopped before consuming the full retry
-                # budget. See src/services/aggregator_agent.py and aggregator.agent.md.
-                try:
-                    if (
-                        not _captcha_type
-                        and _is_extraction_task
-                        and (
-                            aggregator_agent.detect_data_extraction_context(str(observation))
-                            or aggregator_agent.detect_pagination_context(str(observation))
-                        )
-                    ):
-                        observation = aggregator_agent.handle_aggregator_observation(
-                            str(observation),
-                            _aggregator_state,
-                            _task_domain,
-                            target_count=_aggregator_target_count,
-                            spec_guidance=_aggregator_spec_guidance,
-                        )
-                except ObstacleInputNeeded:
-                    raise
-                except Exception as _agge:
-                    logger.warning(f"Aggregator agent detection error (non-fatal): {_agge}")
-
-                # ── Obstacle detection (generic framework) — human-input types like OTP ──
-                # CAPTCHA is handled above (agent attempts to self-solve). Obstacles that
-                # can only be resolved by a human (requires_human_input=True) pause the run
-                # here so it can be surfaced via the NEEDS_INPUT form and resumed later.
-                try:
-                    if not _captcha_type:
-                        _obstacle = detect_obstacle_from_observed(_observed)
-                        if _obstacle and _obstacle.requires_human_input:
-                            if self.memory_service:
-                                try:
-                                    # Remember that this site/flow uses this obstacle type so
-                                    # future runs recognize and pause on it immediately. This
-                                    # never stores the code/secret itself — only that the
-                                    # pattern exists on this domain.
-                                    await self.memory_service._update_procedural(
-                                        user_id, _obstacle.skill_name, _task_domain, [], success=True,
-                                    )
-                                except Exception:
-                                    pass
-                            raise ObstacleInputNeeded(_obstacle, _task_domain)
-                except ObstacleInputNeeded:
-                    raise
-                except Exception as _oe:
-                    logger.warning(f"Obstacle detection error (non-fatal): {_oe}")
-
-                status = "SUCCESS" if "Error" not in str(observation) else "FAILED"
-
-                # --- Cooperative cancellation: stop early if user clicked Stop ---
-                # Without this check, the agent will keep executing every remaining
-                # tool_call in last_message.tool_calls even though the user already
-                # asked to abort. We break the loop here so the cancellation takes
-                # effect immediately instead of after all queued tools finish.
-                if chat_id in self.cancelled_chats:
-                    observation = "Process stopped by user."
-                    status = "CANCELLED"
-                    break
-
-                # --- Navigation cooldown: track success / failure per domain ------------
-                # After the tool has executed (or been skipped by cooldown), update the
-                # per-domain failure tracker so repeated blocked navigations trigger a
-                # 60-second cooldown instead of burning tokens.
-                if _is_nav_tool and _nav_domain:
-                    _obs_text = str(observation)
-                    # Treat cooldown-skipped calls as failures for tracking purposes
-                    _was_skipped = "[Navigation Cooldown]" in _obs_text
-                    _was_error = "Error" in _obs_text or "[Navigation Error]" in _obs_text
-                    if status == "SUCCESS" and not _was_skipped and not _was_error:
-                        self._record_nav_success(_nav_domain)
-                    else:
-                        self._record_nav_failure(_nav_domain)
-
-                # ── Verifier step (Task #154 Step 3) ────────────────────────────────────
-                # Explicit post-action check that the tool call's expected effect actually
-                # occurred, using the Observer's structured state computed above. The
-                # result is appended to `execution_history` (so the planner's next turn
-                # sees it) and surfaced on the graph's `validation_result` field for any
-                # critic/planning logic that reads state directly.
-                _validation: ValidationResult = verify_action(
-                    tool_call["name"], tool_call["args"], status, _observed
-                )
-                if not _validation.passed:
-                    observation = str(observation) + _validation.to_prompt_note()
-
-                # Clean observation for logs (remove large base64 data)
-                _obs_str = str(observation)
-                
-                # Extract and stream the screenshot frame to the UI if present
-                screenshot_match = re.search(r'\[SCREENSHOT\](.*?)\[/SCREENSHOT\]', _obs_str, flags=re.DOTALL)
-                if screenshot_match and self.stream_manager:
-                    _b64 = screenshot_match.group(1)
-                    # Use asyncio.create_task to not block the main loop
-                    asyncio.create_task(self.stream_manager.broadcast_frame(_b64, user_id, is_tool=False))
-                    
-                clean_obs = re.sub(r'\[SCREENSHOT\].*?\[/SCREENSHOT\]', '[Image Data]', _obs_str, flags=re.DOTALL)
-
-                # Scrub any known secret values (passwords, OTP codes, card/CVV, etc.)
-                # out of BOTH the tool args and the observation text before they are
-                # persisted to ToolExecutionLog. Tool args can be a dict of typed
-                # field->value pairs (e.g. {"selector": ..., "text": "123456"}) — scrub
-                # every string value, not just ones under a "sensitive-looking" key,
-                # since a generic "text"/"value" arg is exactly how a password or OTP
-                # gets typed into a form field.
-                _safe_tool_input = tool_call["args"]
-                if _run_secret_values and isinstance(_safe_tool_input, dict):
-                    _safe_tool_input = {
-                        k: self._redact_secret_values_in_text(v, _run_secret_values)
-                        for k, v in _safe_tool_input.items()
-                    }
-                _safe_tool_output = self._redact_secret_values_in_text(clean_obs[:1000], _run_secret_values)
-
-                # 3. Log the REAL result to DB
-                # NOTE: the DB row's primary key (`log.id`, a server-generated UUID)
-                # is NOT the same value as `tool_call["id"]` (the LLM-issued
-                # tool_call_id used to correlate the tool_start/tool_output stream
-                # events). The frontend's tool-selection UI keys entries by the
-                # streamed `tool_call_id` — if a schedule is created from tools
-                # selected via that live stream, the IDs sent to
-                # /scheduler/create won't match any `ToolExecutionLog.id`, and the
-                # selected tool data silently comes back empty. Capture the real
-                # DB id here and pass it back down in the tool_output event so the
-                # frontend can reconcile its selection state to the persisted id.
-                _db_log_id = await self.db_manager.log_tool_execution(
-                    chat_id=chat_id,
-                    agent_id="3",
-                    tool_name=tool_call["name"],
-                    status=status,
-                    tool_input=_safe_tool_input,
-                    tool_output=_safe_tool_output # Increased limit but kept clean
-                )
-
-                # --- Compress/truncate observation for LLM history to prevent token overflow ---
-                # Dedupe/collapse noisy repetition first so the char budget is spent
-                # on unique content, then fall back to a hard cutoff if still too big.
-                llm_observation = _compress_observation_for_llm(str(observation), MAX_OBSERVATION_CHARS_FOR_LLM)
-
-                # --- Explicit cleanup if browser was closed by tool call ---
-                if tool_call["name"] in ["browser_close_session", "browser_close_all"] and status == "SUCCESS":
-                    logger.info(f"Browser closed by tool call. Cleaning up session for user {user_id}")
-                    session_obj = self.session_manager.get_session(user_id)
-                    if session_obj.get("mcp_manager"):
-                        # Close the MCP manager so the subprocess (and any Chrome
-                        # process it owns) actually terminates.  Use a short timeout
-                        # so a stuck manager doesn't block the whole tool loop.
-                        try:
-                            mcp = session_obj["mcp_manager"]
-                            await asyncio.wait_for(mcp.close(), timeout=3.0)
-                            logger.info(f"[User {user_id}] MCP manager closed after browser_close_* tool.")
-                        except Exception:
-                            pass
-                        session_obj["mcp_manager"] = None
-                
-                # 4. Buffer + broadcast tool OUTPUT to UI
-                _tool_out_event = {
-                    "type": "tool_output",
-                    "tool": tool_call["name"],
-                    "output": clean_obs[:500],
-                    "tool_call_id": tool_call["id"],
-                    # Real ToolExecutionLog.id — lets the frontend swap its
-                    # selection-state key from the stream-only tool_call_id to
-                    # the actual persisted row id (see note above).
-                    "db_id": _db_log_id,
-                    "status": status,
-                }
-                self.buffer_tool_event(chat_id, _tool_out_event)
-                if self.stream_manager:
-                    await self.stream_manager.broadcast_frame(
-                        json.dumps(_tool_out_event),
-                        user_id,
-                        is_tool=True
-                    )
-                
-                new_messages.append(ToolMessage(content=llm_observation, tool_call_id=tool_call["id"]))
-                # Carry the real ToolExecutionLog.id along so the graph-output
-                # handling below can persist genuine DB ids into Message.tool_calls
-                # instead of minting a disconnected uuid4() per entry.
-                execution_history.append({
-                    "tool": tool_call["name"],
-                    "args": tool_call.get("args", {}),
-                    "status": status,
-                    "result": llm_observation[:500],
-                    "id": _db_log_id,
-                    "validation": _validation.to_dict(),
-                })
-                _last_validation_result = _validation.to_dict()
-
-            return {
-                "messages": new_messages,
-                "execution_history": execution_history,
-                "validation_result": _last_validation_result,
-            }
-
-        # Define the graph
-        workflow = StateGraph(AgentState)
-        workflow.add_node("agent", call_model)
-        workflow.add_node("tools", _call_tool)
-
-        workflow.set_entry_point("agent")
-        workflow.add_conditional_edges(
-            "agent",
-            lambda x: "tools" if x["messages"][-1].tool_calls else END,
-            {"tools": "tools", END: END}
-        )
-        workflow.add_edge("tools", "agent")
-
-        app = workflow.compile()
-        
-        try:
-            # Execute the graph with an explicit recursion_limit as a backstop
-            # against runaway agent<->tools loops that slip past our domain-specific
-            # retry guards (see GRAPH_RECURSION_LIMIT for rationale).
-            config = {
-                "recursion_limit": GRAPH_RECURSION_LIMIT,
-            }
-            final_state = await app.ainvoke(graph_input, config=config)
-            return final_state
-        except asyncio.CancelledError:
-            # Propagate the cancellation so callers can react.
-            raise
-        finally:
-            # If this graph was cancelled (user hit "Stop") or keep_alive is disabled,
-            # ask the session manager to close it so old Chrome processes don't leak.
-            # Otherwise, keep it open/alive for reuse or user inspection.
-            keep_alive = os.getenv("BROWSER_USE_KEEP_ALIVE", "true").lower() != "false"
-            is_cancelled = (sys.exc_info()[0] is asyncio.CancelledError) or (chat_id in self.cancelled_chats)
-            if not keep_alive or is_cancelled:
-                try:
-                    await asyncio.wait_for(
-                        self.session_manager.close_browser(user_id), timeout=5.0
-                    )
-                except asyncio.TimeoutError:
-                    pass
-                except Exception:
-                    pass
-
-    async def process_chat_message(
-        self,
-        user_message_content: str,
-        user_id: str,
-        chat_id: str,
-        
-    ) -> str:
-        """Adapts request parameters to run inside the stateful Multi-Agent Workflow."""
-        if not self.initialized:
-            await self.initialize()
-
-        # Clear any stale cooperative-cancel flag for this chat before starting a
-        # brand new run. `stop_process` sets this flag synchronously, but the
-        # previously-cancelled task's own cleanup (closing the browser, joining
-        # the screenshot stream task with up to a 15s timeout — see the
-        # `finally` block in `process_message`) can still be in flight when the
-        # user immediately retries. Without this, the new task's very first
-        # cooperative-cancel checkpoint would see the still-set flag from the
-        # OLD run and incorrectly abort the NEW run instantly with
-        # "Process stopped by user" before it does any work.
-        self.cancelled_chats.discard(chat_id)
-
-        # Create a task for the message processing to allow cancellation
-        task = asyncio.create_task(self.process_message(user_id, user_message_content, chat_id))
-        self.active_tasks[chat_id] = task
-        
-        try:
-            result = await task
-        except asyncio.CancelledError:
-            logger.info(f"Task for chat_id {chat_id} was cancelled.")
-            return json.dumps({"status": "CANCELLED", "message": "Process stopped by user."})
-        finally:
-            self.active_tasks.pop(chat_id, None)
-        
-        if isinstance(result, dict):
-            # If ATAG returned NEEDS_INPUT, return the form
-            if result.get("status") == "NEEDS_INPUT":
-                return json.dumps({"status": "NEEDS_INPUT", "form": result.get("form")})
-            return result.get("execution_result") or result.get("message") or "Agent completed with no summary."
-        return str(result)
-
-    async def stop_process(self, chat_id: str, user_id: str = None):
-        """Stops an active agent process and closes the browser (without destroying the session)."""
-        # Mark as cancelled so process_message exits at its next checkpoint
-        self.cancelled_chats.add(chat_id)
-
-        task = self.active_tasks.get(chat_id)
-        if task:
-            task.cancel()
-            logger.info(f"Cancellation signal sent to task for chat_id {chat_id}")
-            self.active_tasks.pop(chat_id, None)
-
-            # Clear the stale plan so reconnecting clients don't rehydrate a "running" plan
-            self.active_plans.pop(chat_id, None)
-
-            # Close the browser process but keep the session alive for reuse
-            if user_id:
-                try:
-                    await self.session_manager.close_browser(user_id)
-                    logger.info(f"Browser closed for user {user_id} via stop_process.")
+                    await self.tool_selector._get_embedding(tool_text)
+                    logger.info(f"Pre-embedded tool at startup: {tool.name}")
                 except Exception as e:
-                    logger.warning(f"Browser close error during stop: {e}")
+                    logger.warning(f"Failed to pre-embed tool {tool.name}: {e}")
+            
+            try:
+                await temp_manager.close()
+            except Exception as e:
+                logger.warning(f"Ignored error closing temp_manager during startup: {e}")
+            logger.info("Pre-initialization of MCP tools and embeddings cache complete.")
+        except Exception as e:
+            logger.error(f"Error during MCP pre-initialization: {e}")
 
+    async def shutdown(self):
+        for task in self.active_tasks.values():
+            task.cancel()
+        for session in self.session_manager.sessions.values():
+            mcp = session.get("mcp_manager")
+            if mcp:
+                try:
+                    await mcp.close()
+                except Exception as e:
+                    logger.warning(f"Error closing mcp_manager during shutdown: {e}")
+
+    async def stop_process(self, chat_id: str, user_id: str) -> bool:
+        if chat_id in self.active_tasks:
+            self.active_tasks[chat_id].cancel()
             return True
-        # Even if no active task found, flag was set (guards stale tasks)
-        # Also clear stale plan so reconnect doesn't rehydrate it
-        self.active_plans.pop(chat_id, None)
         return False
 
-    async def process_message(self, user_id: str, user_message: str, chat_id: str) -> Dict[str, Any]:
-        """
-        Runs Agent 1 (Analysis) -> Agent 2 (Strategy) -> Agent 3 (Execution) with UI updates and Critic retries.
-        """
-        # --- NEW: Limit parallel tasks per user ---
-        if self.session_manager.get_active_count(user_id) >= 2:
-            return {
-                "success": False, 
-                "message": "You have reached the limit of 2 parallel automation tasks. Please wait for one to finish."
-            }
+    def get_live_tool_logs(self, chat_id: str) -> list:
+        return self.live_tool_logs.get(chat_id, [])
 
-        # Task #146: block usage once a user's credit balance is exhausted.
-        credit_balance = await self.db_manager.get_user_credit_balance(user_id)
-        if credit_balance <= 0:
-            return {
-                "success": False,
-                "message": "You're out of credits. Please contact an admin to top up your balance before continuing."
-            }
+    def _wrap_tool_with_logging(self, tool: Any, chat_id: str, user_id: str, executed_tool_calls: list) -> Any:
+        from langchain_core.tools import StructuredTool
+        from datetime import datetime, timezone
+        import json
+        import uuid
+        from src.database.chat_db import ToolExecutionLog, AsyncSessionLocal
 
-        self.session_manager.add_active_chat(user_id, chat_id)
-
-        current_plan = [
-            {"id": "1", "title": "Task 1: Analysis", "description": "Understanding user intent", "status": "pending", "priority": "high", "level": 0, "dependencies": [], "subtasks": [], "details": None},
-            {"id": "2", "title": "Task 2: Execution", "description": "Running browser tools", "status": "pending", "priority": "high", "level": 0, "dependencies": ["1"], "subtasks": [], "details": None}
-        ]
-
-        # Known secret values for THIS run, accumulated as they become known
-        # (obstacle answer, confirmed_inputs) — every update_ui() call below
-        # scrubs input_data/output_data/error against whatever is in this list
-        # at call time, and rows logged BEFORE a value became known are
-        # retroactively scrubbed the moment we learn it (see
-        # _rescrub_agent_execution_logs below). AgentExecutionLog must never
-        # carry a raw password/OTP/card value, same bar as Message/ToolExecutionLog.
-        _agent_log_secret_values: List[str] = []
-        _agent_log_ids: List[int] = []
-
-        def _scrub_agent_log_payload(data):
-            if data is None:
-                return None
-            if isinstance(data, dict):
-                scrubbed = {
-                    k: self._redact_secret_values_in_text(v, _agent_log_secret_values)
-                    for k, v in data.items()
-                }
-                return {k: self._mask_labeled_secrets(v) if isinstance(v, str) else v for k, v in scrubbed.items()}
-            if isinstance(data, str):
-                return self._mask_labeled_secrets(self._redact_secret_values_in_text(data, _agent_log_secret_values))
-            return data
-
-        async def update_ui(idx, status, input_data=None, output_data=None, error=None, details=None, thought=None, token_usage=None, cost=None):
-            # Ensure idx is within bounds of current_plan
-            if idx < len(current_plan):
-                current_plan[idx]["status"] = status
-                if details:
-                    current_plan[idx]["details"] = details
-                if thought:
-                    current_plan[idx]["thought"] = thought
-                
-                if token_usage:
-                    current_plan[idx]["token_usage"] = token_usage
-                
-                stage_name = current_plan[idx]["title"]
-            else:
-                stage_name = f"Stage {idx + 1}"
+        async def _coroutine_wrapper(*args, **kwargs):
+            db_id = str(uuid.uuid4())
+            tool_name = tool.name
             
-            _log_id = await self.db_manager.log_agent_execution(
-                user_id=user_id,
-                chat_id=chat_id,
-                stage=str(idx + 1),
-                name=stage_name,
-                status=status.upper(),
-                input_data=_scrub_agent_log_payload(input_data),
-                output_data=_scrub_agent_log_payload(output_data),
-                error=self._mask_labeled_secrets(self._redact_secret_values_in_text(error, _agent_log_secret_values)) if error else error,
-                token_usage=token_usage,
-                cost=cost
-            )
-            if _log_id:
-                _agent_log_ids.append(_log_id)
+            # Broadcast tool_start
             if self.stream_manager:
-                await self.stream_manager.broadcast_plan(chat_id, current_plan)
-            
-            # Store for rehydration
-            self.active_plans[chat_id] = current_plan
-
-        async def _rescrub_agent_execution_logs(new_secret_values: List[str]):
-            """Once a new secret value becomes known (e.g. Agent-1 just extracted
-            confirmed_inputs, or an obstacle answer was captured), retroactively
-            scrub every AgentExecutionLog row already written for this run — those
-            were logged before the value was known, so the proactive scrub in
-            update_ui() couldn't catch them at the time."""
-            if not new_secret_values or not _agent_log_ids:
-                return
-            async with AsyncSessionLocal() as db:
-                stmt = select(AgentExecutionLog).where(AgentExecutionLog.id.in_(_agent_log_ids))
-                res = await db.execute(stmt)
-                rows = res.scalars().all()
-                changed = False
-                for row in rows:
-                    for col in ("input_data", "output_data", "error_message"):
-                        val = getattr(row, col)
-                        if val and isinstance(val, str):
-                            new_val = self._redact_secret_values_in_text(val, new_secret_values)
-                            if new_val != val:
-                                setattr(row, col, new_val)
-                                changed = True
-                if changed:
-                    await db.commit()
-
-        try:
-            if not self.initialized: await self.initialize()
-            session = await self.db_manager.get_or_create_chat_session(user_id, chat_id)
-            
-            # Initialize stream variables to None for finally block safety
-            stop_stream = None
-            stream_task = None
-            
-            # --- NEW: Fetch Chat History for Context ---
-            prior_session_state: dict = {}
-            async with AsyncSessionLocal() as db:
-                stmt = select(Message).where(Message.chat_id == chat_id).order_by(Message.created_at.asc())
-                res = await db.execute(stmt)
-                history_msgs = res.scalars().all()
+                tool_start_msg = {
+                    "type": "tool_start",
+                    "tool_call_id": db_id,
+                    "tool": tool_name,
+                    "args": kwargs
+                }
+                await self.stream_manager.broadcast_frame(tool_start_msg, user_id, is_tool=True)
                 
-                # Convert DB messages to LangChain format
-                chat_history = []
-                for m in history_msgs:
-                    if m.role == "user":
-                        chat_history.append(HumanMessage(content=m.content))
-                    else:
-                        chat_history.append(AIMessage(content=m.content))
-
-                # Load persisted session state (what the agent accomplished last turn)
-                sess_stmt = select(ChatSession).where(ChatSession.id == chat_id)
-                sess_res = await db.execute(sess_stmt)
-                sess_row = sess_res.scalar_one_or_none()
-                if sess_row and sess_row.session_state:
-                    try:
-                        prior_session_state = json.loads(sess_row.session_state)
-                    except Exception:
-                        prior_session_state = {}
-
-                # --- Reset-intent detection ---
-                # If the user wants to start fresh, wipe the prior session state so
-                # the agent does not inherit the previous URL / accomplishment summary.
-                if prior_session_state and self._is_reset_intent(user_message):
-                    prior_session_state = {}
-                    if sess_row:
-                        sess_row.session_state = None
-                        await db.commit()
-                    logger.info(f"[brain] Reset intent detected for chat {chat_id} — session_state cleared.")
-
-                # ── Obstacle resume check ───────────────────────────────────────
-                # If the previous turn paused mid-run for human input (e.g. an OTP
-                # code), this message is that answer — resume the paused run
-                # instead of treating it as a brand-new task.
-                pending_obstacle = prior_session_state.pop("pending_obstacle", None) if prior_session_state else None
-                _obstacle_attempt_count = (pending_obstacle or {}).get("attempt", 0)
-
-                # Add current message to DB — but never persist the raw value if this
-                # message is directly answering an obstacle form (OTP/verification
-                # code, etc.): those values are single-use/expire and must never be
-                # readable from chat history, or a later turn's Agent-1 pass can
-                # mistake a stale code sitting in history_context for a still-valid
-                # credential and try to reuse it instead of asking for a fresh one.
-                if pending_obstacle:
-                    _obstacle_label = pending_obstacle.get("obstacle_type", "verification")
-                    _stored_content = self.OBSTACLE_ANSWER_PLACEHOLDER_TEMPLATE.format(label=_obstacle_label)
+            # Create pending DB log
+            async with AsyncSessionLocal() as db:
+                log_entry = ToolExecutionLog(
+                    id=db_id,
+                    chat_id=chat_id,
+                    agent_id="agent_react",
+                    tool_name=tool_name,
+                    tool_input=json.dumps(kwargs),
+                    status="IN_PROGRESS"
+                )
+                db.add(log_entry)
+                await db.commit()
+                
+            # Update in-memory log buffer
+            log_item = {
+                "id": db_id,
+                "tool_name": tool_name,
+                "tool_input": json.dumps(kwargs),
+                "status": "IN_PROGRESS",
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            if chat_id not in self.live_tool_logs:
+                self.live_tool_logs[chat_id] = []
+            self.live_tool_logs[chat_id].append(log_item)
+                
+            # Execute original tool
+            status = "completed"
+            error_str = None
+            output_str = ""
+            try:
+                res = await tool.ainvoke(kwargs)
+                if isinstance(res, list):
+                    text_blocks = []
+                    for block in res:
+                        if isinstance(block, dict):
+                            if block.get("type") == "text":
+                                text_blocks.append(block.get("text", ""))
+                        else:
+                            text_blocks.append(str(block))
+                    output_str = "\n".join(text_blocks)
                 else:
-                    # Defense-in-depth: scrub any explicit "label: value" secret
-                    # disclosures (password/OTP/card/etc.) even outside the obstacle
-                    # flow, e.g. when a credential-input form answer is typed back.
-                    _stored_content = self._mask_labeled_secrets(user_message)
-                human_msg = Message(
+                    output_str = str(res)
+            except Exception as e:
+                status = "failed"
+                error_str = str(e)
+                output_str = f"Error: {e}"
+                
+            # Update DB log
+            async with AsyncSessionLocal() as db:
+                from sqlalchemy import update
+                await db.execute(
+                    update(ToolExecutionLog)
+                    .where(ToolExecutionLog.id == db_id)
+                    .values(
+                        status=status.upper(),
+                        tool_output=output_str,
+                        error_message=error_str
+                    )
+                )
+                await db.commit()
+                
+            # Update in-memory log buffer
+            for item in self.live_tool_logs.get(chat_id, []):
+                if item["id"] == db_id:
+                    item["status"] = status.upper()
+                    item["tool_output"] = output_str
+                    item["error_message"] = error_str
+                    break
+                    
+            # Add to executed tool calls for final AI response payload
+            executed_tool_calls.append({
+                "id": db_id,
+                "tool_name": tool_name,
+                "tool_input": kwargs,
+                "tool_output": output_str,
+                "status": status.upper(),
+                "error_message": error_str
+            })
+                
+            # Broadcast tool_output
+            if self.stream_manager:
+                tool_output_msg = {
+                    "type": "tool_output",
+                    "tool_call_id": db_id,
+                    "db_id": db_id,
+                    "status": status,
+                    "output": output_str,
+                    "error": error_str
+                }
+                await self.stream_manager.broadcast_frame(tool_output_msg, user_id, is_tool=True)
+                
+            if error_str:
+                raise RuntimeError(error_str)
+                
+            return res
+
+        wrapped = StructuredTool(
+            name=tool.name,
+            description=tool.description,
+            args_schema=tool.args_schema,
+            func=tool._run,
+            coroutine=_coroutine_wrapper
+        )
+        return wrapped
+
+    async def process_message(self, user_id: str, message: str, chat_id: str) -> dict:
+        try:
+            # 1. Ensure MCP Server and Session exist
+            # (MCPToolManager lazily initializes inside get_tools())
+            
+            # Setup session
+            session_data = self.session_manager.get_session(user_id)
+            if not session_data.get("mcp_manager"):
+                session_data["mcp_manager"] = MCPToolManager(port=session_data["port"])
+            mcp_manager = session_data["mcp_manager"]
+
+            # 2. Get tools from MCP
+            all_tools = await mcp_manager.get_tools()
+            
+            # Filter out the meta-agent tool to force sequential atomic tool calling
+            all_tools = [t for t in all_tools if t.name != "retry_with_browser_use_agent"]
+
+            # Run Tool Selection system to choose the right tools
+            tools = await self.tool_selector.select_tools(message, all_tools)
+
+            # Force-include core browser utilities that the agent always needs to operate properly
+            core_tool_names = {
+                "browser_get_state",
+                "browser_wait",
+                "browser_key_press",
+                "browser_extract_raw",
+                "browser_extract_vision"
+            }
+            selected_names = {t.name for t in tools}
+            for t in all_tools:
+                if t.name in core_tool_names and t.name not in selected_names:
+                    tools.append(t)
+
+            # Wrap tools with database logging & WebSocket streaming
+            executed_tool_calls = []
+            wrapped_tools = [
+                self._wrap_tool_with_logging(t, chat_id, user_id, executed_tool_calls)
+                for t in tools
+            ]
+
+            # 3. Create simple ReAct agent
+            system_prompt = (
+                "You are an autonomous browser agent. Your objective is to complete the user's task by any valid method. "
+                "You control a live browser session. If you encounter an obstacle (e.g. login popup, cookie banner), "
+                "do not give up. Find a way around it or close it. Never repeat the same failed action.\n\n"
+                "IMPORTANT INSTRUCTIONS:\n"
+                "1. Always create a clear TODO list to plan and complete the task step-by-step.\n"
+                "2. Use the cursor/mouse carefully for every action (e.g., hover over elements, verify coordinates before clicking).\n"
+                "3. CRITICAL: You MUST execute browser actions strictly one by one (sequentially). NEVER call multiple browser tools or output parallel tool calls in a single turn. You must wait for the output of the current tool (like navigate or click) and analyze the page state before generating the next tool call."
+            )
+            # agent_executor = create_react_agent(self.llm, tools, prompt=system_prompt)
+            agent_executor = create_deep_agent(
+                model = self.llm,
+                system_prompt = system_prompt,
+                tools = wrapped_tools
+            )
+
+            # 4. Save User Message to DB (minimal)
+            async with AsyncSessionLocal() as db:
+                # Ensure ChatSession exists
+                session_obj = (await db.execute(select(ChatSession).where(ChatSession.id == chat_id))).scalar_one_or_none()
+                if not session_obj:
+                    session_obj = ChatSession(
+                        id=chat_id,
+                        user_id=user_id,
+                        title=message[:50] + ("..." if len(message) > 50 else ""),
+                        status="active"
+                    )
+                    db.add(session_obj)
+
+                user_msg = Message(
                     message_id=str(uuid.uuid4()),
                     chat_id=chat_id,
                     user_id=user_id,
                     role="user",
-                    content=_stored_content,
-                    created_at=datetime.now(timezone.utc)
+                    content=message
                 )
-                db.add(human_msg)
+                db.add(user_msg)
                 await db.commit()
 
-            graph_output: Dict[str, Any] = {}   # ensure exists for finally write-back
-            memory_block = ""
-
-            if pending_obstacle:
-                # Resuming a run that paused for human input (e.g. an OTP code) —
-                # skip Agent 1 entirely and reuse the task context captured when
-                # the run paused, so the user's answer isn't misread as a new task.
-                #
-                # The real confirmed_inputs (account/credential values) were never
-                # written to the database — only an in-memory cache and a redacted
-                # placeholder in session_state. If the cache is gone (e.g. the
-                # process restarted while paused), we deliberately do NOT fall back
-                # to the redacted placeholder; instead we drop out of the resume
-                # path and let the normal Agent-1 flow ask the user again.
-                _cached_inputs = self.pending_confirmed_inputs.pop(chat_id, None)
-                if _cached_inputs is None:
-                    logger.info(
-                        f"[brain] No in-memory credential cache for chat {chat_id} on resume "
-                        f"(process likely restarted) — asking the user again instead of using "
-                        f"the redacted placeholder."
-                    )
-                    pending_obstacle = None
-
-            if pending_obstacle:
-                task_summary = pending_obstacle["task_summary"]
-                confirmed_inputs = _cached_inputs
-                discovery_strategy = pending_obstacle.get("discovery_strategy", "direct_execution")
-                domain = pending_obstacle.get("site_domain") or self._extract_domain_from_task(task_summary, confirmed_inputs)
-                # Register the resumed credential values so any AgentExecutionLog
-                # rows logged in this resumed run (proactively, via update_ui) never
-                # carry the raw password/OTP — same guarantee as a fresh run.
-                _resumed_secrets = self._extract_sensitive_values(confirmed_inputs)
-                if _resumed_secrets:
-                    _agent_log_secret_values.extend(v for v in _resumed_secrets if v)
-                await update_ui(0, "completed", details="Resuming after obstacle input was provided.")
-                if self.memory_service:
-                    try:
-                        mem_ctx = await self.memory_service.retrieve(user_id, domain, task_summary)
-                        memory_block = mem_ctx.to_prompt_block()
-                    except Exception as _me:
-                        logger.warning(f"[Memory] retrieve error (non-fatal): {_me}")
-            else:
-                # --- Agent 1: Analysis (Now with history context) ---
-                # Mask any explicit "label: value" secret disclosures before this
-                # goes into AgentExecutionLog — same defense-in-depth as the
-                # Message.content scrub above.
-                await update_ui(0, "in-progress", input_data={"message": self._mask_labeled_secrets(user_message)})
-
-                # Construct a context string from history for Agent 1
-                # Defense-in-depth: re-mask any "label: value" secret disclosures at
-                # READ time too, not just at write time. This protects against stale
-                # unmasked rows already sitting in the DB (e.g. written before this
-                # scrubbing existed, or any future write-path gap) leaking a raw
-                # password/OTP/card value into the prompt and causing the agent to
-                # reuse an expired code instead of asking for a fresh one.
-                history_context = "\n".join([
-                    f"{'User' if isinstance(m, HumanMessage) else 'AI'}: {self._mask_labeled_secrets(m.content)}"
-                    for m in chat_history[-5:]
-                ])
-                # Append prior browser state so the analysis agent knows what was already done
-                if prior_session_state:
-                    history_context += (
-                        f"\n\nPREVIOUS SESSION STATE: The agent previously completed: "
-                        f"{prior_session_state.get('accomplishment_summary', '')} "
-                        f"The browser is currently on: {prior_session_state.get('last_url', 'unknown page')}."
-                    )
-                override_intent = self._is_credential_override_intent(user_message)
-                if override_intent:
-                    logger.info(f"[brain] Credential override intent detected for chat {chat_id} — instructing Agent 1 to ignore stale history values.")
-                understanding = await self.atag_processor.run_input_understanding(
-                    user_message, history_context=history_context, override_intent=override_intent
-                )
-
-                if understanding.get("status") == "NEEDS_INPUT":
-                    form_data = understanding.get("form")
-                    await update_ui(0, "completed", output_data=understanding, details=f"Missing critical inputs. Form requested.")
-
-                    # Save the NEEDS_INPUT message to DB with form data
-                    async with AsyncSessionLocal() as db:
-                        ai_msg = Message(
-                            message_id=str(uuid.uuid4()),
-                            chat_id=chat_id,
-                            user_id=user_id,
-                            role="ai",
-                            content=form_data.get("description", "I need more information to proceed."),
-                            form_data=json.dumps(form_data),
-                            created_at=datetime.now(timezone.utc)
-                        )
-                        db.add(ai_msg)
-                        await db.commit()
-
-                    return {"status": "NEEDS_INPUT", "form": form_data}
-
-                task_summary = understanding.get("task_summary", "Processing...")
-                confirmed_inputs = understanding.get("confirmed_inputs", {})
-                discovery_strategy = understanding.get("discovery_strategy", "direct_execution")
-
-                # Retroactively scrub the just-stored Message.content using the
-                # ground-truth sensitive values Agent-1 itself extracted into
-                # confirmed_inputs (e.g. password/card fields). This catches free-
-                # text disclosures the label:value regex above can't reliably parse
-                # (e.g. "use hunter2 as the password") without guessing at secret
-                # detection ourselves — we trust Agent-1's own field extraction.
-                _post_understanding_secrets = await self._retroactively_redact_message_content(
-                    human_msg.message_id, _stored_content, confirmed_inputs
-                )
-
-                # Same ground-truth secret values also gate AgentExecutionLog: the
-                # stage-0 "in-progress" row above was logged before confirmed_inputs
-                # was known, so retroactively scrub it too (and remember these
-                # values so any later update_ui() calls in this run scrub proactively).
-                if _post_understanding_secrets:
-                    _agent_log_secret_values.extend(v for v in _post_understanding_secrets if v)
-                    await _rescrub_agent_execution_logs(_post_understanding_secrets)
-
-                # ── Memory routing: extract domain + retrieve relevant memories ──
-                domain = self._extract_domain_from_task(user_message, confirmed_inputs)
-                if self.memory_service:
-                    try:
-                        mem_ctx = await self.memory_service.retrieve(user_id, domain, task_summary)
-                        memory_block = mem_ctx.to_prompt_block()
-                        if memory_block:
-                            logger.info(f"[Memory] Injecting {len(memory_block)} chars for domain '{domain}'")
-                    except Exception as _me:
-                        logger.warning(f"[Memory] retrieve error (non-fatal): {_me}")
-
-                await update_ui(
-                    0,
-                    "completed",
-                    output_data={**understanding, "confirmed_inputs": self._redact_confirmed_inputs(confirmed_inputs)},
-                    details=f"Task Summary: {task_summary}",
-                )
-                # --- NEW: Update Session Title based on Task Summary ---
-                async with AsyncSessionLocal() as db:
-                    stmt = select(ChatSession).where(ChatSession.id == chat_id)
-                    res = await db.execute(stmt)
-                    session_db = res.scalar_one_or_none()
-                    if session_db and (session_db.title == "New Chat" or len(session_db.title) < 5):
-                        session_db.title = task_summary[:100]
-                        await db.commit()
-            # --- Agent 2: Execution (with Retries & AI Thinking) ---
-            retry_count = 0
-            max_retries = 3
-            last_error = None
-            obstacle_paused = False
-            final_response = None
-            all_tool_calls = [] # Track all tool calls for saving to DB
-
-            # 1. Get the user's private session
-            session_obj = self.session_manager.get_session(user_id)
-            user_port = session_obj.get("port")
+            # 5. Run the agent and stream results
+            messages = [HumanMessage(content=message)]
             
-            # 2. Initialize MCP manager — create fresh if missing OR if previous init failed
-            existing_mgr = session_obj.get("mcp_manager")
-            if existing_mgr and not getattr(existing_mgr, "_initialized", False):
-                # Previous init failed — close the dead manager and replace it
-                logger.info(f"Replacing dead MCP manager for user {user_id} (prev _initialized=False)...")
-                try:
-                    await existing_mgr.close()
-                except Exception:
-                    pass
-                session_obj["mcp_manager"] = None
+            if self.stream_manager:
+                await self.stream_manager.broadcast_thought(chat_id, "Agent starting execution...")
 
-            # Pre-flight proxy check — verify the proxy is reachable and show exit IP
-            _proxy_url_preflight = session_obj.get("proxy_url")
-            if _proxy_url_preflight:
-                from urllib.parse import urlparse as _pf_up, urlunparse as _pf_uu
-                def _mask_proxy(url: str) -> str:
-                    try:
-                        _p = _pf_up(url)
-                        if _p.password:
-                            netloc = f"{_p.username}:***@{_p.hostname}"
-                            if _p.port:
-                                netloc += f":{_p.port}"
-                            return _pf_uu((_p.scheme, netloc, _p.path, _p.params, _p.query, _p.fragment))
-                    except Exception:
-                        pass
-                    return url
+            final_response = ""
+            # Use updates mode to intercept tool messages
+            async for event in agent_executor.astream({"messages": messages}, stream_mode="updates"):
+                logger.info(f"Agent stream event keys: {list(event.keys())}")
+                # Dynamically process any node that outputs message state updates
+                for node_name, node_output in event.items():
+                    if not isinstance(node_output, dict) or "messages" not in node_output:
+                        continue
+                    for msg in node_output["messages"]:
+                        # Process ToolMessage content (screenshots / base64 frame extraction)
+                        if isinstance(msg, ToolMessage) or (hasattr(msg, "type") and msg.type == "tool"):
+                            content = msg.content
+                            b64_frame = None
 
-                try:
-                    _exit_ip = None
-                    _pf_last_exc = None
-                    for _pf_url in (config.IP_CHECK_URLS or [config.IP_CHECK_URL]):
-                        try:
-                            async with httpx.AsyncClient(proxy=_proxy_url_preflight, timeout=config.PROXY_TEST_TIMEOUT_SECONDS) as _pc:
-                                _ip_resp = await _pc.get(_pf_url)
-                            _ip_resp.raise_for_status()
-                            _ip_data = _ip_resp.json()
-                            _exit_ip = _ip_data.get("ip") or _ip_data.get("origin") or _ip_data.get("query")
-                            if _exit_ip:
-                                break
-                        except Exception as _pf_exc:
-                            _pf_last_exc = _pf_exc
-                            continue
-                    if not _exit_ip:
-                        raise ValueError(f"No IP found across {len(config.IP_CHECK_URLS or [config.IP_CHECK_URL])} check endpoint(s): {_pf_last_exc}")
-                    logger.info(f"Proxy pre-flight OK for user {user_id} — exit IP: {_exit_ip}")
-                    if self.stream_manager:
-                        await self.stream_manager.broadcast_thought(
-                            chat_id,
-                            f"Proxy active — exit IP: {_exit_ip}",
-                        )
-                except Exception as _proxy_err:
-                    logger.warning(
-                        f"Proxy pre-flight failed for user {user_id} "
-                        f"({_mask_proxy(_proxy_url_preflight)}): {_proxy_err}. "
-                        "Falling back to direct connection."
-                    )
-                    if self.stream_manager:
-                        await self.stream_manager.broadcast_thought(
-                            chat_id,
-                            f"Proxy unreachable. Falling back to direct datacenter connection.",
-                        )
-                    # Clear proxy and close any existing manager so this run uses a direct connection
-                    session_obj["proxy_url"] = None
-                    _dead_mgr = session_obj.get("mcp_manager")
-                    if _dead_mgr:
-                        try:
-                            await _dead_mgr.close()
-                        except Exception:
-                            pass
-                        session_obj["mcp_manager"] = None
-
-            if not session_obj.get("mcp_manager"):
-                logger.info(f"Preparing MCP manager for user {user_id} on port {user_port}...")
-                ua_index = session_obj.get("ua_index", 0)
-                user_cdp_url = session_obj.get("cdp_url")  # set when user connects their own browser
-                user_proxy_url = session_obj.get("proxy_url")  # residential proxy URL
-                user_browser_engine = session_obj.get("browser_engine")  # None if not explicitly set; MCPToolManager falls back to env then "camoufox"
-                if user_cdp_url:
-                    logger.info(f"Using user-provided CDP URL for {user_id}: {user_cdp_url}")
-                    session_obj["mcp_manager"] = MCPToolManager(
-                        cdp_url=user_cdp_url,
-                        user_agent_index=ua_index,
-                        own_browser=False,
-                        proxy_url=user_proxy_url,
-                        browser_engine=user_browser_engine,
-                    )
-                else:
-                    session_obj["mcp_manager"] = MCPToolManager(port=user_port, user_agent_index=ua_index, proxy_url=user_proxy_url, browser_engine=user_browser_engine)
-
-            mcp_manager = session_obj["mcp_manager"]
-            
-            # 3. Discover tools ONCE outside the retry loop to save time
-            # If user's external browser is unreachable, fall back to cloud browser automatically.
-            try:
-                all_tools = await mcp_manager.get_tools()
-            except Exception as _cdp_err:
-                user_cdp_url = session_obj.get("cdp_url")
-                if user_cdp_url:
-                    logger.warning(
-                        f"External CDP browser at {user_cdp_url} is unreachable ({_cdp_err}). "
-                        "Clearing CDP URL and falling back to cloud browser."
-                    )
-                    # Broadcast fallback notice to UI
-                    if self.stream_manager:
-                        await self.stream_manager.broadcast_thought(
-                            chat_id,
-                            "Your connected browser appears to be offline. Falling back to the cloud browser for this run.",
-                        )
-                    session_obj["cdp_url"] = None
-                    try:
-                        await mcp_manager.close()
-                    except Exception:
-                        pass
-                    session_obj["mcp_manager"] = MCPToolManager(port=user_port, user_agent_index=session_obj.get("ua_index", 0), proxy_url=session_obj.get("proxy_url"), browser_engine=session_obj.get("browser_engine"))
-                    mcp_manager = session_obj["mcp_manager"]
-                    all_tools = await mcp_manager.get_tools()
-                else:
-                    raise
-            logger.info(f"Discovered {len(all_tools)} tools for execution.")
-
-            # Check whether the bridge fell back from Camoufox to Chrome and notify the user
-            _fallback_flag = Path(f"/tmp/camoufox_fallback_{user_port}.json")
-            if _fallback_flag.exists():
-                _fallback_reason = None
-                try:
-                    _fallback_data = json.loads(_fallback_flag.read_text())
-                    _fallback_reason = (_fallback_data.get("reason") or "").strip() or None
-                except Exception:
-                    pass
-                try:
-                    _fallback_flag.unlink()
-                except Exception:
-                    pass
-                logger.warning(
-                    f"[brain] Camoufox → Chrome fallback detected for user {user_id}, "
-                    f"notifying chat {chat_id} (reason: {_fallback_reason or 'unknown'})"
-                )
-                if self.stream_manager:
-                    _reason_suffix = f" ({_fallback_reason})" if _fallback_reason else ""
-                    await self.stream_manager.broadcast_notification(
-                        chat_id,
-                        "camoufox_fallback",
-                        (
-                            "Stealth browser (Camoufox) couldn't start"
-                            f"{_reason_suffix}, so this run automatically switched to "
-                            "regular headless Chrome instead. Bot-detection evasion may be "
-                            "reduced for this run — change the default engine anytime in Settings."
-                        ),
-                    )
-
-            # Start direct-CDP screenshot stream (no MCP tools needed)
-            self.clear_live_tool_logs(chat_id)  # fresh slate for this execution
-            stop_stream = asyncio.Event()
-            stream_task = asyncio.create_task(self._stream_browser_frames(user_id, chat_id, stop_stream))
-
-            # Set on the first retry-loop iteration if this run is resuming from an
-            # obstacle answer (e.g. an OTP code) — threaded into _execute_tool_graph
-            # so it can scrub the raw value out of ToolExecutionLog rows. Initialized
-            # here so it's always defined at the _execute_tool_graph call site below,
-            # regardless of which branch (resume vs. fresh) executes on a given retry.
-            _otp_answer_for_redaction: Optional[str] = None
-            # Set True on the first resumed attempt after an address obstacle
-            # answer (candidate selection or manual entry) so the Address
-            # Agent's scoring/escalation logic is suppressed for this run —
-            # the user's value is authoritative and must not be re-evaluated.
-            _address_resume_active = False
-
-            while retry_count < max_retries:
-                # --- Cooperative cancellation: exit cleanly if user pressed Stop ---
-                if chat_id in self.cancelled_chats:
-                    self.cancelled_chats.discard(chat_id)
-                    logger.info(f"[Cooperative cancel] Exiting process loop for chat_id {chat_id}")
-                    raise asyncio.CancelledError("Stopped by user")
-
-                try:
-                    await update_ui(1, "in-progress", input_data={"task_summary": task_summary, "confirmed_inputs": self._redact_confirmed_inputs(confirmed_inputs), "retry": retry_count})
-                    
-                    # --- Execution via MCP Tool Graph (Standardized) ---
-                    logger.info(f"Executing via MCP Tool Graph (Attempt {retry_count + 1})...")
-                    
-                    # 1. Generate the mission objective (with prior browser state if available)
-                    prior_context_str = ""
-                    if prior_session_state:
-                        prior_context_str = (
-                            "## CURRENT BROWSER STATE\n"
-                            f"The agent has already completed: {prior_session_state.get('accomplishment_summary', '')}\n"
-                            f"The browser is currently on: {prior_session_state.get('last_url', 'unknown page')}\n"
-                            "IMPORTANT: Continue from this state. Do NOT re-navigate to the start URL or redo "
-                            "steps that have already been completed. Pick up exactly where the previous "
-                            "message left off."
-                        )
-                    reasoning = ""
-                    plan_data = []
-
-                    if (
-                        pending_obstacle and retry_count == 0
-                        and pending_obstacle.get("obstacle_category") == "address"
-                        and pending_obstacle.get("obstacle_type") != "manual_entry"
-                    ):
-                        # Resuming after the user picked (or rejected) an address
-                        # candidate — per address.agent.md step 7, use exactly what
-                        # they chose and do not re-run scoring/escalation on it.
-                        _selected_address = _extract_form_answer(user_message)
-                        if not _selected_address or _selected_address.strip() == "__none__":
-                            # "None of these are correct" — never type the sentinel
-                            # value into the page. Ask the user to type the exact
-                            # address manually instead of guessing or looping.
-                            _manual_form = {
-                                "title": "Enter the Correct Address",
-                                "description": (
-                                    "None of the suggested addresses were correct. Please type the "
-                                    "exact address to enter (street, house/unit number, city, and "
-                                    "postal code)."
-                                ),
-                                "sections": [
-                                    {
-                                        "section_title": None,
-                                        "fields": [
-                                            {
-                                                "id": "manual_address",
-                                                "label": "Full address",
-                                                "type": "text",
-                                                "placeholder": "e.g. 123 Main St, Springfield, IL 62704",
-                                                "required": True,
-                                                "options": None,
-                                                "note": "Used once to continue this task.",
-                                            }
-                                        ],
-                                    }
-                                ],
-                                "security_note": None,
-                                "obstacle_type": "manual_entry",
-                                "obstacle_category": "address",
-                            }
-                            await update_ui(1, "completed", details="Paused — needs the correct address typed in manually.")
-                            self.pending_confirmed_inputs[chat_id] = confirmed_inputs
-                            _manual_obstacle_state = {
-                                "obstacle_type": "manual_entry",
-                                "obstacle_category": "address",
-                                "skill_name": "address_manual_entry",
-                                "site_domain": pending_obstacle.get("site_domain", ""),
-                                "task_summary": task_summary,
-                                "confirmed_inputs": self._redact_confirmed_inputs(confirmed_inputs),
-                                "discovery_strategy": discovery_strategy,
-                                "attempt": _obstacle_attempt_count,
-                                "created_at": datetime.now(timezone.utc).isoformat(),
-                            }
-                            async with AsyncSessionLocal() as db:
-                                upd_stmt = select(ChatSession).where(ChatSession.id == chat_id)
-                                upd_res = await db.execute(upd_stmt)
-                                upd_row = upd_res.scalar_one_or_none()
-                                if upd_row:
-                                    _existing_state = {}
-                                    if upd_row.session_state:
-                                        try:
-                                            _existing_state = json.loads(upd_row.session_state)
-                                        except Exception:
-                                            _existing_state = {}
-                                    _existing_state["pending_obstacle"] = _manual_obstacle_state
-                                    upd_row.session_state = json.dumps(_existing_state)
-                                    await db.commit()
-                                ai_msg = Message(
-                                    message_id=str(uuid.uuid4()),
-                                    chat_id=chat_id,
-                                    user_id=user_id,
-                                    role="ai",
-                                    content=_manual_form["description"],
-                                    form_data=json.dumps(_manual_form),
-                                    created_at=datetime.now(timezone.utc)
-                                )
-                                db.add(ai_msg)
-                                await db.commit()
-                            obstacle_paused = True
-                            return {"status": "NEEDS_INPUT", "form": _manual_form}
-                        _address_resume_active = True
-                        mission_objective = (
-                            f"The user confirmed the exact address to use: '{_selected_address}'. "
-                            "Type/select exactly this address (do not modify it, do not pick a "
-                            "different suggestion, and do not re-evaluate other candidates), "
-                            "verify the field reflects it, then submit/continue. "
-                            f"Then proceed with the original task: {task_summary}."
-                        )
-                        pending_obstacle = None  # only bypass planning on this first resumed attempt
-                    elif (
-                        pending_obstacle and retry_count == 0
-                        and pending_obstacle.get("obstacle_category") == "address"
-                        and pending_obstacle.get("obstacle_type") == "manual_entry"
-                    ):
-                        # Resuming after the user typed a fully manual address
-                        # (they rejected every suggested candidate previously).
-                        _manual_address = _extract_form_answer(user_message)
-                        _address_resume_active = True
-                        mission_objective = (
-                            f"The user typed the exact address to use: '{_manual_address}'. "
-                            "Type exactly this address into the address field. If a suggestion "
-                            "dropdown appears, only select it if it is an exact match for this "
-                            "value; otherwise dismiss the dropdown and keep the typed value. "
-                            f"Then proceed with the original task: {task_summary}."
-                        )
-                        pending_obstacle = None
-                    elif pending_obstacle and retry_count == 0:
-                        # Resuming after the user answered an obstacle prompt (e.g. an
-                        # OTP code) — feed their answer straight into the graph instead
-                        # of re-planning from scratch.
-                        _otp_answer = _extract_form_answer(user_message)
-                        _otp_answer_for_redaction = _otp_answer
-                        if _otp_answer_for_redaction:
-                            _agent_log_secret_values.append(str(_otp_answer_for_redaction))
-                        mission_objective = (
-                            f"The user was asked for a '{pending_obstacle.get('obstacle_type', 'verification')}' "
-                            f"and responded: '{_otp_answer}'. Enter this into the corresponding field on the "
-                            f"current page (e.g. the verification/OTP code field) and submit/continue. "
-                            f"Then proceed with the original task: {task_summary}."
-                        )
-                        pending_obstacle = None  # only bypass planning on this first resumed attempt
-                    else:
-                        mission_objective = await self.atag_processor.run_execution_generation(
-                            user_message, task_summary, confirmed_inputs, discovery_strategy,
-                            prior_context=prior_context_str
-                        )
-
-                    if "REASONING:" in mission_objective and "PLAN:" in mission_objective:
-                        try:
-                            parts = re.split(r"REASONING:|PLAN:|MISSION OBJECTIVE:", mission_objective)
-                            if len(parts) >= 4:
-                                reasoning = parts[1].strip()
-                                plan_str = parts[2].strip()
-                                mission_objective = parts[3].strip()
+                            if isinstance(content, list):
+                                new_content = ""
+                                for block in content:
+                                    if isinstance(block, dict):
+                                        b_type = block.get("type")
+                                        if b_type == "image_url":
+                                            url = block.get("image_url", {}).get("url", "")
+                                            if url.startswith("data:image"):
+                                                b64_frame = url.split(",", 1)[-1]
+                                            else:
+                                                b64_frame = url
+                                            new_content += "[Image Data Omitted]\n"
+                                        elif b_type == "image":
+                                            # Native MCP image block
+                                            b64_frame = block.get("data", "")
+                                            new_content += "[Image Data Omitted]\n"
+                                        elif b_type == "text":
+                                            new_content += str(block.get("text", "")) + "\n"
+                                        else:
+                                            new_content += str(block) + "\n"
+                                    else:
+                                        new_content += str(block) + "\n"
+                                msg.content = new_content.strip()
+                            elif isinstance(content, str):
+                                if "[SCREENSHOT]" in content:
+                                    match = re.search(r'\[SCREENSHOT\](.*?)\[/SCREENSHOT\]', content, flags=re.DOTALL)
+                                    if match:
+                                        b64_frame = match.group(1)
+                                    msg.content = re.sub(r'\[SCREENSHOT\].*?\[/SCREENSHOT\]', '[Image Data]', content, flags=re.DOTALL)
+                                else:
+                                    # Parse JSON output from MCP browser_get_state
+                                    try:
+                                        import json
+                                        data = json.loads(content)
+                                        if isinstance(data, dict) and "screenshot" in data:
+                                            b64_frame = data["screenshot"]
+                                            # Strip the giant base64 from content to avoid bloating LLM memory
+                                            data["screenshot"] = "[Image Data]"
+                                            msg.content = json.dumps(data, indent=2)
+                                    except Exception:
+                                        # Fallback regex search for "screenshot" field
+                                        match = re.search(r'"screenshot"\s*:\s*"([^"]+)"', content)
+                                        if match:
+                                            b64_frame = match.group(1)
+                                            msg.content = re.sub(r'"screenshot"\s*:\s*"[^"]+"', '"screenshot": "[Image Data]"', content)
                                 
-                                json_match = re.search(r"\[.*\]", plan_str, re.DOTALL)
-                                if json_match:
-                                    plan_data = json.loads(json_match.group(0))
-                                    # --- FIX: Ensure unique IDs to prevent React key warnings ---
-                                    # We re-index the plan starting from 2 (since Analysis is 1)
-                                    for i, task in enumerate(plan_data):
-                                        task["id"] = str(i + 2)
-                                        # Ensure the task itself has a non-empty title
-                                        if not task.get("title", "").strip():
-                                            task["title"] = task.get("description", "").split(".")[0].strip() or f"Step {i + 2}"
-                                        # Sanitise subtask titles so the frontend fallback
-                                        # ("Step N") is never triggered in normal runs.
-                                        for j, sub in enumerate(task.get("subtasks", [])):
-                                            if not sub.get("title", "").strip():
-                                                sub["title"] = (
-                                                    sub.get("description", "").split(".")[0].strip()
-                                                    or f"{task['title']} — part {j + 1}"
-                                                )
-                                    current_plan = [current_plan[0]] + plan_data
-                                    if self.stream_manager:
-                                        await self.stream_manager.broadcast_plan(chat_id, current_plan)
-                        except Exception as e:
-                            logger.error(f"Failed to parse reasoning/plan: {e}")
-
-                    # Update UI to show we are starting execution
-                    if len(current_plan) > 1:
-                        await update_ui(1, "in-progress", details="Executing mission steps via MCP...")
-
-                    # 2. Execute via MCP Tool Graph
-                    graph_input = {"messages": [HumanMessage(content=mission_objective)]}
-                    graph_output = await self._execute_tool_graph(
-                        graph_input, all_tools, user_id, chat_id, task_summary, confirmed_inputs, update_ui_func=update_ui, memory_block=memory_block,
-                        obstacle_answer=_otp_answer_for_redaction, suppress_address_agent=_address_resume_active
-                    )
+                            if b64_frame and self.stream_manager:
+                                asyncio.create_task(self.stream_manager.broadcast_frame(b64_frame, user_id, is_tool=False))
                     
-                    # Capture tool calls from the graph execution — this list is
-                    # persisted verbatim to Message.tool_calls below, so it must go
-                    # through the exact same value-based secret scrub as
-                    # ToolExecutionLog (sensitive confirmed_inputs values + the
-                    # current obstacle answer), or a typed password/OTP surfaces in
-                    # the messages table even though ToolExecutionLog is clean.
-                    if "execution_history" in graph_output:
-                        _msg_secret_values = self._extract_sensitive_values(confirmed_inputs)
-                        if _otp_answer_for_redaction:
-                            _msg_secret_values.append(str(_otp_answer_for_redaction))
-                        for entry in graph_output["execution_history"]:
-                            # Prefer the real ToolExecutionLog.id captured in _call_tool
-                            # so this links to an actual persisted row the scheduler can
-                            # look up. Only fall back to a fresh uuid4 if it's missing
-                            # (e.g. older code paths that don't set "id" on the entry).
-                            all_tool_calls.append({
-                                "id": entry.get("id") or str(uuid.uuid4()),
-                                "tool_name": entry["tool"],
-                                "tool_input": {}, # Input is not easily available here, but we have the result
-                                "tool_output": self._redact_secret_values_in_text(entry["result"][:1000], _msg_secret_values),
-                                "status": entry["status"],
-                                "created_at": datetime.now(timezone.utc).isoformat()
-                            })
+                        # Process AIMessage content (thoughts & responses)
+                        elif isinstance(msg, AIMessage) or (hasattr(msg, "type") and msg.type == "ai"):
+                            if msg.content:
+                                final_response = msg.content
+                            if self.stream_manager and msg.content:
+                                await self.stream_manager.broadcast_thought(chat_id, msg.content)
 
-                    final_msg = graph_output["messages"][-1].content
-                    if "Error" not in final_msg and "failed" not in final_msg.lower():
-                        final_response = final_msg
-                        # Mark all steps as completed
-                        for i in range(1, len(current_plan)):
-                            await update_ui(i, "completed")
-                        
-                        await update_ui(1, "completed", output_data={"response": final_response}, details="Task completed successfully via MCP.")
-
-                        # --- Persist session state for multi-turn continuity ---
-                        try:
-                            exec_history = graph_output.get("execution_history", [])
-                            # Find the last URL from any navigation tool result
-                            last_url = prior_session_state.get("last_url", "")
-                            for entry in exec_history:
-                                tool_name = entry.get("tool", "")
-                                result_text = entry.get("result", "")
-                                if tool_name in ("browser_navigate", "browser_go_back", "browser_go_forward") and result_text:
-                                    # Extract URL from result text if present
-                                    url_match = re.search(r'https?://[^\s\'"]+', result_text)
-                                    if url_match:
-                                        last_url = url_match.group(0).rstrip(".,)")
-                            # Build a brief accomplishment summary from successful steps
-                            success_steps = [
-                                e["tool"] for e in exec_history if e.get("status") == "SUCCESS"
-                            ]
-                            accomplishment = f"{task_summary}. Steps completed: {', '.join(success_steps[:8])}."
-                            new_session_state = {
-                                "last_url": last_url,
-                                "accomplishment_summary": accomplishment[:500],
-                                "ts": datetime.now(timezone.utc).timestamp(),
-                            }
-                            async with AsyncSessionLocal() as db:
-                                upd_stmt = select(ChatSession).where(ChatSession.id == chat_id)
-                                upd_res = await db.execute(upd_stmt)
-                                upd_row = upd_res.scalar_one_or_none()
-                                if upd_row:
-                                    upd_row.session_state = json.dumps(new_session_state)
-                                    await db.commit()
-                            logger.info(f"[SessionState] Saved for chat {chat_id}: url={last_url}")
-                        except Exception as _ss_err:
-                            logger.warning(f"[SessionState] save error (non-fatal): {_ss_err}")
-
-                        break
-                    else:
-                        raise Exception(f"Execution failed: {final_msg}")
-
-                except ObstacleInputNeeded as obstacle_exc:
-                    # Track how many times this run has paused for human input — if the
-                    # user's answer didn't resolve it and we hit the SAME obstacle again,
-                    # stop asking forever and explain clearly instead.
-                    _obstacle_attempt_count += 1
-                    if _obstacle_attempt_count > 2:
-                        logger.warning(
-                            f"[Obstacle] '{obstacle_exc.match.skill_name}' on {obstacle_exc.site_domain} "
-                            f"still unresolved after {_obstacle_attempt_count} attempts — giving up gracefully."
-                        )
-                        final_response = (
-                            f"I got stuck on a {obstacle_exc.match.category} step on {obstacle_exc.site_domain} — "
-                            f"the code you provided may not have worked, or the site needs a fresh one. Please "
-                            f"try the task again with a new/rechecked code."
-                        )
-                        if self.memory_service:
-                            try:
-                                await self.memory_service._update_procedural(
-                                    user_id, obstacle_exc.match.skill_name, obstacle_exc.site_domain, [], success=False,
-                                )
-                                await self.memory_service.store_reflection(
-                                    user_id,
-                                    obstacle_exc.site_domain,
-                                    (
-                                        f"Obstacle '{obstacle_exc.match.skill_name}' on {obstacle_exc.site_domain} "
-                                        f"was not resolved after {_obstacle_attempt_count} user-provided answers."
-                                    ),
-                                    category="OTP" if obstacle_exc.match.category == "otp" else obstacle_exc.match.category.upper(),
-                                    severity="MEDIUM",
-                                )
-                            except Exception:
-                                pass
-                        # No further resume will happen for this run — drop any
-                        # cached credentials so they don't linger in memory.
-                        self.pending_confirmed_inputs.pop(chat_id, None)
-                        await update_ui(1, "failed", details=final_response)
-                        break
-
-                    # _obstacle_attempt_count > 1 means the user already answered once
-                    # for this exact obstacle and we hit it again — their prior code
-                    # didn't work. Never resubmit it; explicitly ask for a fresh one.
-                    form_data = build_input_form(
-                        obstacle_exc.match, obstacle_exc.site_domain, is_retry=_obstacle_attempt_count > 1
-                    )
-                    await update_ui(1, "completed", details=f"Paused — needs {obstacle_exc.match.category} input from the user.")
-
-                    # Keep the real account/credential values in memory ONLY for
-                    # the resume step — they must never be written to the
-                    # database. Only a redacted placeholder goes into
-                    # session_state so a reader of the DB can see the run is
-                    # paused without ever seeing the personal data involved.
-                    self.pending_confirmed_inputs[chat_id] = confirmed_inputs
-                    _pending_obstacle_state = {
-                        "obstacle_type": obstacle_exc.match.obstacle_type,
-                        "obstacle_category": obstacle_exc.match.category,
-                        "skill_name": obstacle_exc.match.skill_name,
-                        "site_domain": obstacle_exc.site_domain,
-                        "task_summary": task_summary,
-                        "confirmed_inputs": self._redact_confirmed_inputs(confirmed_inputs),
-                        "discovery_strategy": discovery_strategy,
-                        "attempt": _obstacle_attempt_count,
-                        "created_at": datetime.now(timezone.utc).isoformat(),
-                    }
-                    async with AsyncSessionLocal() as db:
-                        upd_stmt = select(ChatSession).where(ChatSession.id == chat_id)
-                        upd_res = await db.execute(upd_stmt)
-                        upd_row = upd_res.scalar_one_or_none()
-                        if upd_row:
-                            _existing_state = {}
-                            if upd_row.session_state:
-                                try:
-                                    _existing_state = json.loads(upd_row.session_state)
-                                except Exception:
-                                    _existing_state = {}
-                            _existing_state["pending_obstacle"] = _pending_obstacle_state
-                            upd_row.session_state = json.dumps(_existing_state)
-                            await db.commit()
-
-                    async with AsyncSessionLocal() as db:
-                        ai_msg = Message(
-                            message_id=str(uuid.uuid4()),
-                            chat_id=chat_id,
-                            user_id=user_id,
-                            role="ai",
-                            content=form_data.get("description", "I need more information to proceed."),
-                            form_data=json.dumps(form_data),
-                            created_at=datetime.now(timezone.utc)
-                        )
-                        db.add(ai_msg)
-                        await db.commit()
-
-                    obstacle_paused = True
-                    return {"status": "NEEDS_INPUT", "form": form_data}
-
-                except Exception as e:
-                    retry_count += 1
-                    last_error = str(e)
-                    logger.warning(f"Execution attempt {retry_count} failed: {last_error}")
-                    
-                    if retry_count < max_retries:
-                        await update_ui(1, "in-progress", details=f"Attempt {retry_count} failed. Resetting browser with new identity and retrying…")
-
-                        # --- Browser reset: close stale session, rotate user agent, reopen ---
-                        logger.info(f"[Retry] Closing browser for user {user_id} before retry {retry_count + 1}...")
-                        await self.session_manager.close_browser(user_id)
-
-                        # Rotate user agent for the fresh browser so the site sees a different client
-                        next_ua = (session_obj.get("ua_index", 0) + 1) % 5
-                        session_obj["ua_index"] = next_ua
-                        logger.info(f"[Retry] Starting fresh browser with user-agent index {next_ua}...")
-                        session_obj["mcp_manager"] = MCPToolManager(port=user_port, user_agent_index=next_ua, proxy_url=session_obj.get("proxy_url"), browser_engine=session_obj.get("browser_engine"))
-                        mcp_manager = session_obj["mcp_manager"]
-
-                        # Re-discover tools from the fresh session
-                        all_tools = await mcp_manager.get_tools()
-
-                        logger.info(f"Running Critic to revise strategy for attempt {retry_count + 1}...")
-                        critic_input_message = f"The previous execution attempt failed with error: {last_error}. Please analyze the current page state and provide a refined strategy to achieve the goal: {task_summary}. Confirmed inputs: {json.dumps(confirmed_inputs)}"
-                        # Deterministic pre-classification (Task #154 Step 4): a cheap
-                        # pattern-match hint for mechanically-detectable failure types
-                        # (timeout/crash/session-expiry/permission/etc.) so the LLM
-                        # critic spends its reasoning on the revised strategy instead
-                        # of re-deriving what the raw error text already answers.
-                        _failure_hint = format_hint(classify_failure(last_error))
-                        revised_strategy = await self.atag_processor.run_critic(
-                            user_message, critic_input_message, last_error, failure_hint=_failure_hint
-                        )
-                        
-                        initial_execution_message = HumanMessage(content=revised_strategy)
-                        await asyncio.sleep(2)
-                    else:
-                        logger.error(f"All {max_retries} attempts failed.")
-                        await update_ui(1, "failed", error=last_error, details=f"All {max_retries} attempts failed. Last error: {last_error}")
-                        final_response = f"I attempted the task {max_retries} times but encountered persistent errors. Last error: {last_error}"
-
+            # 6. Save AI Message to DB
             ai_msg_id = str(uuid.uuid4())
-            # Ensure chat session row exists before inserting a message (FK guard)
-            await self.db_manager.get_or_create_chat_session(user_id, chat_id)
-
-            # Backfill the final message's token_usage/cost from the real
-            # per-stage numbers already written to AgentExecutionLog during
-            # this run (via update_ui -> log_agent_execution), instead of
-            # leaving these columns empty. Mirrors the aggregation the
-            # finally-block credit deduction below already does.
-            _msg_token_usage = None
-            _msg_cost = None
-            if '_agent_log_ids' in locals() and _agent_log_ids:
-                try:
-                    async with AsyncSessionLocal() as _tu_db:
-                        _tu_res = await _tu_db.execute(
-                            select(AgentExecutionLog.token_usage, AgentExecutionLog.cost)
-                            .where(AgentExecutionLog.id.in_(_agent_log_ids))
-                        )
-                        _total_input = _total_output = _total_tokens = 0
-                        _total_cost = 0.0
-                        for _tu_raw, _cost_raw in _tu_res.all():
-                            if _tu_raw:
-                                try:
-                                    _tu_parsed = json.loads(_tu_raw)
-                                    _total_input += int(_tu_parsed.get("input", 0) or 0)
-                                    _total_output += int(_tu_parsed.get("output", 0) or 0)
-                                    _total_tokens += int(_tu_parsed.get("total", 0) or (_tu_parsed.get("input", 0) or 0) + (_tu_parsed.get("output", 0) or 0))
-                                except (ValueError, TypeError):
-                                    pass
-                            if _cost_raw:
-                                try:
-                                    _total_cost += float(_cost_raw)
-                                except (ValueError, TypeError):
-                                    pass
-                    if _total_input or _total_output:
-                        _msg_token_usage = json.dumps({
-                            "input": _total_input,
-                            "output": _total_output,
-                            "total": _total_tokens,
-                        })
-                    if _total_cost > 0:
-                        _msg_cost = str(_total_cost)
-                except Exception as _tu_err:
-                    logger.warning(f"[Message backfill] Failed to aggregate token usage for message {ai_msg_id}: {_tu_err}")
-
             async with AsyncSessionLocal() as db:
                 ai_msg = Message(
                     message_id=ai_msg_id,
                     chat_id=chat_id,
                     user_id=user_id,
                     role="ai",
-                    content=final_response,
-                    plan_data=json.dumps(current_plan),
-                    tool_calls=json.dumps(all_tool_calls),
-                    created_at=datetime.now(timezone.utc),
-                    token_usage=_msg_token_usage,
-                    cost=_msg_cost,
+                    content=final_response or "Task finished.",
+                    tool_calls=json.dumps(executed_tool_calls)
                 )
                 db.add(ai_msg)
                 await db.commit()
 
             return {
                 "success": True,
-                "execution_result": final_response,
-                "plan": current_plan,
                 "message": {
                     "id": ai_msg_id,
-                    "log_id": str(uuid.uuid4()),
-                    "role": "ai",
-                    "content": final_response,
-                    "tool_calls": all_tool_calls,
-                    "created_at": datetime.now(timezone.utc).isoformat()
+                    "content": final_response or "Task finished.",
+                    "tool_calls": executed_tool_calls
                 }
             }
 
         except Exception as e:
-            logger.error(f"Error in process_message: {e}")
-            
-            # --- NEW: Unwrap ExceptionGroup (Python 3.11+) or TaskGroup errors ---
-            error_detail = str(e)
-            if "TaskGroup" in error_detail or "sub-exception" in error_detail:
-                try:
-                    # If it's a PEP 654 ExceptionGroup
-                    if hasattr(e, 'exceptions') and e.exceptions:
-                        error_detail = f"Multiple errors occurred: {', '.join([str(ex) for ex in e.exceptions])}"
-                    # Fallback for anyio TaskGroup strings
-                    elif "1 sub-exception" in error_detail:
-                        logger.warning("Detected anyio TaskGroup error, attempting to extract root cause.")
-                except:
-                    pass
+            logger.error(f"Error in process_message: {traceback.format_exc()}")
+            return {"success": False, "error": str(e)}
 
-            # Ensure current_plan exists before using it
-            if 'current_plan' in locals():
-                await update_ui(len(current_plan) - 1, "failed", error=error_detail, details=f"Overall task failed: {error_detail}")
-
-            # Persist the error as an AI message so it survives page refresh.
-            _error_msg_id = str(uuid.uuid4())
-            try:
-                async with AsyncSessionLocal() as _err_db:
-                    await self.db_manager.get_or_create_chat_session(user_id, chat_id)
-                    _err_msg = Message(
-                        message_id=_error_msg_id,
-                        chat_id=chat_id,
-                        user_id=user_id,
-                        role="ai",
-                        content=f"\u26a0\ufe0f An unexpected error occurred: {error_detail}",
-                        plan_data=json.dumps(current_plan) if 'current_plan' in locals() else None,
-                        tool_calls=json.dumps(all_tool_calls) if 'all_tool_calls' in locals() else None,
-                        created_at=datetime.now(timezone.utc),
-                    )
-                    _err_db.add(_err_msg)
-                    await _err_db.commit()
-            except Exception as _persist_err:
-                logger.warning(f"[Error persist] Failed to persist error message to DB: {_persist_err}")
-
-            return {"success": False, "message": f"An unexpected error occurred: {error_detail}"}
-        finally:
-            # Safely cleanup stream tasks if they were initialized.
-            # IMPORTANT: give the stream task enough time to finish the final-frame
-            # capture (which takes up to ~11 s: 3 s for CDP /json + 8 s for screenshot).
-            # The old 1.0 s timeout killed the task before the results-page frame
-            # could ever be sent, leaving the preview stuck on the first/homepage frame.
-            if 'stop_stream' in locals() and stop_stream:
-                stop_stream.set()
-            if 'stream_task' in locals() and stream_task:
-                try:
-                    await asyncio.wait_for(stream_task, timeout=15.0)
-                except Exception:
-                    pass
-            self.session_manager.remove_active_chat(user_id, chat_id)
-            self.active_tasks.pop(chat_id, None)
-            self.active_plans.pop(chat_id, None)
-
-            # Task #146: deduct this run's actual token cost from the user's
-            # credit balance. Uses the AgentExecutionLog rows written above
-            # (via update_ui) since those already carry the real per-stage cost.
-            if '_agent_log_ids' in locals() and _agent_log_ids:
-                try:
-                    async with AsyncSessionLocal() as _db:
-                        _res = await _db.execute(
-                            select(AgentExecutionLog.cost).where(AgentExecutionLog.id.in_(_agent_log_ids))
-                        )
-                        _run_cost = sum(float(c) for c in _res.scalars().all() if c)
-                    if _run_cost > 0:
-                        await self.db_manager.deduct_credits(user_id, _run_cost)
-                except Exception as _credit_err:
-                    logger.warning(f"[Credits] Failed to deduct usage cost for user {user_id}: {_credit_err}")
-            # Always clear the cooperative-cancel flag so the next message in this
-            # thread isn't immediately killed (handles the CancelledError path where
-            # the discard above was never reached)
-            self.cancelled_chats.discard(chat_id)
-
-            # ── Memory write-back (non-fatal — never blocks cleanup) ──────────
-            # Skip storing an episode when the run merely paused for obstacle input
-            # (e.g. waiting on an OTP code) — it hasn't failed, it's still in flight.
-            if self.memory_service and not ('obstacle_paused' in locals() and obstacle_paused):
-                try:
-                    _outcome = "FAIL"
-                    if 'final_response' in locals() and final_response and \
-                            "attempted the task" not in str(final_response) and \
-                            "encountered persistent errors" not in str(final_response):
-                        _outcome = "SUCCESS"
-                    _compact_steps: List[Dict] = []
-                    if 'graph_output' in locals() and isinstance(graph_output, dict):
-                        for _e in graph_output.get("execution_history", []):
-                            if _e.get("status") == "SUCCESS":
-                                _compact_steps.append({"tool": _e.get("tool", "")})
-                    _d = domain if 'domain' in locals() else "general"
-                    _ts = task_summary if 'task_summary' in locals() else user_message[:200]
-                    await self.memory_service.store_episode(
-                        user_id=user_id,
-                        domain=_d,
-                        task_summary=_ts,
-                        outcome=_outcome,
-                        key_steps=_compact_steps,
-                    )
-                    await self.memory_service.apply_decay(user_id)
-                    logger.info(f"[Memory] Stored {_outcome} episode for domain '{_d}'")
-                except Exception as _mem_err:
-                    logger.warning(f"[Memory] write-back error (non-fatal): {_mem_err}")
-
-    async def _save_session_state(self, chat_id: str, updated_state: dict):
-        """Safely commits processed state dictionaries back into short-lived database queries."""
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(select(ChatSession).where(ChatSession.id == chat_id))
-            session_db = result.scalar_one()
-            session_db.state_data = serialize_state(updated_state)
-            session_db.updated_at = datetime.utcnow()
-            await db.commit()
-
-    async def shutdown(self):
-        """Shutdown helper invoked on lifespan exit."""
-        await self.session_manager.shutdown_all()
-
-
-# ============================================================
-# INSTANTIATE GLOBAL EXPORTS FOR COMPATIBILITY
-# ============================================================
 brain = Brain()
-agent_manager = brain # Export both for compatibility

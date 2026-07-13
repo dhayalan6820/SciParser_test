@@ -24,3 +24,4 @@ passlib[bcrypt]
 Pillow
 camoufox
 pgvector
+deepagents

@@ -1672,6 +1672,61 @@ async def websocket_plan_endpoint(
     finally:
         suspension_watcher.cancel()
 
+@app.websocket("/api/ws/browser")
+async def legacy_browser_websocket(
+    websocket: WebSocket,
+    thread_id: str = Query(...)
+):
+    await websocket.accept()
+    user_id = None
+    try:
+        async with AsyncSessionLocal() as db:
+            from src.database.chat_db import ChatSession
+            session = (await db.execute(select(ChatSession).where(ChatSession.id == thread_id))).scalar_one_or_none()
+            if session:
+                user_id = session.user_id
+    except Exception as e:
+        logger.error(f"Error resolving user_id for thread_id {thread_id} in legacy WS: {e}")
+        
+    if not user_id:
+        # Fallback: find by active session in brain
+        for uid, s in brain.session_manager.sessions.items():
+            if thread_id in s.get("active_chat_ids", set()):
+                user_id = uid
+                break
+                
+    if not user_id:
+        # Local single-user fallback
+        if brain.session_manager.sessions:
+            user_id = list(brain.session_manager.sessions.keys())[0]
+
+    if not user_id:
+        logger.warning(f"Legacy WS: Could not resolve user_id for thread_id {thread_id}")
+        await websocket.close(code=1008)
+        return
+
+    logger.info(f"Legacy WS connected for thread {thread_id} -> user {user_id}")
+    await plan_stream_manager.connect(user_id, websocket, is_browser=True)
+    
+    # Replay last frame
+    cached = plan_stream_manager.last_frame.get(user_id)
+    if cached:
+        try:
+            await websocket.send_json({"event": "frame", "data": cached})
+        except Exception:
+            pass
+
+    try:
+        while True:
+            await websocket.receive()
+    except WebSocketDisconnect:
+        plan_stream_manager.disconnect(user_id, websocket, is_browser=True)
+    except Exception as e:
+        _emsg = str(e)
+        if "Cannot call" not in _emsg and "disconnect" not in _emsg.lower():
+            logger.error(f"Legacy browser WS stream error: {e}")
+        plan_stream_manager.disconnect(user_id, websocket, is_browser=True)
+
 @app.websocket("/sciparser/v1/browser/stream")
 async def browser_stream(
     websocket: WebSocket, 

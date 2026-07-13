@@ -182,7 +182,7 @@ if IS_PRODUCTION and CORS_ALLOWED_ORIGINS == ["*"]:
 # Server
 # ---------------------------------------------------------------------------
 SERVER_HOST = _str("SERVER_HOST", "0.0.0.0")
-SERVER_PORT = _int("SERVER_PORT", 8000)
+SERVER_PORT = _int("SERVER_PORT", 5000)
 
 # ---------------------------------------------------------------------------
 # SMTP / email notifications

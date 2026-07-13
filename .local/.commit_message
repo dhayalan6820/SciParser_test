@@ -1,7 +1,0 @@
-result page overhaul: hide reasoning/thought display from UI while keeping internal memory usage
-
-- Removed all "Agent Reasoning" thought bubble rendering blocks from agent-plan.tsx
-- Removed aiThinking and taskThoughts state + thought_update handler from chat_page.tsx
-- Backend memory_service.retrieve() remains active; agent still learns from past runs internally
-- Frontend now ignores thought_update messages and passes empty thoughts/taskThoughts to Plan
-- TypeScript clean, workflows running
