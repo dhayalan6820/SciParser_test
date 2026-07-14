@@ -69,12 +69,13 @@ class MCPToolManager:
     def stream_manager(self):
         return getattr(self.client, 'stream_manager', None)
 
-    def __init__(self, mcp_config: Dict[str, Any] = None, cdp_url: Optional[str] = None, port: Optional[int] = None, user_agent_index: int = 0, own_browser: bool = True, proxy_url: Optional[str] = None, browser_engine: Optional[str] = None):
+    def __init__(self, mcp_config: Dict[str, Any] = None, cdp_url: Optional[str] = None, port: Optional[int] = None, user_agent_index: int = 0, own_browser: bool = True, proxy_url: Optional[str] = None, browser_engine: Optional[str] = None, user_id: Optional[str] = None):
         if hasattr(self, '_initialized_base') and self._initialized_base:
             return
 
         # Dynamic port assignment for multi-user isolation
         self.port = port or find_free_port()
+        self.user_id = user_id
 
         # Accept direct WebSocket or HTTP CDP URL
         self.cdp_url = cdp_url or f"http://{config.BROWSER_DEFAULT_CDP_HOST}:{self.port}"
@@ -124,6 +125,8 @@ class MCPToolManager:
                     "BROWSER_USE_DISABLE_SECURITY": "true",
                     "BROWSER_USER_AGENT_INDEX": str(user_agent_index),
                     "BROWSER_USE_KEEP_ALIVE": os.getenv("BROWSER_USE_KEEP_ALIVE", "true"),
+                    "BROWSER_USE_USER_ID": user_id or "system",
+                    "BACKEND_API_URL": "http://localhost:8000",
                 },
                 "transport": "stdio",
             }

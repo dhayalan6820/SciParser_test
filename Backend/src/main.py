@@ -1775,6 +1775,14 @@ async def browser_stream(
 async def toggle_browser_state(req: Dict[str, Any], current_user: User = Depends(ChatService.get_current_user)):
     return {"status": "success", "is_active": req.get("is_active")}
 
+@app.post("/sciparser/v1/browser/frame/{user_id}")
+async def post_browser_frame(user_id: str, req: Dict[str, Any]):
+    """Allow internal bridge subprocess to POST live browser frames for real-time preview."""
+    frame_data = req.get("frame")
+    if frame_data:
+        await plan_stream_manager.broadcast_frame(frame_data, user_id, is_tool=False)
+    return {"status": "success"}
+
 @app.post("/sciparser/v1/browser/connect-cdp")
 async def connect_cdp(req: Dict[str, Any], current_user: User = Depends(ChatService.get_current_user)):
     """Store a user-provided CDP URL and verify it is reachable before accepting it."""

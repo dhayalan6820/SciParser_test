@@ -126,15 +126,23 @@ def _patch_mcp_server(browser_session: 'BrowserSession', get_cdp_url_func, headl
 
             # Initialize LLM for extraction
             try:
-                from langchain_openai import ChatOpenAI
                 import os
-                api_key = os.environ.get("OPENAI_API_KEY")
-                base_url = os.environ.get("OPENAI_BASE_URL")
-                model = os.environ.get("BROWSER_USE_MODEL", "gpt-4o-mini")
+                api_key = os.environ.get("OPENROUTER_API_KEY")
+                model = os.environ.get("BROWSER_USE_MODEL", "openai/gpt-4o-mini-search-preview")
                 if api_key:
-                    kwargs_llm = {}
-                    if base_url: kwargs_llm["base_url"] = base_url
-                    self.llm = ChatOpenAI(model=model, api_key=api_key, **kwargs_llm)
+                    try:
+                        from langchain_openrouter import ChatOpenRouter
+                        self.llm = ChatOpenRouter(
+                            model_name=model,
+                            openrouter_api_key=api_key,
+                            temperature=0.8,
+                            max_retries=3,
+                        )
+                    except ImportError:
+                        from langchain_openai import ChatOpenAI
+                        kwargs_llm = {}
+                        if base_url: kwargs_llm["base_url"] = base_url
+                        self.llm = ChatOpenAI(model=model, api_key=api_key, **kwargs_llm)
                 else:
                     self.llm = None
             except Exception as e:
@@ -310,6 +318,43 @@ def _patch_mcp_server(browser_session: 'BrowserSession', get_cdp_url_func, headl
     # print("Bridge: BrowserUseServer patched with CDP and tools", file=sys.stderr)
 
 # ---------------------------------------------------------------------------
+# Frame Streaming Task
+# ---------------------------------------------------------------------------
+
+async def stream_browser_frames(browser_session, user_id: str, backend_url: str):
+    import httpx
+    import base64
+    import asyncio
+    import sys
+    
+    print(f"Bridge [stream]: Starting frame streaming for user_id={user_id} pointing to {backend_url}", file=sys.stderr)
+    # Wait for the browser session to be ready
+    await asyncio.sleep(2)
+    
+    last_frame = None
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        while True:
+            # Check if browser session is alive
+            if getattr(browser_session, "_is_killed", False):
+                print("Bridge [stream]: Browser session is killed, stopping stream loop.", file=sys.stderr)
+                break
+            try:
+                # Capture JPEG screenshot using the built-in browser_session method
+                screenshot_bytes = await browser_session.take_screenshot(format='jpeg', quality=65)
+                if screenshot_bytes:
+                    b64_frame = base64.b64encode(screenshot_bytes).decode('utf-8')
+                    
+                    if b64_frame != last_frame:
+                        last_frame = b64_frame
+                        url = f"{backend_url.rstrip('/')}/sciparser/v1/browser/frame/{user_id}"
+                        resp = await client.post(url, json={"frame": b64_frame})
+                        if resp.status_code != 200:
+                            print(f"Bridge [stream]: POST frame failed with status {resp.status_code}", file=sys.stderr)
+            except Exception as e:
+                print(f"Bridge [stream] error: {e}", file=sys.stderr)
+            await asyncio.sleep(0.35)  # ~3 FPS
+
+# ---------------------------------------------------------------------------
 # Main Execution
 # ---------------------------------------------------------------------------
 
@@ -412,6 +457,12 @@ async def run_bridge():
         await page.add_init_script(STEALTH_JS)
     except Exception as e:
         print(f"Bridge: Stealth JS injection failed: {e}", file=sys.stderr)
+    
+    # Start live screenshot streaming task
+    user_id = os.getenv("BROWSER_USE_USER_ID", "system")
+    backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8000")
+    # Store reference to prevent garbage collection
+    _stream_task = asyncio.create_task(stream_browser_frames(browser_session, user_id, backend_url))
     
     cdp_url = f"http://localhost:{port}"
     os.environ["BROWSER_CDP_URL"] = cdp_url

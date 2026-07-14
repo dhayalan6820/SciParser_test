@@ -60,7 +60,7 @@ class Brain:
             os.environ["BROWSER_USE_SYSTEM_CHROME"] = "false"
             
             temp_port = find_free_port()
-            temp_manager = MCPToolManager(port=temp_port)
+            temp_manager = MCPToolManager(port=temp_port, user_id="system")
             all_tools = await temp_manager.get_tools()
             
             # Restore settings
@@ -157,7 +157,7 @@ class Brain:
             self.live_tool_logs[chat_id].append(log_item)
                 
             # Execute original tool
-            status = "completed"
+            status = "success"
             error_str = None
             output_str = ""
             try:
@@ -244,7 +244,7 @@ class Brain:
             # Setup session
             session_data = self.session_manager.get_session(user_id)
             if not session_data.get("mcp_manager"):
-                session_data["mcp_manager"] = MCPToolManager(port=session_data["port"])
+                session_data["mcp_manager"] = MCPToolManager(port=session_data["port"], user_id=user_id)
             mcp_manager = session_data["mcp_manager"]
 
             # 2. Get tools from MCP

@@ -790,17 +790,28 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                             MCP Tools ({successSelectedTools.length} / {selectedToolLogs.length})
                           </h4>
                           <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
-                            Success tools included in script generation
+                            {successSelectedTools.length === 0
+                              ? "No successful tools selected for script"
+                              : "Success tools included in script generation"}
                           </p>
                         </div>
                       </div>
                       {/* Info pill: how many will be sent */}
-                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                        <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">
-                          {successSelectedTools.length} will be sent
-                        </span>
-                      </div>
+                      {successSelectedTools.length === 0 ? (
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                          <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                          <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest">
+                            0 will be sent
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">
+                            {successSelectedTools.length} will be sent
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {selectedTools.length === 0 ? (
@@ -824,6 +835,18 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                           <p className="text-xs font-black text-amber-400 uppercase tracking-widest mb-1">No Matching Tool Logs</p>
                           <p className="text-[10px] text-amber-400/60 font-bold uppercase tracking-wider leading-relaxed">
                             Selected tool IDs were not found in the current session log.
+                          </p>
+                        </div>
+                      </div>
+                    ) : successSelectedTools.length === 0 ? (
+                      <div className="py-14 flex flex-col items-center justify-center bg-amber-500/5 border border-amber-500/20 rounded-[32px] border-dashed gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                          <AlertCircle className="w-6 h-6 text-amber-400" />
+                        </div>
+                        <div className="text-center px-6">
+                          <p className="text-xs font-black text-amber-400 uppercase tracking-widest mb-1">No Successful Tools</p>
+                          <p className="text-[10px] text-amber-400/60 font-bold uppercase tracking-wider leading-relaxed">
+                            None of the selected tools completed successfully in the chat logs.<br />Only successful tool executions can be included in the automated schedule script.
                           </p>
                         </div>
                       </div>

@@ -2582,9 +2582,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                       <div
                         className={cn(
                           "px-2 py-0.5 rounded-md text-[9px] font-black uppercase",
-                          log.status === "SUCCESS"
+                          (log.status === "SUCCESS" || log.status === "COMPLETED" || log.status === "success" || log.status === "completed")
                             ? "bg-emerald-500/10 text-emerald-600"
-                            : log.status === "FAILED"
+                            : (log.status === "FAILED" || log.status === "ERROR" || log.status === "failed" || log.status === "error")
                               ? "bg-red-500/10 text-red-600"
                               : "bg-blue-500/10 text-blue-600",
                         )}

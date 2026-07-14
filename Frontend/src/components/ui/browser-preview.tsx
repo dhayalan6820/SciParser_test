@@ -222,8 +222,8 @@ export function BrowserPreview({
     const matchesSearch = log.tool_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           JSON.stringify(log.tool_input || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesFilter = logFilter === 'all' ||
-                          (logFilter === 'success' && log.status === 'SUCCESS') ||
-                          (logFilter === 'error'   && log.status === 'FAILED');
+                          (logFilter === 'success' && (log.status === 'SUCCESS' || log.status === 'COMPLETED' || log.status === 'success' || log.status === 'completed')) ||
+                          (logFilter === 'error'   && (log.status === 'FAILED' || log.status === 'ERROR' || log.status === 'failed' || log.status === 'error'));
     return matchesSearch && matchesFilter;
   });
 
@@ -394,9 +394,9 @@ export function BrowserPreview({
                             animate={{ opacity: 1, y: 0 }}
                             className={cn(
                               "group relative flex flex-col gap-2 p-3 rounded-xl border transition-all",
-                              st === 'IN_PROGRESS' ? "border-sky-500/25 bg-sky-500/[0.04]" :
-                              st === 'SUCCESS'     ? "border-emerald-500/15 bg-emerald-500/[0.03]" :
-                                                     "border-red-500/15 bg-red-500/[0.03]",
+                              (st === 'IN_PROGRESS' || st === 'running' || st === 'pending' || st === 'in-progress') ? "border-sky-500/25 bg-sky-500/[0.04]" :
+                              (st === 'SUCCESS' || st === 'COMPLETED' || st === 'success' || st === 'completed')     ? "border-emerald-500/15 bg-emerald-500/[0.03]" :
+                                                                                                                     "border-red-500/15 bg-red-500/[0.03]",
                               isSelectionMode && isSelected && "ring-1 ring-sky-500"
                             )}
                           >
@@ -405,8 +405,8 @@ export function BrowserPreview({
                                 <span className="text-[9px] font-bold text-muted-foreground tabular-nums">{String(idx + 1).padStart(2,'0')}</span>
                                 <span className={cn(
                                   "text-[11px] font-bold truncate",
-                                  st === 'IN_PROGRESS' ? "text-sky-400" :
-                                  st === 'SUCCESS'     ? "text-emerald-500" : "text-red-400"
+                                  (st === 'IN_PROGRESS' || st === 'running' || st === 'pending' || st === 'in-progress') ? "text-sky-400" :
+                                  (st === 'SUCCESS' || st === 'COMPLETED' || st === 'success' || st === 'completed')     ? "text-emerald-500" : "text-red-400"
                                 )}>
                                   {log.tool_name}
                                 </span>
@@ -414,8 +414,8 @@ export function BrowserPreview({
                               <div className="flex items-center gap-1.5 shrink-0">
                                 <span className={cn(
                                   "px-1.5 py-0.5 rounded text-[9px] font-black uppercase",
-                                  st === 'IN_PROGRESS' ? "bg-sky-500/20 text-sky-400" :
-                                  st === 'SUCCESS'     ? "bg-emerald-500/20 text-emerald-500" : "bg-red-500/20 text-red-400"
+                                  (st === 'IN_PROGRESS' || st === 'running' || st === 'pending' || st === 'in-progress') ? "bg-sky-500/20 text-sky-400" :
+                                  (st === 'SUCCESS' || st === 'COMPLETED' || st === 'success' || st === 'completed')     ? "bg-emerald-500/20 text-emerald-500" : "bg-red-500/20 text-red-400"
                                 )}>
                                   {st}
                                 </span>
@@ -611,9 +611,9 @@ export function BrowserPreview({
                     transition={{ duration: 0.2, ease: 'easeOut' }}
                     className="absolute bottom-0 left-0 right-0 z-40 px-4 py-2 bg-card/75 backdrop-blur-md border-t border-border/60 flex items-center gap-2"
                   >
-                {latestToolLog.status === 'IN_PROGRESS' ? (
+                {(latestToolLog.status === 'IN_PROGRESS' || latestToolLog.status === 'running' || latestToolLog.status === 'in-progress') ? (
                   <Loader2 className={cn("h-3 w-3 shrink-0 animate-spin", isLatestStepSlow ? "text-amber-400" : "text-sky-400")} />
-                ) : latestToolLog.status === 'FAILED' ? (
+                ) : (latestToolLog.status === 'FAILED' || latestToolLog.status === 'ERROR' || latestToolLog.status === 'failed' || latestToolLog.status === 'error') ? (
                   <AlertCircle className="h-3 w-3 text-amber-400 shrink-0" />
                 ) : (
                   <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
