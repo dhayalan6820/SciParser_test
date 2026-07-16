@@ -18,7 +18,9 @@ import logging
 from typing import Optional
 from dotenv import load_dotenv
 
-load_dotenv()
+_backend_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_env_path = os.path.join(_backend_root, ".env")
+load_dotenv(dotenv_path=_env_path)
 
 _logger = logging.getLogger("sciparser")
 
@@ -281,4 +283,20 @@ IP_CHECK_URLS = [
         "https://api.ipify.org?format=json,https://ipinfo.io/json,https://ifconfig.me/all.json,https://httpbin.org/ip",
     ).split(",") if u.strip()
 ]
+
+
+# ---------------------------------------------------------------------------
+# Global Directory & File Paths
+# ---------------------------------------------------------------------------
+# The absolute path to the Backend root directory
+BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Centralized paths used by the agents, workspace, and bridge runner
+PROJECTS_DIR = os.path.join(BACKEND_ROOT, "projects")
+SPECS_DIR = os.path.join(BACKEND_ROOT, "src", "agents", "specs")
+MCP_SERVERS_JSON_PATH = os.path.join(BACKEND_ROOT, "src", "agents", "mcp_servers.json")
+BROWSER_USE_BRIDGE_PATH = os.path.join(BACKEND_ROOT, "src", "agents", "browser_use_bridge.py")
+TEMP_DIR_PATH = os.path.join(BACKEND_ROOT, "temp")
+BROWSER_USE_FILE_SYSTEM_PATH = os.path.join(TEMP_DIR_PATH, "browser_mcp_fs")
+
 

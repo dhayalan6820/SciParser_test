@@ -32,7 +32,7 @@
     "browser_scroll": { "description": "Scroll the page or a scrollable container.", "parameters": { "direction": "string", "amount": "int (optional)" } },
     "browser_go_back": { "description": "Navigate back in browser history.", "parameters": {} },
     "browser_get_html": { "description": "Return the raw HTML of the current page (sanitized before reaching the LLM — see _sanitize_browser_observation).", "parameters": {} },
-    "browser_extract_content": { "description": "Extract structured content/text matching a query from the current page.", "parameters": { "query": "string" } },
+    "browser_evaluate": { "description": "Execute custom JavaScript code on the page (for advanced interactions, shadow DOM, custom selectors, data extraction).", "parameters": { "code": "string (required)" } },
     "browser_list_tabs": { "description": "List open browser tabs.", "parameters": {} },
     "browser_switch_tab": { "description": "Switch the active tab.", "parameters": { "tab_id": "string" } },
     "browser_close_tab": { "description": "Close a specific tab.", "parameters": { "tab_id": "string" } },

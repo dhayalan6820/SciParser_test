@@ -391,7 +391,89 @@ class LlmRequest(Base):
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     deleted_at = Column(TIMESTAMP(timezone=True), nullable=True)
 
+    # Observability extensions
+    organization_id = Column(String(50), nullable=True)
+    agent_run_id = Column(String(36), nullable=True)
+    agent_name = Column(String(50), nullable=True)
+    agent_stage = Column(String(20), nullable=True)
+    queue_time_ms = Column(Integer, default=0, server_default="0")
+    processing_time_ms = Column(Integer, default=0, server_default="0")
+    tool_name = Column(String(50), nullable=True)
+    mcp_server = Column(String(50), nullable=True)
+    browser_session = Column(String(100), nullable=True)
+    cache_hit = Column(Boolean, default=False, server_default="false")
+    streaming = Column(Boolean, default=False, server_default="false")
+    request_size = Column(Integer, default=0, server_default="0")
+    response_size = Column(Integer, default=0, server_default="0")
+    temperature = Column(Float, nullable=True)
+    top_p = Column(Float, nullable=True)
+    max_tokens = Column(Integer, nullable=True)
+
     __table_args__ = (
         Index("ix_llm_requests_user_created", "user_id", "created_at"),
         Index("ix_llm_requests_chat_created", "chat_id", "created_at"),
     )
+
+
+class BudgetLimit(Base):
+    __tablename__ = "budget_limits"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    scope = Column(String(50), nullable=False) # "user", "project", "workspace"
+    scope_id = Column(String(100), nullable=False, index=True)
+    daily_budget = Column(Float, nullable=True)
+    monthly_budget = Column(Float, nullable=True)
+    current_daily_spend = Column(Float, default=0.0)
+    current_monthly_spend = Column(Float, default=0.0)
+    alert_thresholds = Column(String(100), default="50,75,90,100")
+    action_at_100 = Column(String(50), default="switch_cheaper_model")
+
+
+class AlertNotification(Base):
+    __tablename__ = "alert_notifications"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    severity = Column(String(20), nullable=False) # "info", "warning", "critical"
+    category = Column(String(50), nullable=False) # "cost", "token", "latency", "loop", "system"
+    title = Column(String(255), nullable=False)
+    message = Column(Text, nullable=False)
+    resolved = Column(Boolean, default=False)
+    created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class MetricSnapshot(Base):
+    __tablename__ = "metric_snapshots"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    cpu_percent = Column(Float)
+    ram_percent = Column(Float)
+    active_websockets = Column(Integer)
+    active_browser_instances = Column(Integer)
+    db_size_bytes = Column(BigInteger)
+    timestamp = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+
+
+class SystemErrorLog(Base):
+    __tablename__ = "system_error_logs"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    error_id = Column(String(50), nullable=False, unique=True, index=True)
+    timestamp = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc), index=True, nullable=False)
+    user_id = Column(String(36), nullable=True, index=True)
+    conversation_id = Column(String(100), nullable=True, index=True)
+    agent_run_id = Column(String(36), nullable=True)
+    api_endpoint = Column(String(255), nullable=True)
+    http_method = Column(String(10), nullable=True)
+    provider = Column(String(50), nullable=True)
+    model = Column(String(100), nullable=True)
+    tool_name = Column(String(50), nullable=True)
+    mcp_server = Column(String(50), nullable=True)
+    browser_session = Column(String(100), nullable=True)
+    severity = Column(String(20), nullable=False) # "info" | "warning" | "error" | "critical"
+    category = Column(String(50), nullable=False)
+    error_code = Column(String(50), nullable=False)
+    error_message = Column(Text, nullable=False)
+    stacktrace = Column(Text, nullable=True)
+    retry_count = Column(Integer, default=0)
+    duration_ms = Column(Integer, default=0)
+

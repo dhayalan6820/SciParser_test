@@ -32,6 +32,7 @@ import { BrowserSessionsTab } from "./admin/browser-sessions-tab";
 import { UsageTab } from "./admin/usage-tab";
 import { SecurityTab } from "./admin/security-tab";
 import { LogsTab } from "./admin/logs-tab";
+import { ObservabilityTab } from "./admin/observability-tab";
 
 interface AdminDashboardProps {
   currentUser: { username: string; email: string } | null;
@@ -44,6 +45,7 @@ type Tab =
   | "users"
   | "operations"
   | "analytics"
+  | "observability"
   | "agents"
   | "automations"
   | "browser-sessions"
@@ -56,6 +58,7 @@ const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "users", label: "Users", icon: <Users className="h-4 w-4" /> },
   { id: "operations", label: "Operations", icon: <Activity className="h-4 w-4" /> },
   { id: "analytics", label: "Analytics", icon: <BarChart3 className="h-4 w-4" /> },
+  { id: "observability", label: "Observability", icon: <Activity className="h-4 w-4" /> },
   { id: "agents", label: "Agent Monitoring", icon: <Bot className="h-4 w-4" /> },
   { id: "automations", label: "Automation Monitoring", icon: <Calendar className="h-4 w-4" /> },
   { id: "browser-sessions", label: "Browser Sessions", icon: <Globe className="h-4 w-4" /> },
@@ -84,6 +87,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         return <OperationsTab />;
       case "analytics":
         return <AnalyticsTab />;
+      case "observability":
+        return <ObservabilityTab />;
       case "agents":
         return <AgentMonitoringTab />;
       case "automations":

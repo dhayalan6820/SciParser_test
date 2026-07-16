@@ -26,6 +26,10 @@ const RANGE_OPTIONS = [
 export const AnalyticsTab: React.FC = () => {
   const { theme } = useTheme();
   const [analytics, setAnalytics] = React.useState<AdminAnalytics | null>(null);
+  const [costData, setCostData] = React.useState<any>(null);
+  const [modelData, setModelData] = React.useState<any>(null);
+  const [contextData, setContextData] = React.useState<any>(null);
+  const [retrievalData, setRetrievalData] = React.useState<any>(null);
   const [days, setDays] = React.useState(30);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -36,8 +40,20 @@ export const AnalyticsTab: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const res = await sciparserApi.adminGetAnalytics(days);
-        if (!cancelled) setAnalytics(res);
+        const [an, cd, md, ctx, ret] = await Promise.all([
+          sciparserApi.adminGetAnalytics(days),
+          sciparserApi.adminGetCostAnalytics(days),
+          sciparserApi.adminGetModelAnalytics(days),
+          sciparserApi.adminGetContextAnalytics(days),
+          sciparserApi.adminGetRetrievalAnalytics(days),
+        ]);
+        if (!cancelled) {
+          setAnalytics(an);
+          setCostData(cd);
+          setModelData(md);
+          setContextData(ctx);
+          setRetrievalData(ret);
+        }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load analytics");
       } finally {
@@ -104,6 +120,96 @@ export const AnalyticsTab: React.FC = () => {
           </div>
         )}
       </Panel>
+
+      {/* Model Performance & Cost breakdown */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Panel title="Active Model Performance" subtitle="Requests, latency, and success rates by model name">
+          <div className="space-y-3">
+            {modelData?.models?.length === 0 ? (
+              <EmptyState label="No active model requests logged." />
+            ) : (
+              modelData?.models?.map((m: any) => (
+                <div key={m.model_name} className="flex flex-col border border-slate-200 dark:border-slate-800 p-3 rounded-lg bg-white dark:bg-slate-900">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{m.model_name}</span>
+                    <span className="text-xs font-medium px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded">{m.requests} runs</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 mt-2 text-center text-xs">
+                    <div>
+                      <p className="text-muted-foreground">Success</p>
+                      <p className="font-semibold text-emerald-500">{m.success_rate}%</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Latency</p>
+                      <p className="font-semibold">{m.avg_latency_ms}ms</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Cost/Run</p>
+                      <p className="font-semibold">${m.avg_cost.toFixed(4)}</p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </Panel>
+
+        <Panel title="Cost Breakdown by Category" subtitle="Feature cost distribution for the platform">
+          <div className="space-y-3">
+            {costData?.breakdown?.map((c: any) => (
+              <div key={c.category} className="flex justify-between items-center p-2.5 border-b border-slate-100 dark:border-slate-850">
+                <span className="text-xs capitalize font-medium">{c.category}</span>
+                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">${c.cost.toFixed(4)}</span>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      </div>
+
+      {/* Context Window & Retrieval Analytics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Panel title="Context Analytics" subtitle="Context sizes and summarization stats">
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-medium">Avg Prompt Size</span>
+              <span className="text-xs font-semibold">{contextData?.avg_prompt_size_tokens?.toLocaleString()} tokens</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-medium">Avg Memory Size</span>
+              <span className="text-xs font-semibold">{contextData?.avg_memory_size_tokens?.toLocaleString()} tokens</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-medium">Context Window Utilization</span>
+              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{contextData?.window_utilization_percent}%</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-medium">Memory Pruning Events</span>
+              <span className="text-xs font-semibold">{contextData?.summarization_events} times</span>
+            </div>
+          </div>
+        </Panel>
+
+        <Panel title="Retrieval & Vector Search" subtitle="Embeddings, recall/precision rates">
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-medium">Embedding API Calls</span>
+              <span className="text-xs font-semibold">{retrievalData?.embedding_calls} calls</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-medium">Vector Searches Run</span>
+              <span className="text-xs font-semibold">{retrievalData?.vector_searches} searches</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-medium">Estimated Precision</span>
+              <span className="text-xs font-semibold text-blue-500">{((retrievalData?.avg_precision ?? 0) * 100).toFixed(0)}%</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-medium">Estimated Recall</span>
+              <span className="text-xs font-semibold text-emerald-500">{((retrievalData?.avg_recall ?? 0) * 100).toFixed(0)}%</span>
+            </div>
+          </div>
+        </Panel>
+      </div>
 
       <Panel title="Token Consumption Over Time" subtitle="Total tokens used per day across all agent runs">
         {analytics.daily_tokens.length === 0 ? (

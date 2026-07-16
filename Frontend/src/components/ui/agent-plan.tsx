@@ -221,11 +221,11 @@ export default function Plan({
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.22 }}
                 className={cn(
-                  "rounded-xl border overflow-hidden",
+                  "rounded-xl border overflow-hidden transition-all duration-200",
                   isActive
-                    ? "border-sky-500/30 bg-sky-500/10"
+                    ? "border-sky-500 bg-sky-500/10 shadow-[0_0_15px_rgba(56,189,248,0.12)] ring-1 ring-sky-500/20"
                     : isCompleted(task.status)
-                    ? "border-border bg-card"
+                    ? "border-border bg-card/60 opacity-80"
                     : isFailed(task.status)
                     ? "border-red-500/20 bg-red-500/[0.03]"
                     : "border-border bg-transparent"
@@ -242,8 +242,8 @@ export default function Plan({
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[10px] font-bold text-muted-foreground tabular-nums">{String(idx + 1).padStart(2, "0")}</span>
                       <span className={cn(
-                        "text-[14px] font-semibold leading-snug",
-                        isCompleted(task.status) ? "text-muted-foreground" : isActive ? "text-foreground" : "text-foreground/75"
+                        "text-[14px] font-semibold leading-snug transition-colors",
+                        isCompleted(task.status) ? "text-muted-foreground line-through opacity-70" : isActive ? "text-sky-400 font-bold" : "text-foreground/75"
                       )}>
                         {task.title}
                       </span>
@@ -254,10 +254,37 @@ export default function Plan({
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className={cn("text-[10px] font-bold uppercase tracking-wider", statusColor(task.status, isActive))}>
-                      {statusLabel(task.status, isActive)}
-                    </span>
-                    <span className="text-muted-foreground/40 group-hover:text-muted-foreground transition-colors">
+                    {(() => {
+                      const label = statusLabel(task.status, isActive);
+                      if (label === "Running") {
+                        return (
+                          <span className="bg-sky-500/15 text-sky-400 border border-sky-500/25 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider animate-pulse flex items-center gap-1 shrink-0">
+                            <span className="w-1 h-1 rounded-full bg-sky-400 animate-ping shrink-0" />
+                            {label}
+                          </span>
+                        );
+                      }
+                      if (label === "Done") {
+                        return (
+                          <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 shrink-0">
+                            {label}
+                          </span>
+                        );
+                      }
+                      if (label === "Failed") {
+                        return (
+                          <span className="bg-red-500/10 text-red-400 border border-red-500/20 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 shrink-0">
+                            {label}
+                          </span>
+                        );
+                      }
+                      return (
+                        <span className="bg-slate-500/5 text-slate-500 border border-slate-500/10 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 shrink-0">
+                          {label}
+                        </span>
+                      );
+                    })()}
+                    <span className="text-muted-foreground/45 group-hover:text-muted-foreground transition-colors ml-0.5">
                       {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                     </span>
                   </div>
@@ -278,6 +305,16 @@ export default function Plan({
                         {/* Description */}
                         {task.description && (
                           <p className="text-[13px] text-muted-foreground leading-relaxed">{task.description}</p>
+                        )}
+
+                        {/* Task Thought (Reasoning) */}
+                        {task.thought && (
+                          <div className="bg-muted/20 border-l-2 border-indigo-500/35 p-3 rounded-lg text-xs text-muted-foreground leading-relaxed font-mono mt-2 shadow-sm">
+                            <div className="text-[9px] font-bold uppercase tracking-wider text-indigo-400 mb-1">
+                              Stage Thoughts
+                            </div>
+                            {task.thought}
+                          </div>
                         )}
 
                         {/* Subtasks — reasoning appears inline after the active sub-step */}
@@ -340,6 +377,35 @@ export default function Plan({
           })}
         </AnimatePresence>
       </div>
+
+      {/* Synthesizing Indicator */}
+      {isAiTyping && totalCount > 0 && completedCount === totalCount && (
+        <div className="mx-4 mb-4 p-4 rounded-xl border border-indigo-500/20 bg-indigo-500/[0.03] flex items-center gap-3 animate-pulse">
+          <CircleDotDashed className="h-5.5 w-5.5 text-indigo-400 animate-spin shrink-0" />
+          <div className="flex-1">
+            <p className="text-[12px] font-bold text-indigo-400">Synthesizing Final Response</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+              Analyzing compiled search details, extracting product information, and generating comparative suggestion report...
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Live Thoughts / Activity Log */}
+      {thoughts && thoughts.length > 0 && (
+        <div className="px-5 pb-3.5 pt-3 border-t border-border bg-muted/5 flex flex-col gap-2">
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/45 block">
+            Agent Activity Log
+          </span>
+          <div className="max-h-[120px] overflow-y-auto space-y-1.5 pr-2 scrollbar-thin">
+            {thoughts.map((thought, idx) => (
+              <div key={idx} className="text-[11px] text-foreground/70 leading-relaxed font-mono pl-3.5 border-l border-indigo-500/30">
+                {thought}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Footer stats */}
       {propTasks.length > 0 && (

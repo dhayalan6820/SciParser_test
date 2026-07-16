@@ -135,6 +135,52 @@ export function BrowserPreview({
   const latestActivityLabel = getFriendlyToolLabel(latestToolLog?.tool_name);
   const latestActivityTarget = getToolTargetDetail(latestToolLog?.tool_name, latestToolLog?.tool_input);
 
+  // iOS Style notification state
+  const [notifications, setNotifications] = useState<Array<{
+    id: string;
+    logId: string;
+    title: string;
+    message: string;
+    status: 'IN_PROGRESS' | 'SUCCESS' | 'FAILED';
+    timestamp: string;
+    created_at: string;
+  }>>([]);
+
+  useEffect(() => {
+    if (!latestToolLog || !isAiTyping) return;
+    const logId = latestToolLog.id;
+    const mappedStatus = (latestToolLog.status === 'IN_PROGRESS' || latestToolLog.status === 'running' || latestToolLog.status === 'in-progress')
+      ? 'IN_PROGRESS'
+      : (latestToolLog.status === 'FAILED' || latestToolLog.status === 'ERROR' || latestToolLog.status === 'failed' || latestToolLog.status === 'error')
+        ? 'FAILED'
+        : 'SUCCESS';
+
+    setNotifications(prev => {
+      const exists = prev.find(n => n.logId === logId);
+      if (exists) {
+        return prev.map(n => n.logId === logId ? { ...n, status: mappedStatus, message: latestActivityTarget || n.message } : n);
+      } else {
+        const newNotif = {
+          id: Math.random().toString(36).substring(2, 9),
+          logId: logId,
+          title: latestActivityLabel,
+          message: latestActivityTarget || "Executing action...",
+          status: mappedStatus,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          created_at: latestToolLog.created_at || new Date().toISOString()
+        };
+        return [...prev, newNotif];
+      }
+    });
+
+    if (mappedStatus !== 'IN_PROGRESS') {
+      const timer = setTimeout(() => {
+        setNotifications(prev => prev.filter(n => n.logId !== logId));
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [latestToolLog?.id, latestToolLog?.status, isAiTyping]);
+
   // Threshold beyond which an IN_PROGRESS step is considered "taking longer
   // than usual" and should surface elapsed time / stuck messaging instead of
   // looking identical to a fast, normal in-progress state.
@@ -597,80 +643,68 @@ export function BrowserPreview({
                 </Button>
               </div>
 
-              {/* ── Live activity notification — overlaid at the bottom edge of
-                  the browser preview image so it feels like an in-screen HUD
-                  rather than a detached panel strip. Gated on isAiTyping so it
-                  disappears once the run finishes. */}
-              <AnimatePresence mode="wait">
-                {isActive && frame && isAiTyping && latestToolLog && (
-                  <motion.div
-                    key={latestToolLog.id}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    transition={{ duration: 0.2, ease: 'easeOut' }}
-                    className="absolute bottom-0 left-0 right-0 z-40 px-4 py-2 bg-card/75 backdrop-blur-md border-t border-border/60 flex items-center gap-2"
-                  >
-                {(latestToolLog.status === 'IN_PROGRESS' || latestToolLog.status === 'running' || latestToolLog.status === 'in-progress') ? (
-                  <Loader2 className={cn("h-3 w-3 shrink-0 animate-spin", isLatestStepSlow ? "text-amber-400" : "text-sky-400")} />
-                ) : (latestToolLog.status === 'FAILED' || latestToolLog.status === 'ERROR' || latestToolLog.status === 'failed' || latestToolLog.status === 'error') ? (
-                  <AlertCircle className="h-3 w-3 text-amber-400 shrink-0" />
-                ) : (
-                  <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
-                )}
-                <span className="text-[11px] font-semibold text-foreground/80 truncate">
-                  {latestActivityLabel}
-                  {latestActivityTarget && (
-                    <span className="font-normal text-foreground/60"> — {latestActivityTarget}</span>
-                  )}
-                </span>
-                {latestToolLog.status === 'IN_PROGRESS' && isLatestStepSlow && (
-                  <span className="ml-auto flex items-center gap-1.5 shrink-0 pl-2">
-                    <span
-                      className={cn(
-                        "text-[9px] font-bold uppercase tracking-widest",
-                        isLatestStepStalled ? "text-red-400/90" : "text-amber-400/90",
-                      )}
-                    >
-                      {isLatestStepStalled ? "Stuck" : "Still working"}
-                    </span>
-                    <span
-                      className={cn(
-                        "text-[10px] font-bold tabular-nums rounded px-1.5 py-0.5 border",
-                        isLatestStepStalled
-                          ? "text-red-400/90 bg-red-400/10 border-red-400/20"
-                          : "text-amber-400/90 bg-amber-400/10 border-amber-400/20",
-                      )}
-                    >
-                      {formatElapsed(latestStepElapsedMs)}
-                    </span>
-                    {/* Once a step has been running well beyond the "still
-                        working" threshold, it's reasonable to suspect it's
-                        actually stuck rather than just slow — offer a direct
-                        way to cancel instead of leaving the user only able to
-                        watch the timer or abandon the whole session. */}
-                    {isLatestStepStalled && onCancelStep && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        disabled={isCancellingStep}
-                        onClick={onCancelStep}
-                        className="h-6 px-2 text-[9px] font-black uppercase tracking-widest text-red-500 hover:text-red-600 hover:bg-red-500/10 gap-1 shrink-0"
+              {/* iOS Style Notification Stack Overlay (Stacked Cards Layout) */}
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-[340px] md:max-w-[360px] h-[100px] pointer-events-none">
+                <AnimatePresence>
+                  {[...notifications].reverse().slice(0, 3).map((notif, idx) => {
+                    const isRunning = notif.status === 'IN_PROGRESS';
+                    const isFailed = notif.status === 'FAILED';
+                    return (
+                      <motion.div
+                        key={notif.id}
+                        initial={{ y: -60, opacity: 0, scale: 0.9 }}
+                        animate={{
+                          y: idx * 8, // Stack offset downward
+                          scale: 1 - idx * 0.04, // Compressive card scale depth
+                          opacity: idx === 0 ? 1 : idx === 1 ? 0.75 : 0.45,
+                        }}
+                        exit={{ y: -60, opacity: 0, scale: 0.9 }}
+                        transition={{ type: "spring", stiffness: 220, damping: 20 }}
+                        style={{
+                          zIndex: 100 - idx,
+                          transformOrigin: 'top center',
+                        }}
+                        className="absolute inset-x-0 top-0 bg-white/85 dark:bg-zinc-900/80 backdrop-blur-[20px] rounded-[24px] border border-white/20 dark:border-white/10 shadow-[0_12px_30px_rgba(0,0,0,0.15)] p-3.5 flex items-center gap-3 pointer-events-auto"
                       >
-                        {isCancellingStep ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <X className="h-3 w-3" />
-                        )}
-                        {isCancellingStep ? "Cancelling…" : "Cancel step"}
-                      </Button>
-                    )}
-                  </span>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
+                        {/* iOS App Icon (Safari/Globe style) */}
+                        <div className="w-9 h-9 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 shrink-0 shadow-inner">
+                          <Globe className="h-5 w-5" />
+                        </div>
+
+                        {/* Title, message, and timestamp layout */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-muted-foreground/60">
+                            <span>SciParser</span>
+                            <span>•</span>
+                            <span>{notif.timestamp}</span>
+                          </div>
+                          <p className="text-[12px] font-bold text-foreground mt-0.5 truncate">{notif.title}</p>
+                          {notif.message && (
+                            <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">{notif.message}</p>
+                          )}
+                        </div>
+
+                        {/* Status badge / spinner */}
+                        <div className="shrink-0">
+                          {isRunning ? (
+                            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-sky-500/10">
+                              <Loader2 className="h-3.5 w-3.5 text-sky-400 animate-spin" />
+                            </div>
+                          ) : isFailed ? (
+                            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-red-500/10">
+                              <AlertCircle className="h-3.5 w-3.5 text-red-400" />
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-500/10">
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+              </div>
             </div>
           ) : null}
 

@@ -34,7 +34,7 @@ from src import config
 
 logger = logging.getLogger(__name__)
 
-SPECS_DIR = os.path.join(os.path.dirname(__file__), "specs")
+SPECS_DIR = config.SPECS_DIR
 
 
 @dataclass

@@ -22,14 +22,11 @@ for _noisy in ("browser_use", "BrowserSession", "playwright", "urllib3", "httpx"
     logging.getLogger(_noisy).setLevel(logging.ERROR)
 
 # Add parent directory to path for config imports
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 try:
     from src import config
-    # After importing config (which calls logging.basicConfig via logger.py),
-    # re-apply our stderr-only override so that basicConfig doesn't sneak
-    # a stdout handler back in.
-    logging.root.handlers = [_stderr_handler]
-except ImportError:
+except ImportError as e:
+    print(f"Bridge [patch]: Failed to import src.config, using MockConfig: {e}", file=sys.stderr)
     class MockConfig:
         BROWSER_CDP_READY_TIMEOUT_SECONDS = 90
         BROWSER_DEFAULT_CDP_HOST = "127.0.0.1"
@@ -113,7 +110,7 @@ def _patch_mcp_server(browser_session: 'BrowserSession', get_cdp_url_func, headl
 
     # 1. Patch session initialization to connect to the dynamically discovered CDP URL
     async def _patched_init(self, allowed_domains: list[str] | None = None, **kwargs):
-        if getattr(self, "browser_session", None):
+        if getattr(self, "llm", None) is not None:
             return
 
         # print(f"Bridge [patch]: binding MCP server to active BrowserSession", file=sys.stderr)
@@ -127,33 +124,60 @@ def _patch_mcp_server(browser_session: 'BrowserSession', get_cdp_url_func, headl
             # Initialize LLM for extraction
             try:
                 import os
-                api_key = os.environ.get("OPENROUTER_API_KEY")
-                model = os.environ.get("BROWSER_USE_MODEL", "openai/gpt-4o-mini-search-preview")
+                
+                # FORCE LOAD ENV VARS in this subprocess
+                try:
+                    from dotenv import load_dotenv
+                    env_path = os.path.join(Path(__file__).parent.parent.parent, ".env")
+                    load_dotenv(env_path)
+                    print(f"Bridge [patch]: Loaded .env from {env_path}", file=sys.stderr)
+                except Exception as env_err:
+                    print(f"Bridge [patch]: Failed to load .env: {env_err}", file=sys.stderr)
+
+                model = os.environ.get("LLM_EXTRACTION_MODEL") or getattr(config, "LLM_EXTRACTION_MODEL", "openai/gpt-4o-mini-2024-07-18")
+                base_url = os.environ.get("OPENAI_BASE_URL") or os.environ.get("OPENAI_API_BASE") or getattr(config, "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+                
+                # Try OpenRouter specifically
+                if "openrouter" in base_url or "openrouter" in model.lower():
+                    api_key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("OPENAI_API_KEY") or getattr(config, "OPENROUTER_API_KEY", "")
+                else:
+                    api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("OPENROUTER_API_KEY") or getattr(config, "OPENROUTER_API_KEY", "")
+                    
                 if api_key:
                     try:
-                        from langchain_openrouter import ChatOpenRouter
-                        self.llm = ChatOpenRouter(
-                            model_name=model,
-                            openrouter_api_key=api_key,
+                        from browser_use.llm.openai.chat import ChatOpenAI as BrowserUseChatOpenAI
+                        self.llm = BrowserUseChatOpenAI(
+                            model=model,
+                            api_key=api_key,
+                            base_url=base_url,
                             temperature=0.8,
                             max_retries=3,
                         )
-                    except ImportError:
+                        print("SUCCESS_TOKEN: LLM successfully initialized via browser_use custom ChatOpenAI!", file=sys.stderr)
+                    except Exception as fallback_e:
+                        print(f"Bridge [patch]: Custom ChatOpenAI init failed, falling back to standard langchain. Reason: {fallback_e}", file=sys.stderr)
+                        # Standard langchain fallback as safety
                         from langchain_openai import ChatOpenAI
                         kwargs_llm = {}
-                        if base_url: kwargs_llm["base_url"] = base_url
-                        self.llm = ChatOpenAI(model=model, api_key=api_key, **kwargs_llm)
+                        if base_url:
+                            kwargs_llm["base_url"] = base_url
+                        try:
+                            self.llm = ChatOpenAI(model=model, api_key=api_key, **kwargs_llm)
+                        except Exception:
+                            self.llm = ChatOpenAI(model=model, openai_api_key=api_key, **kwargs_llm)
                 else:
                     self.llm = None
+                    print("Bridge [patch]: LLM init FATAL ERROR: No API key found.", file=sys.stderr)
             except Exception as e:
-                print(f"Bridge [patch]: LLM init warning: {e}", file=sys.stderr)
+                import traceback
+                print(f"Bridge [patch]: LLM init FATAL ERROR:\n{traceback.format_exc()}", file=sys.stderr)
                 self.llm = None
 
             # Initialize FileSystem for extraction actions
             try:
                 from browser_use.mcp.server import get_default_profile, FileSystem
                 profile_config = get_default_profile(self.config)
-                file_system_path = profile_config.get('file_system_path', '~/.browser-use-mcp')
+                file_system_path = profile_config.get('file_system_path', getattr(config, 'BROWSER_USE_FILE_SYSTEM_PATH', '~/.browser-use-mcp'))
                 self.file_system = FileSystem(base_dir=Path(file_system_path).expanduser())
             except Exception as e:
                 print(f"Bridge [patch]: FileSystem initialization warning: {e}", file=sys.stderr)
@@ -168,137 +192,101 @@ def _patch_mcp_server(browser_session: 'BrowserSession', get_cdp_url_func, headl
 
     BrowserUseServer._init_browser_session = _patched_init
 
-    # 2. Add missing tools: browser_key_press and browser_wait
+    # 2. Add browser_evaluate tool
     NEW_TOOL_SCHEMAS = [
         mcp_types.Tool(
-            name="browser_key_press",
-            description="Press a keyboard key or combination (e.g. 'Enter', 'Control+A').",
+            name="browser_evaluate",
+            description="Execute custom JavaScript code on the page (for advanced interactions, shadow DOM, custom selectors, data extraction).",
             inputSchema={
                 "type": "object",
-                "properties": {"key": {"type": "string"}},
-                "required": ["key"],
-            },
-        ),
-        mcp_types.Tool(
-            name="browser_wait",
-            description="Wait for N milliseconds.",
-            inputSchema={
-                "type": "object",
-                "properties": {"milliseconds": {"type": "integer", "default": 500}},
-            },
-        ),
-        mcp_types.Tool(
-            name="browser_extract_raw",
-            description="Extract data from a page by bypassing the DOM accessibility tree. Best used when 'browser_extract_content' fails due to non-semantic HTML.",
-            inputSchema={
-                "type": "object",
-                "properties": {"query": {"type": "string", "description": "What to extract (e.g. 'All laptop stands with price and rating')."}},
-                "required": ["query"],
-            },
-        ),
-        mcp_types.Tool(
-            name="browser_extract_vision",
-            description="Extract data using a screenshot and Vision LLM. Best used as a last resort when DOM/Raw extraction fails entirely (e.g., bot protection, canvas rendering, empty lists).",
-            inputSchema={
-                "type": "object",
-                "properties": {"query": {"type": "string", "description": "What to extract (e.g. 'All products with name and price from this image')."}},
-                "required": ["query"],
+                "properties": {"code": {"type": "string", "description": "The JavaScript expression or IIFE to evaluate (e.g. '() => document.body.innerText')."}},
+                "required": ["code"],
             },
         ),
     ]
 
-    async def _exec_key_press(srv, args: dict) -> str:
+    async def _exec_evaluate(srv, args: dict) -> str:
         if not srv.browser_session: await srv._init_browser_session()
-        key = str(args.get("key", "Enter"))
+        code = str(args.get("code", ""))
         try:
             page = await srv.browser_session.get_current_page()
-            # FIX: Used page.keyboard.press instead of page.press
-            await page.keyboard.press(key)
-            return f"Pressed: {key}"
-        except Exception as e: 
-            return f"Error: {e}"
-
-    async def _exec_wait(srv, args: dict) -> str:
-        ms = int(args.get("milliseconds", 500))
-        await asyncio.sleep(ms / 1000.0)
-        return f"Waited {ms}ms"
-
-    async def _exec_extract_raw(srv, args: dict) -> str:
-        if not srv.browser_session: await srv._init_browser_session()
-        query = args.get("query", "")
-        try:
-            page = await srv.browser_session.get_current_page()
-            # Prune junk elements temporarily to get clean text and reduce tokens
-            js_script = """
-            () => {
-                let junk = document.querySelectorAll('script, style, svg, iframe, noscript, nav, footer, header, aside, form, [style*="display: none"], [style*="visibility: hidden"]');
-                let hiddenStates = [];
-                junk.forEach(n => {
-                    hiddenStates.push(n.style.display);
-                    n.style.display = 'none';
-                });
-                
-                let mainNode = document.querySelector('main') || document.body;
-                let text = mainNode.innerText || "";
-                
-                junk.forEach((n, i) => {
-                    n.style.display = hiddenStates[i];
-                });
-                
-                return text.split('\\n').map(l => l.trim()).filter(l => l.length > 0).join('\\n');
-            }
-            """
-            raw_text = await page.evaluate(js_script)
-            
-            if not srv.llm:
-                return f"Error: No LLM configured in bridge to parse raw text. Raw text length: {len(raw_text)}"
-            
-            from langchain_core.messages import HumanMessage
-            prompt = (
-                f"You are a Data Extractor. Extract the following information from the raw page text:\n"
-                f"QUERY: {query}\n\n"
-                f"PAGE TEXT:\n{raw_text[:12000]}\n\n"
-                f"Return ONLY valid JSON. Return an array of objects if there are multiple matches."
-            )
-            resp = await srv.llm.ainvoke([HumanMessage(content=prompt)])
-            return resp.content
+            result = await page.evaluate(code)
+            return str(result)
         except Exception as e:
-            return f"Error extracting raw text: {e}"
-
-    async def _exec_extract_vision(srv, args: dict) -> str:
-        if not srv.browser_session: await srv._init_browser_session()
-        query = args.get("query", "")
-        try:
-            page = await srv.browser_session.get_current_page()
-            b64_image = await page.screenshot(format='png')
-            
-            if not srv.llm:
-                return "Error: No LLM configured in bridge to parse screenshot."
-            
-            from langchain_core.messages import HumanMessage
-            prompt = (
-                f"You are a Data Extractor. Extract the following information purely from the provided image of a webpage:\n"
-                f"QUERY: {query}\n\n"
-                f"Return ONLY valid JSON. Return an array of objects if there are multiple matches."
-            )
-            msg = HumanMessage(content=[
-                {"type": "text", "text": prompt},
-                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64_image}"}}
-            ])
-            resp = await srv.llm.ainvoke([msg])
-            return resp.content
-        except Exception as e:
-            return f"Error extracting via vision: {e}"
+            return f"Error executing JavaScript: {e}"
 
     _orig_execute = BrowserUseServer._execute_tool
     async def _patched_execute_tool(self, tool_name: str, arguments: dict):
-        if tool_name == "browser_key_press": return await _exec_key_press(self, arguments)
-        if tool_name == "browser_wait": return await _exec_wait(self, arguments)
-        if tool_name == "browser_extract_raw": return await _exec_extract_raw(self, arguments)
-        if tool_name == "browser_extract_vision": return await _exec_extract_vision(self, arguments)
-        return await _orig_execute(self, tool_name, arguments)
+        # Force initialization so self.llm is guaranteed to be set
+        await self._init_browser_session()
+        
+        if tool_name == "browser_evaluate": return await _exec_evaluate(self, arguments)
+        res = await _orig_execute(self, tool_name, arguments)
+        if isinstance(res, str) and "LLM not initialized" in res:
+            raise ValueError(res)
+        return res
 
     BrowserUseServer._execute_tool = _patched_execute_tool
+    
+    # 3. Patch _extract_content to report actual errors or fallback to raw page text
+    async def _patched_extract_content(self, query: str, extract_links: bool = False) -> str:
+        if not self.llm: return 'Error: LLM not initialized (set OPENAI_API_KEY)'
+        if not self.file_system: return 'Error: FileSystem not initialized'
+        if not self.browser_session: return 'Error: No browser session active'
+        if not self.tools: return 'Error: Tools not initialized'
+
+        from browser_use import ActionModel
+        from pydantic import create_model
+        from typing import Any
+
+        try:
+            ExtractAction = create_model(
+                'ExtractAction',
+                __base__=ActionModel,
+                extract=dict[str, Any],
+            )
+            action = ExtractAction.model_validate(
+                {
+                    'extract': {'query': query, 'extract_links': extract_links},
+                }
+            )
+            action_result = await self.tools.act(
+                action=action,
+                browser_session=self.browser_session,
+                page_extraction_llm=self.llm,
+                file_system=self.file_system,
+            )
+            
+            # If the tool succeeded and returned actual content, return it!
+            if action_result.extracted_content and action_result.extracted_content != 'No content extracted':
+                return action_result.extracted_content
+                
+            # If it failed or returned nothing, execute the fallback (extract visible page text)
+            print("Bridge [patch]: LLM extraction returned empty/failed. Attempting javascript fallback...", file=sys.stderr)
+            try:
+                page = await self.browser_session.get_current_page()
+                fallback_text = await page.evaluate("() => document.body.innerText")
+                if fallback_text and fallback_text.strip():
+                    return f"[Extraction LLM failed, using page text fallback]:\n{fallback_text}"
+            except Exception as eval_err:
+                print(f"Bridge [patch]: Fallback eval failed: {eval_err}", file=sys.stderr)
+                
+            if action_result.error:
+                return f"Error: Extraction failed: {action_result.error}"
+            return 'Error: No content could be extracted or scraped.'
+            
+        except Exception as e:
+            # Try fallback on general exception as well
+            try:
+                page = await self.browser_session.get_current_page()
+                fallback_text = await page.evaluate("() => document.body.innerText")
+                if fallback_text and fallback_text.strip():
+                    return f"[Extraction LLM errored, using page text fallback]:\n{fallback_text}"
+            except Exception:
+                pass
+            return f"Error: Extraction failed with exception: {e}"
+
+    BrowserUseServer._extract_content = _patched_extract_content
 
     _orig_setup = BrowserUseServer._setup_handlers
     def _patched_setup_handlers(self):
@@ -315,7 +303,7 @@ def _patch_mcp_server(browser_session: 'BrowserSession', get_cdp_url_func, headl
             self.server.request_handlers[mcp_types.ListToolsRequest] = _extended_list_tools
 
     BrowserUseServer._setup_handlers = _patched_setup_handlers
-    # print("Bridge: BrowserUseServer patched with CDP and tools", file=sys.stderr)
+    # print("Bridge: BrowserUseServer patched with CDP and evaluate tool", file=sys.stderr)
 
 # ---------------------------------------------------------------------------
 # Frame Streaming Task
@@ -332,6 +320,7 @@ async def stream_browser_frames(browser_session, user_id: str, backend_url: str)
     await asyncio.sleep(2)
     
     last_frame = None
+    sleep_duration = 0.35
     async with httpx.AsyncClient(timeout=5.0) as client:
         while True:
             # Check if browser session is alive
@@ -339,20 +328,38 @@ async def stream_browser_frames(browser_session, user_id: str, backend_url: str)
                 print("Bridge [stream]: Browser session is killed, stopping stream loop.", file=sys.stderr)
                 break
             try:
-                # Capture JPEG screenshot using the built-in browser_session method
-                screenshot_bytes = await browser_session.take_screenshot(format='jpeg', quality=65)
-                if screenshot_bytes:
-                    b64_frame = base64.b64encode(screenshot_bytes).decode('utf-8')
-                    
-                    if b64_frame != last_frame:
-                        last_frame = b64_frame
-                        url = f"{backend_url.rstrip('/')}/sciparser/v1/browser/frame/{user_id}"
-                        resp = await client.post(url, json={"frame": b64_frame})
-                        if resp.status_code != 200:
-                            print(f"Bridge [stream]: POST frame failed with status {resp.status_code}", file=sys.stderr)
+                if sleep_duration > 0.5:
+                    # Rest Mode: skip taking screenshots to save CPU/memory resources.
+                    # Periodically check with the backend if we should resume active streaming.
+                    url = f"{backend_url.rstrip('/')}/sciparser/v1/browser/frame/{user_id}"
+                    resp = await client.post(url, json={"check_only": True})
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        if data.get("is_active", False):
+                            print("Bridge [stream]: Resume active frame streaming.", file=sys.stderr)
+                            sleep_duration = 0.35  # Resume 3 FPS
+                        else:
+                            sleep_duration = 2.0   # Stay in Rest Mode (poll every 2.0s)
+                else:
+                    # Active Mode: capture screenshot and POST it
+                    screenshot_bytes = await browser_session.take_screenshot(format='jpeg', quality=65)
+                    if screenshot_bytes:
+                        b64_frame = base64.b64encode(screenshot_bytes).decode('utf-8')
+                        
+                        if b64_frame != last_frame:
+                            last_frame = b64_frame
+                            url = f"{backend_url.rstrip('/')}/sciparser/v1/browser/frame/{user_id}"
+                            resp = await client.post(url, json={"frame": b64_frame})
+                            if resp.status_code == 200:
+                                data = resp.json()
+                                if not data.get("is_active", False):
+                                    print("Bridge [stream]: Entering rest mode (no active task running).", file=sys.stderr)
+                                    sleep_duration = 2.0  # Switch to Rest Mode
+                            else:
+                                print(f"Bridge [stream]: POST frame failed with status {resp.status_code}", file=sys.stderr)
             except Exception as e:
                 print(f"Bridge [stream] error: {e}", file=sys.stderr)
-            await asyncio.sleep(0.35)  # ~3 FPS
+            await asyncio.sleep(sleep_duration)
 
 # ---------------------------------------------------------------------------
 # Main Execution

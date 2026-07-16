@@ -127,6 +127,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const [isAiTyping, setIsAiTyping] = React.useState(false);
   const [isCancellingStep, setIsCancellingStep] = React.useState(false);
   const [currentPlan, setCurrentPlan] = React.useState<Task[] | null>(null);
+  const [agentThoughts, setAgentThoughts] = React.useState<string[]>([]);
   const [toolLogs, setToolLogs] = React.useState<any[]>([]);
   const [showExecutionPlan, setShowExecutionPlan] = React.useState(true);
   const [userInterruptedHide, setUserInterruptedHide] = React.useState(false);
@@ -833,6 +834,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               (t: any) => t.status === "in-progress" || t.status === "running" || t.status === "pending"
             );
             if (stillRunning) setIsAiTyping(true);
+          } else if (msg.type === "thought_update") {
+            setAgentThoughts((prev) => [...prev, msg.data]);
           } else if (msg.type === "notification" && msg.notification_type === "camoufox_fallback") {
             setCamoufoxFallbackWarning(true);
           }
@@ -1131,6 +1134,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
   const handleSendMessage = async (text: string) => {
     if (!text.trim()) return;
+
+    setAgentThoughts([]);
 
     const currentThreadId = activeThreadId ? String(activeThreadId) : uuidv4();
     // ... (rest of the function)
@@ -3477,7 +3482,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                                 {currentPlan ? (
                                   <Plan
                                     tasks={currentPlan}
-                                    thoughts={[]}
+                                    thoughts={agentThoughts}
                                     taskThoughts={{}}
                                     isAiTyping={isAiTyping}
                                   />

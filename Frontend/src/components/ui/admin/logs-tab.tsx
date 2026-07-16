@@ -41,6 +41,20 @@ export const LogsTab: React.FC = () => {
   const [exportError, setExportError] = React.useState<string | null>(null);
 
   const [liveMode, setLiveMode] = React.useState(false);
+  const [insights, setInsights] = React.useState<string[]>([]);
+  const [insightsLoading, setInsightsLoading] = React.useState(false);
+
+  const loadInsights = async () => {
+    setInsightsLoading(true);
+    try {
+      const res = await sciparserApi.adminGenerateInsights();
+      setInsights(res.recommendations || []);
+    } catch (err) {
+      alert("Failed to load insights: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setInsightsLoading(false);
+    }
+  };
 
   const totalPages = Math.max(1, Math.ceil(total / LOG_PAGE_SIZE));
 
@@ -142,7 +156,34 @@ export const LogsTab: React.FC = () => {
         <h2 className="text-base font-semibold flex items-center gap-1.5">
           <ScrollText className="h-4 w-4" /> Application Logs
         </h2>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={insightsLoading}
+          onClick={loadInsights}
+          className="bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
+        >
+          {insightsLoading ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+              Generating...
+            </>
+          ) : (
+            "Analyze Logs with AI"
+          )}
+        </Button>
       </div>
+
+      {insights.length > 0 && (
+        <div className="border border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-lg p-4 space-y-2">
+          <h3 className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">AI Optimization Insights</h3>
+          <ul className="space-y-1.5 text-xs text-muted-foreground list-disc pl-4">
+            {insights.map((rec, i) => (
+              <li key={i}>{rec}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-4 space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">

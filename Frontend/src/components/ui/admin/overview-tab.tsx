@@ -60,6 +60,30 @@ export const OverviewTab: React.FC = () => {
   const [selectedUser, setSelectedUser] = React.useState<User | null>(null);
   const [analyticsUser, setAnalyticsUser] = React.useState<User | null>(null);
   const [rowAnalyticsLoadingId, setRowAnalyticsLoadingId] = React.useState<string | null>(null);
+  const [resources, setResources] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await sciparserApi.adminGetResourceSnapshots();
+        if (!cancelled) setResources(res);
+      } catch (err) {
+        console.error("Failed to load resource snapshots:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const downloadReport = async (format: "csv" | "json" | "md") => {
+    try {
+      await sciparserApi.adminDownloadReport(format, 30);
+    } catch (err) {
+      alert("Failed to download report: " + (err instanceof Error ? err.message : String(err)));
+    }
+  };
 
   React.useEffect(() => {
     const handle = setTimeout(() => setUserFilter(userInput.trim()), 350);
@@ -226,6 +250,53 @@ export const OverviewTab: React.FC = () => {
           change={overview.success_rate_change}
         />
       </motion.div>
+
+      {/* Telemetry and Report Center */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Panel title="System Telemetry" subtitle="Host resources and database metrics (real-time)">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg">
+              <p className="text-xs text-muted-foreground">Host CPU Usage</p>
+              <p className="text-xl font-semibold mt-1">{resources?.current?.cpu_percent ?? 0}%</p>
+            </div>
+            <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg">
+              <p className="text-xs text-muted-foreground">Host Memory (RAM)</p>
+              <p className="text-xl font-semibold mt-1">{resources?.current?.ram_percent ?? 0}%</p>
+            </div>
+            <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg">
+              <p className="text-xs text-muted-foreground">Active WebSockets</p>
+              <p className="text-xl font-semibold mt-1">{resources?.current?.active_websockets ?? 0}</p>
+            </div>
+            <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg">
+              <p className="text-xs text-muted-foreground">Active Browser Instances</p>
+              <p className="text-xl font-semibold mt-1">{resources?.current?.active_browser_instances ?? 0}</p>
+            </div>
+          </div>
+        </Panel>
+
+        <Panel title="Operations Report Center" subtitle="Download platform analytics reports in multiple formats">
+          <div className="flex flex-col gap-3 justify-center h-full pb-4">
+            <button
+              onClick={() => downloadReport("csv")}
+              className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              Export CSV Report (30 Days)
+            </button>
+            <button
+              onClick={() => downloadReport("json")}
+              className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              Export JSON Report (30 Days)
+            </button>
+            <button
+              onClick={() => downloadReport("md")}
+              className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              Export Markdown Summary (30 Days)
+            </button>
+          </div>
+        </Panel>
+      </div>
 
       <Panel title="Recent Activity" subtitle="Live feed of signups, logins, automation runs, and agent lifecycle events">
         <div className="flex flex-wrap items-center gap-2 mb-4">

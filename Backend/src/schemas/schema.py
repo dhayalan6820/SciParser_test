@@ -153,6 +153,8 @@ class AdminUserAnalyticsResponse(BaseModel):
     automations: AdminUserAnalyticsAutomations
     credit_balance: float = 0.0
     conversations: List[ConversationTokenUsage] = []
+    model_breakdown: List[Dict[str, Any]] = []
+    recent_runs: List[Dict[str, Any]] = []
 
 
 class OperationsMetricsResponse(BaseModel):
@@ -407,3 +409,177 @@ class UserInDB(UserResponse):
     hashed_password: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# --- New Enterprise Admin Portal Schemas ---
+
+class AdminCostBreakdownPoint(BaseModel):
+    category: str
+    cost: float
+
+class AdminCostAnalyticsResponse(BaseModel):
+    total_cost: float
+    breakdown: List[AdminCostBreakdownPoint]
+    daily_trends: List[Dict[str, Any]]
+
+class AdminModelMetricsItem(BaseModel):
+    model_name: str
+    requests: int
+    success_rate: float
+    avg_latency_ms: float
+    avg_tokens: float
+    avg_cost: float
+    failure_rate: float
+
+class AdminModelAnalyticsResponse(BaseModel):
+    models: List[AdminModelMetricsItem]
+
+class AdminToolMetricsItem(BaseModel):
+    tool_name: str
+    usage_count: int
+    success_rate: float
+    failure_rate: float
+    avg_latency_ms: float
+
+class AdminToolAnalyticsResponse(BaseModel):
+    tools: List[AdminToolMetricsItem]
+
+class AdminBrowserAnalyticsResponse(BaseModel):
+    total_sessions: int
+    pages_visited: int
+    avg_load_time_ms: float
+    actions_breakdown: Dict[str, int]
+
+class AdminContextAnalyticsResponse(BaseModel):
+    avg_prompt_size_tokens: float
+    avg_memory_size_tokens: float
+    summarization_events: int
+    window_utilization_percent: float
+
+class AdminRetrievalAnalyticsResponse(BaseModel):
+    embedding_calls: int
+    embedding_cost: float
+    vector_searches: int
+    avg_recall: float
+    avg_precision: float
+
+class AdminResourceSnapshot(BaseModel):
+    cpu_percent: float
+    ram_percent: float
+    active_websockets: int
+    active_browser_instances: int
+    db_size_bytes: int
+    timestamp: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class AdminResourcesResponse(BaseModel):
+    current: AdminResourceSnapshot
+    history: List[AdminResourceSnapshot]
+
+class AdminSetBudgetRequest(BaseModel):
+    user_id: str
+    daily_budget: Optional[float] = None
+    monthly_budget: Optional[float] = None
+    action_at_100: Optional[str] = "switch_cheaper_model"
+
+class AdminAlertNotificationItem(BaseModel):
+    id: str
+    severity: str
+    category: str
+    title: str
+    message: str
+    resolved: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class AdminAlertsResponse(BaseModel):
+    alerts: List[AdminAlertNotificationItem]
+
+class AdminGenerateInsightsResponse(BaseModel):
+    recommendations: List[str]
+    analysis_timestamp: datetime
+
+
+# Observability API response schemas
+class ObservabilityOverviewResponse(BaseModel):
+    total_prompt_tokens: int
+    total_completion_tokens: int
+    total_cached_tokens: int
+    total_cost: float
+    total_runs: int
+    total_tool_calls: int
+    overall_success_rate: float
+    avg_latency_ms: float
+    daily_trends: List[Dict[str, Any]]
+    active_alerts: List[Dict[str, Any]]
+
+class ObservabilityUsersResponse(BaseModel):
+    users: List[Dict[str, Any]]
+    total: int
+
+class ObservabilityConversationsResponse(BaseModel):
+    conversations: List[Dict[str, Any]]
+    total: int
+
+class ObservabilityLLMResponse(BaseModel):
+    providers: List[Dict[str, Any]]
+    models: List[Dict[str, Any]]
+
+class ObservabilityAgentsToolsResponse(BaseModel):
+    agents: List[Dict[str, Any]]
+    tools: List[Dict[str, Any]]
+    mcp_servers: List[Dict[str, Any]]
+
+class ObservabilityCacheMemoryResponse(BaseModel):
+    prompt_cache_hit_rate: float
+    embedding_cache_hit_rate: float
+    saved_tokens: int
+    saved_cost_usd: float
+    memory_reads: int
+    memory_writes: int
+    semantic_hits: int
+    cache_hits: int
+    cache_misses: int
+    vector_searches: int
+    embedding_calls: int
+
+class ObservabilityPerformanceErrorsResponse(BaseModel):
+    avg_latency: float
+    median_latency: float
+    p90_latency: float
+    p95_latency: float
+    p99_latency: float
+    queue_time_avg: float
+    inference_time_avg: float
+    tool_time_avg: float
+    browser_time_avg: float
+    memory_time_avg: float
+    recent_errors: List[Dict[str, Any]]
+
+class ObservabilityWaterfallStage(BaseModel):
+    id: str
+    name: str
+    stage_type: str  # "agent" | "tool" | "llm"
+    status: str
+    duration_ms: int
+    tokens: int
+    cost: float
+    started_at: datetime
+    error_message: Optional[str] = None
+
+class ObservabilityWaterfallResponse(BaseModel):
+    chat_id: str
+    title: str
+    total_duration_ms: int
+    total_cost: float
+    total_tokens: int
+    stages: List[ObservabilityWaterfallStage]
+
+
+class ObservabilityErrorsListResponse(BaseModel):
+    errors: List[Dict[str, Any]]
+    total: int
+    aggregates: Dict[str, Any]
+

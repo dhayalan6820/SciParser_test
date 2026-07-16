@@ -4,6 +4,36 @@ import { API_BASE_URL } from "./config";
 const TOKEN_KEY = "access_token";
 const BASE_URL = API_BASE_URL;
 
+// Intercept global fetch to catch errors and display toast notifications
+if (typeof window !== "undefined") {
+  const originalFetch = window.fetch;
+  window.fetch = async (...args) => {
+    try {
+      const response = await originalFetch(...args);
+      if (!response.ok) {
+        const clone = response.clone();
+        try {
+          const body = await clone.json();
+          if (body && body.success === false && body.error) {
+            const err = body.error;
+            const { toast } = await import("./components/ui/toast-notifications");
+            toast(err.severity || "error", err.title || "Request Failed", err.message, err.id);
+          }
+        } catch {
+          if (response.status === 401) {
+            handleUnauthorized();
+          }
+        }
+      }
+      return response;
+    } catch (err) {
+      const { toast } = await import("./components/ui/toast-notifications");
+      toast("error", "Connection Failed", "A connection error occurred. Please check your internet connection.");
+      throw err;
+    }
+  };
+}
+
 export function getStoredToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -988,6 +1018,266 @@ export const sciparserApi = {
     return res.json() as Promise<AdminSecurity>;
   },
 
+  adminGetCostAnalytics: async (days: number = 30) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/analytics/costs?days=${days}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  adminGetModelAnalytics: async (days: number = 30) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/analytics/models?days=${days}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  adminGetToolAnalytics: async (days: number = 30) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/analytics/tools?days=${days}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  adminGetBrowserAnalytics: async (days: number = 30) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/analytics/browser?days=${days}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  adminGetContextAnalytics: async (days: number = 30) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/analytics/context?days=${days}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  adminGetRetrievalAnalytics: async (days: number = 30) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/analytics/retrieval?days=${days}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  adminGetResourceSnapshots: async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/analytics/resources`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  adminSetBudget: async (userId: string, dailyBudget?: number, monthlyBudget?: number, actionAt100: string = "switch_cheaper_model") => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/cost-control/budgets`, {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        Authorization: formattedToken 
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        daily_budget: dailyBudget,
+        monthly_budget: monthlyBudget,
+        action_at_100: actionAt100
+      })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  adminGetAlerts: async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/alerts`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  adminGenerateInsights: async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/insights/generate`, {
+      method: "POST",
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  adminDownloadReport: async (format: "csv" | "json" | "md", days: number = 30) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/reports/download?format=${format}&days=${days}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename=([^;]+)/);
+    const filename = match ? match[1].trim() : `platform_report.${format}`;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  },
+
+  // Observability Platform API calls
+  observabilityGetOverview: async (days: number = 30) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/observability/overview?days=${days}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  observabilityGetUsers: async (days: number = 30) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/observability/users?days=${days}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  observabilityGetConversations: async (days: number = 30, page: number = 1, limit: number = 10, search: string = "", status: string = "", userId: string = "") => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const params = new URLSearchParams({
+      days: days.toString(),
+      page: page.toString(),
+      limit: limit.toString(),
+      search,
+      status,
+      user_id: userId,
+    });
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/observability/conversations?${params.toString()}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  observabilityGetLLM: async (days: number = 30) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/observability/llm?days=${days}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  observabilityGetAgentsTools: async (days: number = 30) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/observability/agents-tools?days=${days}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  observabilityGetCacheMemory: async (days: number = 30) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/observability/cache-memory?days=${days}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  observabilityGetPerformanceErrors: async (days: number = 30) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/observability/performance-errors?days=${days}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  observabilityGetWaterfall: async (chatId: string) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/observability/conversations/${chatId}/waterfall`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  observabilityGetErrors: async (days: number = 30, page: number = 1, limit: number = 10, search: string = "", severity: string = "", category: string = "") => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const params = new URLSearchParams({
+      days: days.toString(),
+      page: page.toString(),
+      limit: limit.toString(),
+      search,
+      severity,
+      category,
+    });
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/observability/errors?${params.toString()}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<{ errors: any[]; total: number; aggregates: any }>;
+  },
+
+
   // Admin: Application Logs (info/warning/error lines)
   adminGetAppLogs: async (filters: AppLogFilters) => {
     const token = localStorage.getItem("access_token");
@@ -1184,6 +1474,28 @@ export interface AdminUserAnalytics {
   };
   credit_balance: number;
   conversations: ConversationTokenUsage[];
+  model_breakdown?: Array<{
+    model: string;
+    requests: number;
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+    cost: number;
+    avg_latency: number;
+  }>;
+  recent_runs?: Array<{
+    id: string;
+    chat_id: string;
+    agent_stage: string;
+    stage_name: string;
+    status: string;
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    cost: number;
+    error_message?: string | null;
+    created_at?: string | null;
+  }>;
 }
 
 export interface OperationsMetrics {

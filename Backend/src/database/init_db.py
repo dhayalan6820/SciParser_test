@@ -179,9 +179,45 @@ async def init_database():
                     latency_ms INTEGER,
                     finish_reason VARCHAR(50),
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    deleted_at TIMESTAMPTZ
+                    deleted_at TIMESTAMPTZ,
+                    organization_id VARCHAR(50),
+                    agent_run_id VARCHAR(36),
+                    agent_name VARCHAR(50),
+                    agent_stage VARCHAR(20),
+                    queue_time_ms INTEGER DEFAULT 0,
+                    processing_time_ms INTEGER DEFAULT 0,
+                    tool_name VARCHAR(50),
+                    mcp_server VARCHAR(50),
+                    browser_session VARCHAR(100),
+                    cache_hit BOOLEAN DEFAULT FALSE,
+                    streaming BOOLEAN DEFAULT FALSE,
+                    request_size INTEGER DEFAULT 0,
+                    response_size INTEGER DEFAULT 0,
+                    temperature DOUBLE PRECISION,
+                    top_p DOUBLE PRECISION,
+                    max_tokens INTEGER
                 )
             """))
+            # Run column migration ALTER TABLE commands
+            for col_name, col_type in [
+                ("organization_id", "VARCHAR(50)"),
+                ("agent_run_id", "VARCHAR(36)"),
+                ("agent_name", "VARCHAR(50)"),
+                ("agent_stage", "VARCHAR(20)"),
+                ("queue_time_ms", "INTEGER DEFAULT 0"),
+                ("processing_time_ms", "INTEGER DEFAULT 0"),
+                ("tool_name", "VARCHAR(50)"),
+                ("mcp_server", "VARCHAR(50)"),
+                ("browser_session", "VARCHAR(100)"),
+                ("cache_hit", "BOOLEAN DEFAULT FALSE"),
+                ("streaming", "BOOLEAN DEFAULT FALSE"),
+                ("request_size", "INTEGER DEFAULT 0"),
+                ("response_size", "INTEGER DEFAULT 0"),
+                ("temperature", "DOUBLE PRECISION"),
+                ("top_p", "DOUBLE PRECISION"),
+                ("max_tokens", "INTEGER")
+            ]:
+                await conn.execute(text(f"ALTER TABLE llm_requests ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
             await conn.execute(text(
                 "CREATE INDEX IF NOT EXISTS ix_llm_requests_user_created "
                 "ON llm_requests (user_id, created_at)"
@@ -236,6 +272,86 @@ async def init_database():
                         FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE;
                 END $$;
             """))
+
+            # Create new admin budget and telemetry tables
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS budget_limits (
+                    id BIGSERIAL PRIMARY KEY,
+                    scope VARCHAR(50) NOT NULL,
+                    scope_id VARCHAR(100) NOT NULL,
+                    daily_budget DOUBLE PRECISION,
+                    monthly_budget DOUBLE PRECISION,
+                    current_daily_spend DOUBLE PRECISION DEFAULT 0,
+                    current_monthly_spend DOUBLE PRECISION DEFAULT 0,
+                    alert_thresholds VARCHAR(100) DEFAULT '50,75,90,100',
+                    action_at_100 VARCHAR(50) DEFAULT 'switch_cheaper_model'
+                )
+            """))
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS alert_notifications (
+                    id VARCHAR(36) PRIMARY KEY,
+                    severity VARCHAR(20) NOT NULL,
+                    category VARCHAR(50) NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    message TEXT NOT NULL,
+                    resolved BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """))
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS metric_snapshots (
+                    id BIGSERIAL PRIMARY KEY,
+                    cpu_percent DOUBLE PRECISION,
+                    ram_percent DOUBLE PRECISION,
+                    active_websockets INTEGER,
+                    active_browser_instances INTEGER,
+                    db_size_bytes BIGINT,
+                    timestamp TIMESTAMPTZ DEFAULT NOW()
+                )
+            """))
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS system_error_logs (
+                    id VARCHAR(36) PRIMARY KEY,
+                    error_id VARCHAR(50) NOT NULL UNIQUE,
+                    timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    user_id VARCHAR(36),
+                    conversation_id VARCHAR(100),
+                    agent_run_id VARCHAR(36),
+                    api_endpoint VARCHAR(255),
+                    http_method VARCHAR(10),
+                    provider VARCHAR(50),
+                    model VARCHAR(100),
+                    tool_name VARCHAR(50),
+                    mcp_server VARCHAR(50),
+                    browser_session VARCHAR(100),
+                    severity VARCHAR(20) NOT NULL,
+                    category VARCHAR(50) NOT NULL,
+                    error_code VARCHAR(50) NOT NULL,
+                    error_message TEXT NOT NULL,
+                    stacktrace TEXT,
+                    retry_count INTEGER DEFAULT 0,
+                    duration_ms INTEGER DEFAULT 0
+                )
+            """))
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_budget_limits_scope_id ON budget_limits (scope_id)"
+            ))
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_metric_snapshots_timestamp ON metric_snapshots (timestamp)"
+            ))
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_system_error_logs_error_id ON system_error_logs (error_id)"
+            ))
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_system_error_logs_timestamp ON system_error_logs (timestamp)"
+            ))
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_system_error_logs_user_id ON system_error_logs (user_id)"
+            ))
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_system_error_logs_conversation_id ON system_error_logs (conversation_id)"
+            ))
+
             logger.info("Database tables checked/created successfully.")
 
         # Attempt to add RAG embedding columns in an isolated transaction

@@ -26,6 +26,9 @@ from apscheduler.triggers.cron import CronTrigger
 
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request, Query, Response, Body
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from src.services.errors import SciParserError
 
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,6 +47,12 @@ from src.schemas.schema import (
     AdminAnalyticsResponse, OperationsLogListResponse, AdminUserAnalyticsResponse,
     AdminSetCreditsRequest, ConversationTokenUsage, AppLogListResponse,
     LlmProviderRequest, LlmProviderResponse,
+    AdminCostAnalyticsResponse, AdminModelAnalyticsResponse, AdminToolAnalyticsResponse,
+    AdminBrowserAnalyticsResponse, AdminContextAnalyticsResponse, AdminRetrievalAnalyticsResponse,
+    AdminResourcesResponse, AdminSetBudgetRequest, AdminAlertsResponse, AdminGenerateInsightsResponse,
+    ObservabilityOverviewResponse, ObservabilityUsersResponse, ObservabilityConversationsResponse,
+    ObservabilityLLMResponse, ObservabilityAgentsToolsResponse, ObservabilityCacheMemoryResponse,
+    ObservabilityPerformanceErrorsResponse, ObservabilityWaterfallResponse, ObservabilityErrorsListResponse,
 )
 from src.utils.logger import logger
 from src.services.brain import brain
@@ -514,6 +523,41 @@ async def _run_schedule_task(schedule_id: str, run_id: str) -> None:
                         clean_line = line.strip()
                         if clean_line:
                             full_output.append(clean_line)
+                            
+                            # Parse token usage log emitted by subprocess
+                            if clean_line.startswith("[TOKEN_USAGE]"):
+                                try:
+                                    json_str = clean_line.split("[TOKEN_USAGE] ", 1)[-1]
+                                    token_data = json.loads(json_str)
+                                    from src.utils.llm_instrumentation import record_llm_request
+                                    
+                                    prompt_t = token_data.get("prompt_tokens", 0)
+                                    completion_t = token_data.get("completion_tokens", 0)
+                                    cost_usd = token_data.get("cost", 0.0)
+                                    model_name = token_data.get("model", "unknown")
+                                    p_user_id = token_data.get("user_id", owner_user_id)
+                                    p_chat_id = token_data.get("chat_id")
+                                    
+                                    category_tokens = {
+                                        "system_tokens": int(prompt_t * 0.20),
+                                        "user_tokens": int(prompt_t * 0.30),
+                                        "history_tokens": int(prompt_t * 0.50),
+                                    }
+                                    
+                                    asyncio.create_task(record_llm_request(
+                                        user_id=p_user_id,
+                                        chat_id=p_chat_id or f"schedule_{schedule_id}",
+                                        model=model_name,
+                                        source="schedule_run",
+                                        category_tokens=category_tokens,
+                                        input_tokens=prompt_t,
+                                        output_tokens=completion_t,
+                                        cost_usd=cost_usd
+                                    ))
+                                    logger.info(f"[SubprocessTracker] Captured subprocess tokens: {prompt_t} prompt, {completion_t} completion, cost: ${cost_usd:.6f}")
+                                except Exception as parse_err:
+                                    logger.warning(f"Failed to parse subprocess token usage: {parse_err}")
+
                             await plan_stream_manager.broadcast_schedule_update(schedule_id, {
                                 "type": "log",
                                 "time": datetime.now(timezone.utc).strftime("%H:%M:%S"),
@@ -692,6 +736,232 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# --- Centralized Error Handling & Exception Middleware ---
+
+async def log_system_error(
+    exc: Exception,
+    error_id: str,
+    code: str,
+    status_code: int,
+    title: str,
+    severity: str,
+    message: str,
+    request: Request
+) -> None:
+    from src.database.chat_db import SystemErrorLog, AsyncSessionLocal
+    user_id = None
+    conversation_id = None
+    agent_run_id = None
+    
+    if hasattr(request, "state"):
+        if hasattr(request.state, "user") and request.state.user:
+            user_id = getattr(request.state.user, "user_id", None)
+        if hasattr(request.state, "conversation_id"):
+            conversation_id = request.state.conversation_id
+        if hasattr(request.state, "agent_run_id"):
+            agent_run_id = request.state.agent_run_id
+
+    db = AsyncSessionLocal()
+    try:
+        tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+        context = getattr(exc, "context", {}) or {}
+        err_log = SystemErrorLog(
+            error_id=error_id,
+            user_id=user_id or context.get("user_id"),
+            conversation_id=conversation_id or context.get("conversation_id"),
+            agent_run_id=agent_run_id or context.get("agent_run_id"),
+            api_endpoint=str(request.url.path),
+            http_method=str(request.method),
+            provider=context.get("provider"),
+            model=context.get("model"),
+            tool_name=context.get("tool_name"),
+            mcp_server=context.get("mcp_server"),
+            browser_session=context.get("browser_session"),
+            severity=severity,
+            category=exc.__class__.__name__,
+            error_code=code,
+            error_message=message,
+            stacktrace=tb,
+            retry_count=context.get("retry_count", 0),
+            duration_ms=context.get("duration_ms", 0)
+        )
+        db.add(err_log)
+        await db.commit()
+    except Exception as e:
+        logger.error(f"Failed to save system error log to database: {e}")
+        await db.rollback()
+    finally:
+        await db.close()
+
+
+@app.exception_handler(SciParserError)
+async def sciparser_exception_handler(request: Request, exc: SciParserError):
+    await log_system_error(
+        exc=exc,
+        error_id=exc.error_id,
+        code=exc.code,
+        status_code=exc.status_code,
+        title=exc.title,
+        severity=exc.severity,
+        message=exc.message,
+        request=request
+    )
+    logger.error(f"SciParserError [{exc.error_id}]: {exc.title} - {exc.message}")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "success": False,
+            "error": {
+                "id": exc.error_id,
+                "code": exc.code,
+                "title": exc.title,
+                "message": exc.message,
+                "severity": exc.severity,
+                "retryable": exc.retryable,
+                "support_reference": exc.error_id
+            }
+        }
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    error_id = f"ERR-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+    friendly_msg = "We couldn't process your request because some parameters are invalid."
+    raw_details = str(exc.errors())
+    
+    await log_system_error(
+        exc=exc,
+        error_id=error_id,
+        code="VALIDATION_ERROR",
+        status_code=400,
+        title="Validation Error",
+        severity="warning",
+        message=raw_details,
+        request=request
+    )
+    logger.warning(f"ValidationError [{error_id}]: {raw_details}")
+    return JSONResponse(
+        status_code=400,
+        content={
+            "success": False,
+            "error": {
+                "id": error_id,
+                "code": "VALIDATION_ERROR",
+                "title": "Validation Error",
+                "message": friendly_msg,
+                "severity": "warning",
+                "retryable": False,
+                "support_reference": error_id
+            }
+        }
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    error_id = f"ERR-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+    code = "HTTP_ERROR"
+    title = "HTTP Error"
+    severity = "error"
+    friendly_msg = exc.detail
+
+    if exc.status_code == 401:
+        code = "UNAUTHORIZED"
+        title = "Authentication Failed"
+        friendly_msg = "Authentication credentials not provided or invalid."
+    elif exc.status_code == 403:
+        code = "PERMISSION_DENIED"
+        title = "Permission Denied"
+        friendly_msg = "You do not have permission to access this resource."
+    elif exc.status_code == 404:
+        code = "NOT_FOUND"
+        title = "Resource Not Found"
+        friendly_msg = "The requested resource could not be found."
+    elif exc.status_code == 429:
+        code = "RATE_LIMIT_EXCEEDED"
+        title = "Too Many Requests"
+        friendly_msg = "Too many requests were sent in a short period. Please wait a moment."
+
+    await log_system_error(
+        exc=exc,
+        error_id=error_id,
+        code=code,
+        status_code=exc.status_code,
+        title=title,
+        severity=severity,
+        message=exc.detail,
+        request=request
+    )
+    logger.error(f"HTTPException [{error_id}]: {exc.status_code} - {exc.detail}")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "success": False,
+            "error": {
+                "id": error_id,
+                "code": code,
+                "title": title,
+                "message": friendly_msg,
+                "severity": severity,
+                "retryable": exc.status_code in (429, 502, 503, 504),
+                "support_reference": error_id
+            }
+        }
+    )
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    error_id = f"ERR-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+    friendly_msg = "We couldn't complete your request right now. Please try again in a moment."
+    exc_name = type(exc).__name__.lower()
+    code = "INTERNAL_SERVER_ERROR"
+    title = "Internal Server Error"
+    severity = "critical"
+    
+    if "sql" in exc_name or "db" in exc_name or "operationalerror" in exc_name:
+        code = "DATABASE_ERROR"
+        title = "Service Issue"
+        friendly_msg = "We're experiencing a temporary service issue. Please try again."
+    elif "timeout" in exc_name:
+        code = "TIMEOUT_ERROR"
+        title = "Request Timed Out"
+        friendly_msg = "The request took longer than expected to respond."
+    elif "conn" in exc_name or "socket" in exc_name:
+        code = "CONNECTION_ERROR"
+        title = "Network Connection Failed"
+        friendly_msg = "A connection error occurred. Please try again."
+
+    await log_system_error(
+        exc=exc,
+        error_id=error_id,
+        code=code,
+        status_code=500,
+        title=title,
+        severity=severity,
+        message=str(exc),
+        request=request
+    )
+    logger.error(f"Unhandled Exception [{error_id}]: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "error": {
+                "id": error_id,
+                "code": code,
+                "title": title,
+                "message": friendly_msg,
+                "severity": severity,
+                "retryable": code in ("DATABASE_ERROR", "TIMEOUT_ERROR", "CONNECTION_ERROR"),
+                "support_reference": error_id
+            }
+        }
+    )
+
 
 # --- Auth Endpoints ---
 
@@ -1778,10 +2048,12 @@ async def toggle_browser_state(req: Dict[str, Any], current_user: User = Depends
 @app.post("/sciparser/v1/browser/frame/{user_id}")
 async def post_browser_frame(user_id: str, req: Dict[str, Any]):
     """Allow internal bridge subprocess to POST live browser frames for real-time preview."""
-    frame_data = req.get("frame")
-    if frame_data:
-        await plan_stream_manager.broadcast_frame(frame_data, user_id, is_tool=False)
-    return {"status": "success"}
+    is_active = brain.is_user_active(user_id)
+    if is_active and not req.get("check_only"):
+        frame_data = req.get("frame")
+        if frame_data:
+            await plan_stream_manager.broadcast_frame(frame_data, user_id, is_tool=False)
+    return {"status": "success", "is_active": is_active}
 
 @app.post("/sciparser/v1/browser/connect-cdp")
 async def connect_cdp(req: Dict[str, Any], current_user: User = Depends(ChatService.get_current_user)):
@@ -2314,6 +2586,260 @@ async def test_llm_provider(
         return {"status": "ok", "provider": req.provider, "model": req.model, "base_url": resolved_url}
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Provider test failed: {exc}")
+
+
+# --- Cost Control, Resources & Alerts endpoints ---
+
+@app.get("/sciparser/v1/admin/analytics/costs", response_model=AdminCostAnalyticsResponse)
+async def admin_get_cost_analytics_endpoint(
+    days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_cost_analytics(db, days=days)
+
+
+@app.get("/sciparser/v1/admin/analytics/models", response_model=AdminModelAnalyticsResponse)
+async def admin_get_model_analytics_endpoint(
+    days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_model_analytics(db, days=days)
+
+
+@app.get("/sciparser/v1/admin/analytics/tools", response_model=AdminToolAnalyticsResponse)
+async def admin_get_tool_analytics_endpoint(
+    days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_tool_analytics(db, days=days)
+
+
+@app.get("/sciparser/v1/admin/analytics/browser", response_model=AdminBrowserAnalyticsResponse)
+async def admin_get_browser_analytics_endpoint(
+    days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_browser_analytics(db, days=days)
+
+
+@app.get("/sciparser/v1/admin/analytics/context", response_model=AdminContextAnalyticsResponse)
+async def admin_get_context_analytics_endpoint(
+    days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_context_analytics(db, days=days)
+
+
+@app.get("/sciparser/v1/admin/analytics/retrieval", response_model=AdminRetrievalAnalyticsResponse)
+async def admin_get_retrieval_analytics_endpoint(
+    days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_retrieval_analytics(db, days=days)
+
+
+@app.get("/sciparser/v1/admin/analytics/resources", response_model=AdminResourcesResponse)
+async def admin_get_resources_endpoint(
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_resource_snapshots(db)
+
+
+@app.post("/sciparser/v1/admin/cost-control/budgets")
+async def admin_set_budget_endpoint(
+    req: AdminSetBudgetRequest,
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_set_budget(
+        db, user_id=req.user_id, daily=req.daily_budget, monthly=req.monthly_budget, action=req.action_at_100
+    )
+
+
+@app.get("/sciparser/v1/admin/alerts", response_model=AdminAlertsResponse)
+async def admin_get_alerts_endpoint(
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_alerts(db)
+
+
+@app.post("/sciparser/v1/admin/insights/generate", response_model=AdminGenerateInsightsResponse)
+async def admin_generate_insights_endpoint(
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_insights(db)
+
+
+@app.get("/sciparser/v1/admin/reports/download")
+async def admin_download_reports_endpoint(
+    format: str = Query("csv", pattern="^(csv|json|md)$"),
+    days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    costs = await ChatService.admin_get_cost_analytics(db, days=days)
+    models = await ChatService.admin_get_model_analytics(db, days=days)
+    tools = await ChatService.admin_get_tool_analytics(db, days=days)
+    browser = await ChatService.admin_get_browser_analytics(db, days=days)
+
+    import io
+    import csv
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    report_data = {
+        "days": days,
+        "total_cost": costs.get("total_cost", 0.0),
+        "cost_breakdown": costs.get("breakdown", []),
+        "models": models.get("models", []),
+        "tools": tools.get("tools", []),
+        "browser_sessions": browser.get("total_sessions", 0),
+        "pages_visited": browser.get("pages_visited", 0)
+    }
+
+    if format == "json":
+        return Response(
+            content=json.dumps(report_data, indent=2),
+            media_type="application/json",
+            headers={"Content-Disposition": f"attachment; filename=platform_report_{timestamp}.json"},
+        )
+    elif format == "md":
+        md = f"# Platform Performance & Analytics Report (Last {days} Days)\n\n"
+        md += f"Generated At: {datetime.now(timezone.utc).isoformat()}\n\n"
+        md += f"## 1. Summary\n- Total Cost: ${report_data['total_cost']:.4f}\n- Active Browser Sessions: {report_data['browser_sessions']}\n- Pages Visited: {report_data['pages_visited']}\n\n"
+        md += "## 2. Cost Breakdown\n"
+        for c in report_data["cost_breakdown"]:
+            md += f"- {c['category']}: ${c['cost']:.4f}\n"
+        md += "\n## 3. Active Models\n"
+        for m in report_data["models"]:
+            md += f"- {m['model_name']}: {m['requests']} runs, success rate {m['success_rate']}%, cost ${m['avg_cost'] * m['requests']:.4f}\n"
+        return Response(
+            content=md,
+            media_type="text/markdown",
+            headers={"Content-Disposition": f"attachment; filename=platform_report_{timestamp}.md"},
+        )
+    
+    # CSV
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["Report Metric", "Value"])
+    writer.writerow(["Date Range (Days)", days])
+    writer.writerow(["Total Cost (USD)", report_data["total_cost"]])
+    writer.writerow(["Browser Sessions", report_data["browser_sessions"]])
+    writer.writerow(["Pages Visited", report_data["pages_visited"]])
+    writer.writerow([])
+    writer.writerow(["Model Name", "Requests", "Success Rate (%)", "Avg Latency (ms)"])
+    for m in report_data["models"]:
+        writer.writerow([m["model_name"], m["requests"], m["success_rate"], m["avg_latency_ms"]])
+    return Response(
+        content=buffer.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=platform_report_{timestamp}.csv"},
+    )
+
+
+# --- Observability Endpoints ---
+
+@app.get("/sciparser/v1/admin/observability/overview", response_model=ObservabilityOverviewResponse)
+async def admin_observability_overview(
+    days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_observability_overview(db, days=days)
+
+
+@app.get("/sciparser/v1/admin/observability/users", response_model=ObservabilityUsersResponse)
+async def admin_observability_users(
+    days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_observability_users(db, days=days)
+
+
+@app.get("/sciparser/v1/admin/observability/conversations", response_model=ObservabilityConversationsResponse)
+async def admin_observability_conversations(
+    days: int = Query(30, ge=1, le=365),
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    search: str = Query("", description="Fuzzy search on conversation title"),
+    status: str = Query("", description="Filter by status"),
+    user_id: str = Query("", description="Filter by user id"),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_observability_conversations(
+        db, days=days, page=page, limit=limit, search=search, status=status, user_id=user_id
+    )
+
+
+@app.get("/sciparser/v1/admin/observability/llm", response_model=ObservabilityLLMResponse)
+async def admin_observability_llm(
+    days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_observability_llm(db, days=days)
+
+
+@app.get("/sciparser/v1/admin/observability/agents-tools", response_model=ObservabilityAgentsToolsResponse)
+async def admin_observability_agents_tools(
+    days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_observability_agents_tools(db, days=days)
+
+
+@app.get("/sciparser/v1/admin/observability/cache-memory", response_model=ObservabilityCacheMemoryResponse)
+async def admin_observability_cache_memory(
+    days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_observability_cache_memory(db, days=days)
+
+
+@app.get("/sciparser/v1/admin/observability/performance-errors", response_model=ObservabilityPerformanceErrorsResponse)
+async def admin_observability_performance_errors(
+    days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_observability_performance_errors(db, days=days)
+
+
+@app.get("/sciparser/v1/admin/observability/conversations/{chat_id}/waterfall", response_model=ObservabilityWaterfallResponse)
+async def admin_observability_waterfall(
+    chat_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_observability_waterfall(db, chat_id=chat_id)
+
+
+@app.get("/sciparser/v1/admin/observability/errors", response_model=ObservabilityErrorsListResponse)
+async def admin_observability_errors(
+    days: int = Query(30, ge=1, le=365),
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    search: str = Query("", description="Search term for message, code or error id"),
+    severity: str = Query("", description="Filter by severity"),
+    category: str = Query("", description="Filter by category"),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    return await ChatService.admin_get_observability_errors(
+        db, days=days, page=page, limit=limit, search=search, severity=severity, category=category
+    )
 
 
 if __name__ == "__main__":

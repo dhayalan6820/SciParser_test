@@ -12,7 +12,7 @@ from src import config
 
 logger = logging.getLogger(__name__)
 
-_EXTRA_SERVERS_PATH = os.path.join(os.path.dirname(__file__), "mcp_servers.json")
+_EXTRA_SERVERS_PATH = config.MCP_SERVERS_JSON_PATH
 
 
 def load_extra_mcp_servers() -> Dict[str, Any]:
@@ -82,11 +82,11 @@ class MCPToolManager:
 
         # Configure the browser-use MCP server via the local bridge script
         # This ensures the browser is launched with the correct CDP port and config
-        bridge_path = os.path.join(os.path.dirname(__file__), "browser_use_bridge.py")
+        bridge_path = config.BROWSER_USE_BRIDGE_PATH
 
         # Create a unique user data directory for this user/session to ensure isolation
         # and prevent "two browsers" or profile lock issues.
-        base_temp_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "temp"))
+        base_temp_dir = config.TEMP_DIR_PATH
         user_data_dir = os.path.join(base_temp_dir, f"user_{self.port}")
         os.makedirs(user_data_dir, exist_ok=True)
 
@@ -104,11 +104,13 @@ class MCPToolManager:
                 "args": [bridge_path],
                 "env": {
                     **os.environ,
-                    "PYTHONPATH": os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")),
+                    "PYTHONPATH": config.BACKEND_ROOT,
                     "OPENAI_API_KEY": config.OPENROUTER_API_KEY or os.getenv("OPENAI_API_KEY", ""),
+                    "OPENROUTER_API_KEY": config.OPENROUTER_API_KEY or os.getenv("OPENROUTER_API_KEY", ""),
                     "OPENAI_BASE_URL": config.OPENROUTER_BASE_URL or os.getenv("OPENAI_BASE_URL", ""),
                     "OPENAI_API_BASE": config.OPENROUTER_BASE_URL or os.getenv("OPENAI_API_BASE", ""),
                     "BROWSER_USE_MODEL": config.OPENROUTER_MODEL,
+                    "LLM_EXTRACTION_MODEL": os.getenv("LLM_EXTRACTION_MODEL", "openai/gpt-4o-mini-2024-07-18"),
                     "MCP_BROWSER_CDP_URL": self.cdp_url,  # per-session override
                     "BROWSER_CDP_URL": self.cdp_url, # Standard env var for some MCP servers
                     "BROWSER_USE_CDP_PORT": str(self.port),  # per-session override

@@ -8,6 +8,7 @@ import { useTheme } from "../../../contexts/ThemeContext";
 export const UsageTab: React.FC = () => {
   const { theme } = useTheme();
   const [usage, setUsage] = React.useState<AdminUsage | null>(null);
+  const [alerts, setAlerts] = React.useState<any[]>([]);
   const [days, setDays] = React.useState(30);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -18,8 +19,14 @@ export const UsageTab: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const res = await sciparserApi.adminGetUsage(days);
-        if (!cancelled) setUsage(res);
+        const [uRes, aRes] = await Promise.all([
+          sciparserApi.adminGetUsage(days),
+          sciparserApi.adminGetAlerts(),
+        ]);
+        if (!cancelled) {
+          setUsage(uRes);
+          setAlerts(aRes.alerts || []);
+        }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load usage");
       } finally {
@@ -120,6 +127,76 @@ export const UsageTab: React.FC = () => {
           </div>
         )}
       </Panel>
+
+      {/* Cost Controls & Active Alerts */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Panel title="Configure User Budgets" subtitle="Set limits and automatic mitigation policies">
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            const form = e.currentTarget;
+            const uid = (form.elements.namedItem("userId") as HTMLInputElement).value;
+            const daily = parseFloat((form.elements.namedItem("dailyBudget") as HTMLInputElement).value || "0");
+            const monthly = parseFloat((form.elements.namedItem("monthlyBudget") as HTMLInputElement).value || "0");
+            const action = (form.elements.namedItem("actionAt100") as HTMLSelectElement).value;
+            try {
+              await sciparserApi.adminSetBudget(uid, daily, monthly, action);
+              alert("Budget configured successfully!");
+              form.reset();
+            } catch (err) {
+              alert("Failed to set budget: " + (err instanceof Error ? err.message : String(err)));
+            }
+          }} className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">User ID</label>
+              <input name="userId" required placeholder="User ID string..." className="w-full text-xs rounded border border-slate-250 dark:border-slate-800 bg-transparent px-3 py-2 focus:ring-1 focus:ring-emerald-500 focus:outline-none" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Daily Limit ($)</label>
+                <input name="dailyBudget" type="number" step="0.01" required placeholder="e.g. 5.00" className="w-full text-xs rounded border border-slate-250 dark:border-slate-800 bg-transparent px-3 py-2 focus:ring-1 focus:ring-emerald-500 focus:outline-none" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Monthly Limit ($)</label>
+                <input name="monthlyBudget" type="number" step="0.01" required placeholder="e.g. 50.00" className="w-full text-xs rounded border border-slate-250 dark:border-slate-800 bg-transparent px-3 py-2 focus:ring-1 focus:ring-emerald-500 focus:outline-none" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Policy Limit Action (100% Exceeded)</label>
+              <select name="actionAt100" className="w-full text-xs rounded border border-slate-250 dark:border-slate-800 bg-transparent px-3 py-2 focus:ring-1 focus:ring-emerald-500 focus:outline-none">
+                <option value="switch_cheaper_model">Switch to Cheaper Model (gpt-4o-mini)</option>
+                <option value="throttle">Throttle Delay Execution</option>
+                <option value="reject">Reject request (HTTP 402)</option>
+              </select>
+            </div>
+            <button type="submit" className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold transition-colors">
+              Apply Budget Rules
+            </button>
+          </form>
+        </Panel>
+
+        <Panel title="Active Operational Alerts" subtitle="Recent threshold crossings, high latencies, and loops">
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {alerts.length === 0 ? (
+              <EmptyState label="No active alerts recorded." />
+            ) : (
+              alerts.map((a: any) => (
+                <div key={a.id} className="p-2.5 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 rounded-lg flex flex-col gap-1">
+                  <div className="flex justify-between items-center">
+                    <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                      a.severity === "critical" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
+                      a.severity === "warning" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
+                      "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                    }`}>{a.severity}</span>
+                    <span className="text-[10px] text-muted-foreground">{new Date(a.created_at).toLocaleString()}</span>
+                  </div>
+                  <p className="text-xs font-semibold">{a.title}</p>
+                  <p className="text-[11px] text-muted-foreground">{a.message}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </Panel>
+      </div>
     </div>
   );
 };
