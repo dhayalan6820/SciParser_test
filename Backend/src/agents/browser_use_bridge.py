@@ -234,6 +234,16 @@ def _patch_mcp_server(browser_session: 'BrowserSession', get_cdp_url_func, headl
         if not self.file_system: return 'Error: FileSystem not initialized'
         if not self.browser_session: return 'Error: No browser session active'
         if not self.tools: return 'Error: Tools not initialized'
+        # Enrich extraction query to guide LLM to extract CSS selectors natively
+        if "selector" not in query.lower():
+            query = query.rstrip() + (
+                "\n\nCRITICAL: For each piece of data/value you extract, you MUST also find or construct "
+                "a unique CSS selector path (e.g., '#plan-premium > div.price', 'div.card.plan:nth-of-type(1) > span.name') "
+                "pointing to the HTML element containing that specific text value. Output these CSS selector paths "
+                "under keys named '{field_name}_selector' (e.g., 'price_selector', 'name_selector') alongside "
+                "the extracted field values."
+            )
+
 
         from browser_use import ActionModel
         from pydantic import create_model
@@ -257,9 +267,143 @@ def _patch_mcp_server(browser_session: 'BrowserSession', get_cdp_url_func, headl
                 file_system=self.file_system,
             )
             
-            # If the tool succeeded and returned actual content, return it!
-            if action_result.extracted_content and action_result.extracted_content != 'No content extracted':
-                return action_result.extracted_content
+            # If the tool succeeded and returned actual content, map it to CSS selectors!
+            if not action_result.error and action_result.extracted_content and action_result.extracted_content != 'No content extracted':
+                content = action_result.extracted_content
+                try:
+                    page = await self.browser_session.get_current_page()
+                    js_mapper = """
+                    async (dataStr) => {
+                        function getUniqueSelector(el) {
+                            if (!(el instanceof Element)) return "";
+                            const path = [];
+                            let current = el;
+                            while (current && current.nodeType === Node.ELEMENT_NODE) {
+                                let selector = current.nodeName.toLowerCase();
+                                if (current.id) {
+                                    const id = current.id;
+                                    if (!/^[0-9_-]/.test(id) && id.length < 50) {
+                                        selector += '#' + id;
+                                        path.unshift(selector);
+                                        break;
+                                    }
+                                }
+                                let classes = Array.from(current.classList)
+                                    .filter(c => !c.includes("hover") && !c.includes("active") && !c.includes("focus") && c.length < 30);
+                                if (classes.length > 0) {
+                                    selector += '.' + classes.join('.');
+                                }
+                                let parent = current.parentNode;
+                                if (parent) {
+                                    let siblings = Array.from(parent.children).filter(c => c.nodeName === current.nodeName);
+                                    if (siblings.length > 1) {
+                                        let index = siblings.indexOf(current) + 1;
+                                        selector += `:nth-of-type(${index})`;
+                                    }
+                                }
+                                path.unshift(selector);
+                                current = current.parentNode;
+                            }
+                            return path.join(' > ');
+                        }
+
+                        function findBestSelectorForText(textVal) {
+                            if (!textVal || typeof textVal !== 'string') return "";
+                            const val = textVal.trim();
+                            if (val.length < 2) return "";
+                            
+                            const allElements = document.getElementsByTagName("*");
+                            let bestEl = null;
+                            let minTextLength = Infinity;
+                            
+                            for (let i = 0; i < allElements.length; i++) {
+                                const el = allElements[i];
+                                const tag = el.tagName.toLowerCase();
+                                if (['script', 'style', 'head', 'html', 'body'].includes(tag)) continue;
+                                
+                                let matches = false;
+                                for (let j = 0; j < el.childNodes.length; j++) {
+                                    const node = el.childNodes[j];
+                                    if (node.nodeType === Node.TEXT_NODE && node.nodeValue.includes(val)) {
+                                        matches = true;
+                                        break;
+                                    }
+                                }
+                                
+                                if (!matches && el.innerText && el.innerText.includes(val)) {
+                                    let childContains = false;
+                                    for (let j = 0; j < el.children.length; j++) {
+                                        if (el.children[j].innerText && el.children[j].innerText.includes(val)) {
+                                            childContains = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!childContains) {
+                                        matches = true;
+                                    }
+                                }
+                                
+                                if (matches) {
+                                    const elText = el.innerText.trim();
+                                    if (elText.length < minTextLength) {
+                                        minTextLength = elText.length;
+                                        bestEl = el;
+                                    }
+                                }
+                            }
+                            
+                            if (bestEl) {
+                                return getUniqueSelector(bestEl);
+                            }
+                            return "";
+                        }
+
+                        try {
+                            const parsed = JSON.parse(dataStr);
+                            if (Array.isArray(parsed)) {
+                                const mapped = [];
+                                for (const item of parsed) {
+                                    const newItem = { ...item };
+                                    for (const [key, value] of Object.entries(item)) {
+                                        if (value && typeof value === 'string' && value.trim().length > 1 && !key.endsWith("_selector")) {
+                                            const selector = findBestSelectorForText(value);
+                                            if (selector) {
+                                                newItem[`${key}_selector`] = selector;
+                                            }
+                                        }
+                                    }
+                                    mapped.push(newItem);
+                                }
+                                return JSON.stringify(mapped);
+                            } else if (typeof parsed === 'object' && parsed !== null) {
+                                const newItem = { ...parsed };
+                                for (const [key, value] of Object.entries(parsed)) {
+                                    if (value && typeof value === 'string' && value.trim().length > 1 && !key.endsWith("_selector")) {
+                                        const selector = findBestSelectorForText(value);
+                                        if (selector) {
+                                            newItem[`${key}_selector`] = selector;
+                                        }
+                                    }
+                                }
+                                return JSON.stringify(newItem);
+                            }
+                        } catch (e) {
+                            if (dataStr && dataStr.trim().length > 1) {
+                                const selector = findBestSelectorForText(dataStr);
+                                if (selector) {
+                                    return JSON.stringify({ raw_output: dataStr, selector: selector });
+                                }
+                            }
+                        }
+                        return dataStr;
+                    }
+                    """
+                    mapped_content = await page.evaluate(js_mapper, content)
+                    if mapped_content:
+                        return mapped_content
+                except Exception as eval_err:
+                    print(f"Bridge [patch]: Failed to map CSS selectors: {eval_err}", file=sys.stderr)
+                return content
                 
             # If it failed or returned nothing, execute the fallback (extract visible page text)
             print("Bridge [patch]: LLM extraction returned empty/failed. Attempting javascript fallback...", file=sys.stderr)
@@ -439,18 +583,36 @@ async def run_bridge():
         browser_session = Browser.from_system_chrome(profile_directory=system_chrome_profile)
         await browser_session.start()
     else:
+        # Prevent Chromium from trying to lock the user's primary/active Chrome User Data directory,
+        # which would cause a timeout hang.
+        is_primary_chrome_dir = any(
+            x in user_data_dir.replace("\\", "/").lower()
+            for x in ["google/chrome/user data", "local/google/chrome"]
+        )
+        if is_primary_chrome_dir:
+            temp_profile_dir = os.path.join(getattr(config, "TEMP_DIR_PATH", "./temp"), f"isolated_profile_{port}")
+            print(
+                f"Bridge: Overriding primary Chrome profile directory {user_data_dir} "
+                f"with safe isolated directory {temp_profile_dir} to avoid locks/hangs.",
+                file=sys.stderr
+            )
+            user_data_dir = temp_profile_dir
+            os.makedirs(user_data_dir, exist_ok=True)
+
         profile = BrowserProfile(
             headless=headless,
             user_data_dir=user_data_dir,
-            chromium_args=[
+            chromium_args=[arg for arg in [
                 "--remote-allow-origins=*",
                 f"--remote-debugging-port={port}",
                 "--no-first-run",
                 "--no-default-browser-check",
                 "--skip-first-run-ui",
                 "--disable-search-engine-choice-screen",
-                "--disable-features=Translate,OptimizationHints"
-            ],
+                "--disable-features=Translate,OptimizationHints",
+                "--window-size=1280,1080",
+                "--headless=new" if headless else ""
+            ] if arg],
             proxy={'server': proxy_url} if proxy_url else None,
             keep_alive=keep_alive,
             executable_path=executable_path if executable_path else None

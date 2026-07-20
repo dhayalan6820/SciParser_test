@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Great+Vibes&family=Signika:wght@400;600;700&family=DM+Sans:wght@400;500;700&family=Noto+Sans:wght@400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Great+Vibes&family=Signika:wght@400;600;700&family=DM+Sans:wght@400;500;700&family=Noto+Sans:wght@400;600&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -7,6 +7,7 @@
   --font-sans: 'Noto Sans', ui-sans-serif, system-ui, sans-serif;
   --font-signika: 'Signika', sans-serif;
   --font-dm-sans: 'DM Sans', sans-serif;
+  --font-chat: 'Lora', Georgia, 'Times New Roman', serif;
 }
 
 @keyframes cursorPulse {
@@ -38,6 +39,7 @@
 
 :root {
   --elegant-font: 'Great Vibes';
+  --chat-serif: 'Lora', Georgia, 'Times New Roman', serif;
   --vh: 1vh;
   --app-height: 100%;
   --background: oklch(1 0 0);
@@ -113,6 +115,44 @@ code {
   max-width: 100%;
 }
 
+/* Chat message content — elegant serif font matching Manus style */
+.chat-prose {
+  font-family: var(--chat-serif);
+  font-size: 0.9375rem;     /* 15px — slightly bigger for readability */
+  line-height: 1.75;
+  font-weight: 400;
+  letter-spacing: 0.005em;
+}
+
+.chat-prose strong,
+.chat-prose b {
+  font-weight: 600;
+}
+
+.chat-prose em,
+.chat-prose i {
+  font-style: italic;
+}
+
+.chat-prose li {
+  margin-bottom: 0.35em;
+  line-height: 1.7;
+}
+
+.chat-prose ol,
+.chat-prose ul {
+  padding-left: 1.25rem;
+  margin: 0.5rem 0;
+}
+
+.chat-prose p {
+  margin-bottom: 0.75rem;
+}
+
+.chat-prose p:last-child {
+  margin-bottom: 0;
+}
+
 /* Message text wraps safely */
 .message-body {
   word-break: break-word;
@@ -129,10 +169,21 @@ code {
 
 /* Chat message column — comfortable reading width even on 4K */
 .chat-content-cap {
-  max-width: min(100%, 860px);
+  width: 100%;
+  max-width: 100%;
   margin-left: auto;
   margin-right: auto;
-  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .chat-content-cap {
+    max-width: 75%;
+  }
+}
+
+/* Utilize maximum screen space when the browser split pane is active */
+.chat-content-cap.browser-active {
+  max-width: 95% !important;
 }
 
 /* Touch-friendly min size for interactive targets */

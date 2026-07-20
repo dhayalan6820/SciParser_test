@@ -11,6 +11,7 @@ export const WaterfallTimeline: React.FC<WaterfallTimelineProps> = ({ chatId }) 
   const [data, setData] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [hoveredIndex, setHoveredIndex] = React.useState<number | null>(null);
 
   React.useEffect(() => {
     (async () => {
@@ -93,18 +94,40 @@ export const WaterfallTimeline: React.FC<WaterfallTimelineProps> = ({ chatId }) 
             const isSuccess = (stage.status || "").toUpperCase() === "COMPLETED" || (stage.status || "").toUpperCase() === "SUCCESS";
 
             return (
-              <div key={stage.id || idx} className="group relative flex items-center hover:bg-slate-50 dark:hover:bg-slate-800/40 p-1.5 rounded transition-colors">
+              <div
+                key={stage.id || idx}
+                onMouseEnter={() => setHoveredIndex(idx)}
+                onMouseLeave={() => setHoveredIndex(null)}
+                className="group relative flex items-center hover:bg-slate-50 dark:hover:bg-slate-800/40 p-1.5 rounded transition-colors"
+              >
                 {/* Left labels column */}
                 <div className="w-1/3 shrink-0 flex items-center justify-between pr-4 select-none">
-                  <div className="truncate pr-2">
-                    <span className={`text-[9px] font-bold uppercase px-1 py-0.5 rounded mr-1.5 bg-slate-100 dark:bg-slate-800 text-slate-500`}>
-                      {typeLabel}
-                    </span>
-                    <span className="text-xs font-medium text-slate-800 dark:text-slate-200" title={stage.name}>
-                      {stage.name}
-                    </span>
+                  <div className="truncate pr-2 flex-1">
+                    <div className="flex items-center">
+                      <span className={`text-[9px] font-bold uppercase px-1 py-0.5 rounded mr-1.5 bg-slate-100 dark:bg-slate-800 text-slate-500`}>
+                        {typeLabel}
+                      </span>
+                      <span className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate" title={stage.name}>
+                        {stage.name}
+                      </span>
+                    </div>
+                    {(stage.tokens > 0 || stage.cost > 0) && (
+                      <div className="flex items-center gap-1.5 mt-0.5 pl-[38px] text-[10px] text-muted-foreground font-mono">
+                        {stage.tokens > 0 && (
+                          <span className="text-blue-600 dark:text-blue-400">
+                            {stage.tokens.toLocaleString()} toks
+                          </span>
+                        )}
+                        {stage.tokens > 0 && stage.cost > 0 && <span className="opacity-40">•</span>}
+                        {stage.cost > 0 && (
+                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                            ${stage.cost.toFixed(4)}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 shrink-0">
                     {isSuccess ? (
                       <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                     ) : (
@@ -114,7 +137,7 @@ export const WaterfallTimeline: React.FC<WaterfallTimelineProps> = ({ chatId }) 
                 </div>
 
                 {/* Right bar chart column */}
-                <div className="w-2/3 relative h-6 bg-slate-50 dark:bg-slate-900/40 rounded border border-slate-100 dark:border-slate-850 overflow-hidden flex items-center">
+                <div className="w-2/3 relative h-6 bg-slate-50 dark:bg-slate-900/40 rounded border border-slate-100 dark:border-slate-800 overflow-hidden flex items-center">
                   <div
                     style={{ left: `${startOffset}%`, width: `${widthPercent}%` }}
                     className={`absolute h-4 rounded-sm opacity-85 group-hover:opacity-100 transition-all ${barColor}`}
@@ -124,12 +147,11 @@ export const WaterfallTimeline: React.FC<WaterfallTimelineProps> = ({ chatId }) 
                     className="absolute text-[10px] font-medium text-slate-500 whitespace-nowrap z-10 select-none"
                   >
                     {stage.duration_ms >= 1000 ? `${(stage.duration_ms / 1000).toFixed(2)}s` : `${stage.duration_ms}ms`}
-                    {stage.cost > 0 && ` ($${stage.cost.toFixed(4)})`}
                   </span>
                 </div>
 
                 {/* Hover details tooltip */}
-                <div className="hidden group-hover:block absolute left-1/3 top-7 bg-slate-900 text-white text-[11px] p-2.5 rounded-lg shadow-xl border border-slate-800 z-50 w-72 space-y-1">
+                <div className={`${hoveredIndex === idx ? "block" : "hidden"} absolute left-1/3 top-7 bg-slate-900 text-white text-[11px] p-2.5 rounded-lg shadow-xl border border-slate-800 z-50 w-72 space-y-1 pointer-events-none`}>
                   <div className="font-semibold pb-1 border-b border-slate-800 text-slate-300">{stage.name}</div>
                   <div><span className="text-slate-400">Duration:</span> {stage.duration_ms}ms</div>
                   {stage.tokens > 0 && <div><span className="text-slate-400">Tokens:</span> {stage.tokens.toLocaleString()}</div>}

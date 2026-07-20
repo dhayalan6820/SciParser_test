@@ -22,16 +22,12 @@ import {
   MessageSquare,
   ScrollText,
 } from "lucide-react";
-import { UsersTab } from "./admin/users-tab";
-import { OperationsTab } from "./admin/operations-tab";
 import { OverviewTab } from "./admin/overview-tab";
 import { AnalyticsTab } from "./admin/analytics-tab";
-import { AgentMonitoringTab } from "./admin/agent-monitoring-tab";
 import { AutomationMonitoringTab } from "./admin/automation-monitoring-tab";
 import { BrowserSessionsTab } from "./admin/browser-sessions-tab";
 import { UsageTab } from "./admin/usage-tab";
 import { SecurityTab } from "./admin/security-tab";
-import { LogsTab } from "./admin/logs-tab";
 import { ObservabilityTab } from "./admin/observability-tab";
 
 interface AdminDashboardProps {
@@ -42,29 +38,21 @@ interface AdminDashboardProps {
 
 type Tab =
   | "overview"
-  | "users"
-  | "operations"
   | "analytics"
   | "observability"
-  | "agents"
   | "automations"
   | "browser-sessions"
   | "usage"
-  | "security"
-  | "logs";
+  | "security";
 
 const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "overview", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" /> },
-  { id: "users", label: "Users", icon: <Users className="h-4 w-4" /> },
-  { id: "operations", label: "Operations", icon: <Activity className="h-4 w-4" /> },
   { id: "analytics", label: "Analytics", icon: <BarChart3 className="h-4 w-4" /> },
   { id: "observability", label: "Observability", icon: <Activity className="h-4 w-4" /> },
-  { id: "agents", label: "Agent Monitoring", icon: <Bot className="h-4 w-4" /> },
   { id: "automations", label: "Automation Monitoring", icon: <Calendar className="h-4 w-4" /> },
   { id: "browser-sessions", label: "Browser Sessions", icon: <Globe className="h-4 w-4" /> },
   { id: "usage", label: "Usage", icon: <Coins className="h-4 w-4" /> },
   { id: "security", label: "Security", icon: <ShieldAlert className="h-4 w-4" /> },
-  { id: "logs", label: "Logs", icon: <ScrollText className="h-4 w-4" /> },
 ];
 
 const TAB_LABELS: Record<Tab, string> = NAV_ITEMS.reduce(
@@ -81,16 +69,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
     switch (tab) {
       case "overview":
         return <OverviewTab />;
-      case "users":
-        return <UsersTab currentUsername={currentUser?.username} />;
-      case "operations":
-        return <OperationsTab />;
       case "analytics":
         return <AnalyticsTab />;
       case "observability":
         return <ObservabilityTab />;
-      case "agents":
-        return <AgentMonitoringTab />;
       case "automations":
         return <AutomationMonitoringTab />;
       case "browser-sessions":
@@ -99,8 +81,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         return <UsageTab />;
       case "security":
         return <SecurityTab />;
-      case "logs":
-        return <LogsTab />;
       default:
         return null;
     }

@@ -160,6 +160,7 @@ async def record_llm_request(
     cost_usd: float = 0.0,
     latency_ms: Optional[int] = None,
     finish_reason: Optional[str] = None,
+    tool_name: Optional[str] = None,
 ) -> None:
     """
     Persist one LlmRequest analytics row.
@@ -190,6 +191,7 @@ async def record_llm_request(
             cost_usd=cost_usd,
             latency_ms=latency_ms,
             finish_reason=finish_reason,
+            tool_name=tool_name,
         )
         async with AsyncSessionLocal() as session:
             session.add(row)

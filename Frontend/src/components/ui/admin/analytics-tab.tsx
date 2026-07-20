@@ -157,7 +157,7 @@ export const AnalyticsTab: React.FC = () => {
         <Panel title="Cost Breakdown by Category" subtitle="Feature cost distribution for the platform">
           <div className="space-y-3">
             {costData?.breakdown?.map((c: any) => (
-              <div key={c.category} className="flex justify-between items-center p-2.5 border-b border-slate-100 dark:border-slate-850">
+              <div key={c.category} className="flex justify-between items-center p-2.5 border-b border-slate-100 dark:border-slate-800">
                 <span className="text-xs capitalize font-medium">{c.category}</span>
                 <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">${c.cost.toFixed(4)}</span>
               </div>

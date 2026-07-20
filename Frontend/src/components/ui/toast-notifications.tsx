@@ -109,7 +109,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                   <h4 className="text-xs font-semibold leading-tight">{t.title}</h4>
                   <p className="text-[11px] text-muted-foreground mt-0.5 leading-normal">{t.message}</p>
                   {t.errorId && (
-                    <div className="mt-1.5 font-mono text-[9px] text-slate-500 bg-slate-50 dark:bg-slate-950/40 py-0.5 px-2 rounded border border-slate-100 dark:border-slate-850 inline-block">
+                    <div className="mt-1.5 font-mono text-[9px] text-slate-500 bg-slate-50 dark:bg-slate-950/40 py-0.5 px-2 rounded border border-slate-100 dark:border-slate-800 inline-block">
                       Reference ID: {t.errorId}
                     </div>
                   )}

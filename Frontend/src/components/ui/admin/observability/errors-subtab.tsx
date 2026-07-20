@@ -193,7 +193,7 @@ export const ErrorsSubtab: React.FC<ErrorsSubtabProps> = ({ days }) => {
 
                   {/* Expanded Stacktrace & context */}
                   {isExpanded && (
-                    <div className="mt-4 ml-2 p-4 bg-slate-50/50 dark:bg-slate-900/20 rounded-lg border border-slate-100 dark:border-slate-850 space-y-4 text-xs">
+                    <div className="mt-4 ml-2 p-4 bg-slate-50/50 dark:bg-slate-900/20 rounded-lg border border-slate-100 dark:border-slate-800 space-y-4 text-xs">
                       {/* Context attributes grid */}
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
                         <div>

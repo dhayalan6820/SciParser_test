@@ -14,7 +14,7 @@ import {
   ArrowRight, Loader2, Sparkles, User as UserIcon,
   Check, X, MoreVertical, Maximize2, ZoomIn,
   History, Timer, Gauge, Network,
-  Brain, HardDrive
+  Brain, HardDrive, Square
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -85,6 +85,36 @@ const ModalShell: React.FC<{
   </div>
 );
 
+const extractAndPrettifyJSON = (content: string): string => {
+  if (!content) return "No results available yet. Run the schedule to see data.";
+  
+  const marker = "=== FINAL EXTRACTED DATA ===";
+  const markerIdx = content.indexOf(marker);
+  let jsonPart = content;
+  if (markerIdx !== -1) {
+    jsonPart = content.substring(markerIdx + marker.length).trim();
+  } else {
+    const startIdx = Math.min(
+      content.indexOf('['),
+      content.indexOf('{')
+    );
+    const endIdx = Math.max(
+      content.lastIndexOf(']'),
+      content.lastIndexOf('}')
+    );
+    if (startIdx !== -1 && endIdx !== -1 && startIdx < endIdx) {
+      jsonPart = content.substring(startIdx, endIdx + 1).trim();
+    }
+  }
+
+  try {
+    const parsed = JSON.parse(jsonPart);
+    return JSON.stringify(parsed, null, 2);
+  } catch (e) {
+    return jsonPart || content;
+  }
+};
+
 export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
   const { theme } = useTheme();
   const [schedules, setSchedules] = React.useState<Schedule[]>([]);
@@ -97,7 +127,8 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
   const [isEditing, setIsEditing] = React.useState(false);
   const [editData, setEditData] = React.useState({ title: "", type: "", email: "" });
   const [deleteConfirmId, setDeleteConfirmId] = React.useState<string | null>(null);
-  const [activeModal, setActiveModal] = React.useState<null | "script" | "aiplan" | "history" | "browser" | "result" | "runDetail">(null);
+  const [activeModal, setActiveModal] = React.useState<null | "script" | "aiplan" | "history" | "browser" | "result" | "runDetail" | "monitor">(null);
+  const [activeLogTab, setActiveLogTab] = React.useState<"logs" | "plan" | "script" | "result" | "history">("history");
   const [selectedRun, setSelectedRun] = React.useState<ScheduleRun | null>(null);
   const [currentProgress, setCurrentProgress] = React.useState(0);
   const [liveLogs, setLiveLogs] = React.useState<any[]>([]);
@@ -115,6 +146,25 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
   ]);
   
   const [runs, setRuns] = React.useState<ScheduleRun[]>([]);
+
+  const latestRun = runs[0];
+  const effectiveStatus = isRunning 
+    ? "Running Automation..." 
+    : latestRun 
+      ? latestRun.status.toUpperCase() 
+      : "IDLE";
+
+  const effectiveProgress = isRunning 
+    ? currentProgress 
+    : latestRun 
+      ? 100 
+      : 0;
+
+  const effectiveElapsed = isRunning 
+    ? elapsedSeconds 
+    : latestRun?.duration_seconds 
+      ? latestRun.duration_seconds 
+      : 0;
 
   // Resizable sidebar
   const [sidebarWidth, setSidebarWidth] = React.useState(280);
@@ -156,6 +206,15 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
       fetchScheduleRuns(selectedSchedule.schedule_id);
     }
   }, [selectedSchedule]);
+
+  React.useEffect(() => {
+    if (isRunning) {
+      setActiveLogTab("logs");
+      setActiveModal("monitor");
+    } else {
+      setActiveLogTab("history");
+    }
+  }, [isRunning, selectedSchedule?.schedule_id]);
 
   const fetchScheduleRuns = async (scheduleId: string) => {
     try {
@@ -203,11 +262,16 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
               step.id === msg.step_id ? { ...step, status: msg.status, time: msg.time || step.time } : step
             ));
             setCurrentProgress(Math.round((msg.step_id / 6) * 100));
-            // Mark done when final step completes or any step fails
+             // Mark done when final step completes or any step fails
             if ((msg.step_id === 6 && msg.status === 'completed') || msg.status === 'failed') {
               setIsRunning(false);
-              setResourceUsage(null);
-              setTimeout(fetchSchedules, 1500);
+              // setResourceUsage(null); // Keep final memory & cpu metrics visible
+              setTimeout(async () => {
+                await fetchSchedules();
+                if (msg.step_id === 6 && msg.status === 'completed') {
+                  setActiveLogTab('result');
+                }
+              }, 1500);
             }
           } else if (msg.type === 'screenshot') {
             setLiveScreenshot(msg.frame);
@@ -308,6 +372,15 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
     } catch (err) {
       console.error("Failed to run schedule:", err);
       setIsRunning(false);
+    }
+  };
+  const handleStopRun = async () => {
+    if (!selectedSchedule) return;
+    try {
+      await sciparserApi.stopSchedule(selectedSchedule.schedule_id);
+      setIsRunning(false);
+    } catch (err) {
+      console.error("Failed to stop schedule:", err);
     }
   };
 
@@ -478,7 +551,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
         </div>
 
         {/* Main Content - Premium Dashboard */}
-        <div className="flex-1 overflow-y-auto bg-background p-4 sm:p-6 hide-scrollbar min-w-0">
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-background p-4 sm:p-6 min-w-0">
 
           {/* Mobile schedule switcher — visible only below md breakpoint */}
           {schedules.length > 0 && (
@@ -504,7 +577,7 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="space-y-6"
+              className="flex-grow flex flex-col min-h-0 space-y-4"
             >
               {/* Header Section */}
               <div className="flex flex-wrap items-start gap-6 bg-card/40 p-6 rounded-[32px] border border-border relative overflow-hidden">
@@ -583,19 +656,20 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                         </div>
                       )}
                     </>
+                  ) : isRunning ? (
+                    <Button 
+                      onClick={handleStopRun}
+                      className="h-14 px-10 rounded-2xl bg-red-600 hover:bg-red-700 text-foreground text-[11px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-red-500/20 transition-all active:scale-95 min-w-[200px] flex items-center justify-center gap-3"
+                    >
+                      <Square className="w-5 h-5 fill-current" /> STOP RUN
+                    </Button>
                   ) : (
-                  <Button 
-                    onClick={handleRunNow}
-                    disabled={isRunning}
-                    className="h-14 px-10 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-foreground text-[11px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-indigo-500/20 transition-all active:scale-95 disabled:opacity-50 min-w-[200px] flex items-center justify-center gap-3"
-                  >
-                    {isRunning ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <Play className="w-5 h-5 fill-current" />
-                    )}
-                    {isRunning ? "RUNNING..." : "RUN NOW"}
-                  </Button>
+                    <Button 
+                      onClick={handleRunNow}
+                      className="h-14 px-10 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-foreground text-[11px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-indigo-500/20 transition-all active:scale-95 disabled:opacity-50 min-w-[200px] flex items-center justify-center gap-3"
+                    >
+                      <Play className="w-5 h-5 fill-current" /> RUN NOW
+                    </Button>
                   )}
                   <div className="flex gap-2">
                     <Button 
@@ -617,61 +691,69 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
               </div>
 
               {/* Main Dashboard Grid */}
-              <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+              <div className="flex-grow grid grid-cols-1 xl:grid-cols-12 gap-4 min-h-0">
 
                 {/* Left Column - Progress, Pipeline & Live Logs */}
-                <div className="col-span-1 xl:col-span-8 space-y-6 min-w-0">
+                <div className="col-span-1 xl:col-span-8 flex flex-col min-h-0 space-y-4 min-w-0">
 
                   {/* Current Run Progress */}
-                  <div className="bg-card/40 rounded-[32px] border border-border p-4 sm:p-6 flex flex-col sm:flex-row items-center gap-6 sm:gap-8">
-                    <div className="relative w-24 h-24 shrink-0">
-                      <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                        <circle className="text-border" strokeWidth="8" stroke="currentColor" fill="transparent" r="42" cx="50" cy="50" />
-                        <motion.circle 
-                          className="text-indigo-500" 
-                          strokeWidth="8" 
-                          strokeDasharray={264}
-                          initial={{ strokeDashoffset: 264 }}
-                          animate={{ strokeDashoffset: 264 - (264 * currentProgress) / 100 }}
-                          strokeLinecap="round" 
-                          stroke="currentColor" 
-                          fill="transparent" 
-                          r="42" cx="50" cy="50" 
-                        />
-                      </svg>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-lg font-black text-foreground">{currentProgress}%</span>
-                        <span className="text-[7px] font-black text-muted-foreground uppercase tracking-widest">Progress</span>
-                      </div>
-                    </div>
-                    
-                    <div className="flex-1 space-y-3 w-full">
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                          <div className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">Current Status</div>
-                          <div className="text-base font-black text-foreground uppercase tracking-tight">
-                            {isRunning ? "Running Automation..." : "Idle"}
-                          </div>
-                        </div>
-                        <div className="text-right space-y-1">
-                          <div className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">ETA</div>
-                          <div className="text-base font-black text-foreground uppercase tracking-tight">
-                            {isRunning ? `${Math.max(0, Math.round(((100 - currentProgress) / 100) * 30))}s` : "--"}
-                          </div>
+                  {isRunning && (
+                    <div className="bg-card/40 rounded-[32px] border border-border p-4 sm:p-6 flex flex-col sm:flex-row items-center gap-6 sm:gap-8 shrink-0">
+                      <div className="relative w-24 h-24 shrink-0">
+                        <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                          <circle className="text-border" strokeWidth="8" stroke="currentColor" fill="transparent" r="42" cx="50" cy="50" />
+                          <motion.circle 
+                            className="text-indigo-500" 
+                            strokeWidth="8" 
+                            strokeDasharray={264}
+                            initial={{ strokeDashoffset: 264 }}
+                            animate={{ strokeDashoffset: 264 - (264 * effectiveProgress) / 100 }}
+                            strokeLinecap="round" 
+                            stroke="currentColor" 
+                            fill="transparent" 
+                            r="42" cx="50" cy="50" 
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                          <span className="text-lg font-black text-foreground">{effectiveProgress}%</span>
+                          <span className="text-[7px] font-black text-muted-foreground uppercase tracking-widest">Progress</span>
                         </div>
                       </div>
-                      <div className="h-2 w-full bg-border rounded-full overflow-hidden">
-                        <motion.div 
-                          className="h-full bg-gradient-to-r from-indigo-600 to-purple-600"
-                          initial={{ width: 0 }}
-                          animate={{ width: `${currentProgress}%` }}
-                        />
+                      
+                      <div className="flex-1 space-y-3 w-full">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-1">
+                            <div className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">Current Status</div>
+                            <div className="text-base font-black text-foreground uppercase tracking-tight">
+                              {effectiveStatus}
+                            </div>
+                          </div>
+                          <div className="text-right space-y-1">
+                            <div className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">ETA</div>
+                            <div className="text-base font-black text-foreground uppercase tracking-tight">
+                              {isRunning ? `${Math.max(0, Math.round(((100 - effectiveProgress) / 100) * 30))}s` : "--"}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="h-2 w-full bg-border rounded-full overflow-hidden">
+                          <motion.div 
+                            className="h-full bg-gradient-to-r from-indigo-600 to-purple-600"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${effectiveProgress}%` }}
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Execution Pipeline */}
-                  <div className="bg-card/40 rounded-[32px] border border-border p-4 sm:p-6 space-y-4 sm:space-y-6">
+                  {isRunning && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="bg-card/40 rounded-[32px] border border-border p-4 sm:p-6 space-y-4 sm:space-y-6 overflow-hidden"
+                    >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <Workflow className="w-5 h-5 text-indigo-500" />
@@ -713,82 +795,260 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                       ))}
                       </div>
                     </div>
-                  </div>
+                  </motion.div>
+                  )}
 
-                  {/* Live Logs Panel */}
-                  <div className="bg-card/40 rounded-[32px] border border-border overflow-hidden flex flex-col">
-                    <div className="px-4 sm:px-6 py-4 border-b border-border shrink-0 flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <Terminal className="w-4 h-4 text-indigo-500" />
-                        <h3 className="text-[11px] font-black text-foreground uppercase tracking-[0.2em]">Live Logs</h3>
+                  {/* Console Deck Panel */}
+                  <div className="flex-grow flex flex-col min-h-0 bg-card/40 rounded-[32px] border border-border overflow-hidden">
+                    <div className="px-4 sm:px-6 py-3 border-b border-border shrink-0 flex items-center justify-between bg-white/[0.01]">
+                      {/* Tabs */}
+                      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto hide-scrollbar">
+                        {[
+                          isRunning 
+                            ? { id: 'logs', name: 'Live Logs', icon: Terminal }
+                            : { id: 'history', name: 'Run History', icon: History },
+                          { id: 'plan', name: 'AI Plan', icon: Brain },
+                          { id: 'script', name: 'Script', icon: Code },
+                          { id: 'result', name: 'Final Result', icon: CheckCircle2 }
+                        ].map((t) => (
+                          <button
+                            key={t.id}
+                            onClick={() => {
+                              if (t.id === 'plan') {
+                                setActiveModal('aiplan');
+                              } else if (t.id === 'script') {
+                                setActiveModal('script');
+                              } else if (t.id === 'result') {
+                                setActiveModal('result');
+                              } else {
+                                setActiveLogTab(t.id as any);
+                              }
+                            }}
+                            className={cn(
+                              "h-9 px-3 rounded-xl flex items-center gap-2 text-[10px] font-black uppercase tracking-wider transition-all border",
+                              activeLogTab === t.id
+                                ? "border-indigo-500/30 bg-indigo-500/10 text-indigo-400"
+                                : "border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
+                            )}
+                          >
+                            <t.icon className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">{t.name}</span>
+                            {(t.id === 'plan' || t.id === 'script' || t.id === 'result') && (
+                              <Maximize2 className="w-2.5 h-2.5 opacity-60 hidden sm:inline ml-0.5" />
+                            )}
+                          </button>
+                        ))}
                       </div>
+
+                      {/* Header Actions */}
                       <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline" size="sm"
-                          onClick={() => setActiveModal('aiplan')}
-                          className="h-8 px-3 rounded-lg border-border bg-transparent text-muted-foreground text-[10px] font-black uppercase tracking-widest hover:bg-foreground/5 gap-1.5"
-                        >
-                          <Brain className="w-3.5 h-3.5" /> AI Plan
-                        </Button>
-                        <Button
-                          variant="outline" size="sm"
-                          onClick={() => setActiveModal('script')}
-                          className="h-8 px-3 rounded-lg border-border bg-transparent text-muted-foreground text-[10px] font-black uppercase tracking-widest hover:bg-foreground/5 gap-1.5"
-                        >
-                          <Code className="w-3.5 h-3.5" /> Script
-                        </Button>
-                        <Button
-                          variant="outline" size="sm"
-                          onClick={() => setActiveModal('history')}
-                          className="h-8 px-3 rounded-lg border-border bg-transparent text-muted-foreground text-[10px] font-black uppercase tracking-widest hover:bg-foreground/5 gap-1.5"
-                        >
-                          <History className="w-3.5 h-3.5" /> History
-                        </Button>
+                        {activeLogTab === 'script' && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => handleCopyCode(selectedSchedule.generated_script)}
+                            className="h-8 px-3 rounded-lg border-border bg-transparent text-muted-foreground text-[10px] font-black uppercase tracking-widest hover:bg-foreground/5 gap-1.5"
+                          >
+                            {copySuccess ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                            {copySuccess || "Copy"}
+                          </Button>
+                        )}
+                        {activeLogTab === 'result' && selectedSchedule.extracted_content && (
+                          <div className="flex items-center gap-1.5">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => {
+                                const formatted = extractAndPrettifyJSON(selectedSchedule.extracted_content);
+                                const isJson = formatted.trim().startsWith('[') || formatted.trim().startsWith('{');
+                                const blob = new Blob([formatted], { type: isJson ? 'application/json' : 'text/plain' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `result-${selectedSchedule.schedule_id}.${isJson ? 'json' : 'txt'}`;
+                                a.click();
+                              }}
+                              className="h-8 px-3 rounded-lg border-border bg-transparent text-muted-foreground text-[10px] font-black uppercase tracking-widest hover:bg-foreground/5 gap-1.5"
+                            >
+                              <Download className="w-3.5 h-3.5" /> Download
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    <div className="h-64 sm:h-80 p-4 sm:p-6 overflow-y-auto hide-scrollbar space-y-2 font-mono">
-                      {liveLogs.length > 0 ? (
-                        liveLogs.map((log, i) => (
-                          <div key={i} className="flex items-start gap-4 text-[11px] py-1 group hover:bg-foreground/5 rounded px-2 transition-colors">
-                            <span className="text-muted-foreground/60 shrink-0">{log.time}</span>
-                            <span className={cn("font-black shrink-0 w-20", log.type === 'error' ? 'text-red-400' : 'text-indigo-400')}>[{log.engine || 'SYS'}]</span>
-                            <span className="text-muted-foreground">{log.message}</span>
+                    {/* Tab Contents */}
+                    <div className="flex-1 overflow-y-auto p-4 sm:p-6 hide-scrollbar min-h-0 bg-black/10">
+                      
+                      {activeLogTab === 'history' && (
+                        <div className="h-full flex flex-col min-h-0">
+                          {runs.length > 0 ? (
+                            <div className="overflow-x-auto scroll-x-smooth flex-grow">
+                              <table className="w-full text-left text-[11px] min-w-[480px]">
+                                <thead>
+                                  <tr className="text-muted-foreground font-black uppercase tracking-widest border-b border-border">
+                                    <th className="pb-3 px-2">Run ID</th>
+                                    <th className="pb-3 px-2">Date</th>
+                                    <th className="pb-3 px-2">Status</th>
+                                    <th className="pb-3 px-2">Engine</th>
+                                    <th className="pb-3 px-2">Duration</th>
+                                    <th className="pb-3 px-2 text-right">Action</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                  {runs.map((run) => (
+                                    <tr key={run.run_id} className="group hover:bg-foreground/5 transition-colors">
+                                      <td className="py-3 px-2 font-mono text-indigo-400 truncate max-w-[100px]">{run.run_id}</td>
+                                      <td className="py-3 px-2 text-muted-foreground">{formatDate(run.created_at)}</td>
+                                      <td className="py-3 px-2">
+                                        <span className={cn(
+                                          "px-2 py-0.5 rounded-md text-[9px] font-black uppercase",
+                                          run.status === 'completed' ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-500"
+                                        )}>{run.status}</span>
+                                      </td>
+                                      <td className="py-3 px-2 text-muted-foreground font-semibold uppercase">{run.engine}</td>
+                                      <td className="py-3 px-2 text-muted-foreground">{run.duration_seconds != null ? `${run.duration_seconds}s` : '—'}</td>
+                                      <td className="py-3 px-2 text-right">
+                                        <Button
+                                          variant="ghost" size="sm"
+                                          onClick={() => { setSelectedRun(run); setActiveModal('runDetail'); }}
+                                          className="h-7 px-2.5 rounded-lg border-border text-indigo-400 text-[10px] font-black uppercase tracking-wider hover:bg-indigo-500/10 gap-1"
+                                        >
+                                          Details
+                                        </Button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <div className="my-auto flex flex-col items-center justify-center text-center p-8">
+                              <History className="w-8 h-8 text-border mb-3 animate-pulse" />
+                              <p className="text-[11px] font-black text-muted-foreground/60 uppercase tracking-widest">not yet script ran</p>
+                              <p className="text-[10px] text-muted-foreground/60 max-w-xs mx-auto mt-1 uppercase tracking-wider font-bold">
+                                Run the automation task to see history details.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {activeLogTab === 'logs' && (
+                        <div className="space-y-2 font-mono">
+                          {liveLogs.length > 0 ? (
+                            liveLogs.map((log, i) => (
+                              <div key={i} className="flex items-start gap-4 text-[11px] py-1 group hover:bg-foreground/5 rounded px-2 transition-colors">
+                                <span className="text-muted-foreground/60 shrink-0">{log.time}</span>
+                                <span className={cn("font-black shrink-0 w-20", log.type === 'error' ? 'text-red-400' : 'text-indigo-400')}>[{log.engine || 'SYS'}]</span>
+                                <span className="text-muted-foreground">{log.message}</span>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="h-full flex flex-col items-center justify-center py-16 text-center">
+                              <Terminal className="w-8 h-8 text-border mb-3" />
+                              <p className="text-[10px] font-black text-muted-foreground/60 uppercase tracking-widest">Waiting for execution logs...</p>
+                            </div>
+                          )}
+                          {isRunning && (
+                            <div className="flex items-center gap-2 text-[11px] py-1 px-2">
+                              <Loader2 className="w-3 h-3 animate-spin text-indigo-500" />
+                              <span className="text-indigo-500 animate-pulse">Processing next instruction...</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {activeLogTab === 'plan' && (
+                        <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4 my-auto">
+                          <div className="w-16 h-16 rounded-[24px] bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-500">
+                            <Brain className="w-8 h-8" />
                           </div>
-                        ))
-                      ) : (
-                        <div className="py-16 text-center">
-                          <Terminal className="w-8 h-8 text-border mx-auto mb-3" />
-                          <p className="text-[10px] font-black text-muted-foreground/60 uppercase tracking-widest">Waiting for execution logs...</p>
+                          <div className="space-y-1">
+                            <h4 className="text-[12px] font-black text-foreground uppercase tracking-widest">AI Extraction Plan</h4>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold max-w-sm">
+                              View user prompts, extraction strategy, and original step-by-step pipeline compiled by the agent.
+                            </p>
+                          </div>
+                          <Button
+                            onClick={() => setActiveModal('aiplan')}
+                            className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-foreground text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-indigo-500/10"
+                          >
+                            <Maximize2 className="w-3.5 h-3.5 mr-2" /> VIEW FULL AI PLAN
+                          </Button>
                         </div>
                       )}
-                      {isRunning && (
-                        <div className="flex items-center gap-2 text-[11px] py-1 px-2">
-                          <Loader2 className="w-3 h-3 animate-spin text-indigo-500" />
-                          <span className="text-indigo-500 animate-pulse">Processing next instruction...</span>
+
+                      {activeLogTab === 'script' && (
+                        <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4 my-auto">
+                          <div className="w-16 h-16 rounded-[24px] bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-500">
+                            <Code className="w-8 h-8" />
+                          </div>
+                          <div className="space-y-1">
+                            <h4 className="text-[12px] font-black text-foreground uppercase tracking-widest">automation_script.py</h4>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold max-w-sm">
+                              Inspect the auto-generated python playwright script compiled by the parser agent.
+                            </p>
+                          </div>
+                          <Button
+                            onClick={() => setActiveModal('script')}
+                            className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-foreground text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-indigo-500/10"
+                          >
+                            <Maximize2 className="w-3.5 h-3.5 mr-2" /> VIEW SCRIPT CODE
+                          </Button>
                         </div>
                       )}
+
+                      {activeLogTab === 'result' && (
+                        <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4 my-auto">
+                          <div className="w-16 h-16 rounded-[24px] bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500">
+                            <CheckCircle2 className="w-8 h-8" />
+                          </div>
+                          <div className="space-y-1">
+                            <h4 className="text-[12px] font-black text-foreground uppercase tracking-widest">extracted_results.json</h4>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold max-w-sm">
+                              {selectedSchedule.extracted_content 
+                                ? "Inspect the formatted and prettified JSON payload extracted from the target website."
+                                : "No results available. Run the schedule task to generate extracted data."
+                              }
+                            </p>
+                          </div>
+                          {selectedSchedule.extracted_content ? (
+                            <Button
+                              onClick={() => setActiveModal('result')}
+                              className="h-11 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-foreground text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-emerald-500/10"
+                            >
+                              <Maximize2 className="w-3.5 h-3.5 mr-2" /> VIEW FINAL RESULTS
+                            </Button>
+                          ) : (
+                            <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest border border-dashed border-border px-3 py-1.5 rounded-xl">
+                              No Results Stored
+                            </span>
+                          )}
+                        </div>
+                      )}
+
                     </div>
                   </div>
                 </div>
 
                 {/* Right Column - Summary & Browser */}
-                <div className="col-span-1 xl:col-span-4 space-y-6 min-w-0">
+                <div className="col-span-1 xl:col-span-4 flex flex-col min-h-0 space-y-4 min-w-0">
 
                   {/* Execution Summary - compact strip, backed by real run data */}
-                  <div className="bg-card/40 rounded-[32px] border border-border p-4 sm:p-5">
+                  <div className="bg-card/40 rounded-[32px] border border-border p-4 sm:p-5 shrink-0">
                     <div className="grid grid-cols-2 gap-3">
                       {[
                         {
                           label: 'Elapsed',
-                          val: isRunning || elapsedSeconds > 0
-                            ? `${Math.floor(elapsedSeconds / 60)}:${String(elapsedSeconds % 60).padStart(2, '0')}`
+                          val: isRunning || effectiveElapsed > 0
+                            ? `${Math.floor(effectiveElapsed / 60)}:${String(effectiveElapsed % 60).padStart(2, '0')}`
                             : '--',
                           icon: Timer, color: 'text-indigo-500'
                         },
                         {
                           label: 'Progress',
-                          val: isRunning || currentProgress > 0 ? `${currentProgress}%` : '--',
+                          val: isRunning || effectiveProgress > 0 ? `${effectiveProgress}%` : '--',
                           icon: Activity, color: 'text-emerald-500'
                         },
                         {
@@ -803,12 +1063,16 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                         },
                         {
                           label: 'Log Lines',
-                          val: String(liveLogs.length),
+                          val: isRunning 
+                            ? String(liveLogs.length) 
+                            : latestRun?.output 
+                              ? String(latestRun.output.split('\n').filter(Boolean).length)
+                              : String(liveLogs.length || '--'),
                           icon: Network, color: 'text-blue-500'
                         },
                         {
                           label: 'Browser',
-                          val: liveScreenshot ? 'Streaming' : isRunning ? 'Connecting' : 'Idle',
+                          val: liveScreenshot ? 'Streaming' : isRunning ? 'Connecting' : latestRun ? 'Finished' : 'Idle',
                           icon: Globe, color: 'text-purple-500'
                         }
                       ].map((item, i) => (
@@ -824,97 +1088,52 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                   </div>
 
                   {/* Live Browser Preview */}
-                  <div className="bg-card/40 rounded-[32px] border border-border overflow-hidden flex flex-col">
-                    <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-white/[0.02]">
-                      <div className="flex items-center gap-2">
-                        <Globe className="w-4 h-4 text-indigo-500" />
-                        <span className="text-[10px] font-black text-foreground uppercase tracking-widest">Live Browser</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setActiveModal('browser')}
-                          className="p-1.5 rounded-lg hover:bg-foreground/5 text-muted-foreground hover:text-foreground transition-all"
-                        >
-                          <Maximize2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="aspect-video bg-black relative group cursor-pointer" onClick={() => setActiveModal('browser')}>
-                      {liveScreenshot ? (
-                        <img 
-                          src={liveScreenshot.startsWith('data:') ? liveScreenshot : `data:image/jpeg;base64,${liveScreenshot}`} 
-                          alt="Live Browser" 
-                          className="w-full h-full object-contain"
-                        />
-                      ) : (
-                        <>
-                          <img 
-                            src="https://images.unsplash.com/photo-1614064641938-3bbee52942c7?q=80&w=1000&auto=format&fit=crop" 
-                            alt="Browser Preview" 
-                            className="w-full h-full object-cover opacity-40 grayscale"
-                          />
-                          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
-                            <div className="w-12 h-12 rounded-full border-2 border-indigo-500/30 border-t-indigo-500 animate-spin" />
-                            <span className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em] animate-pulse">
-                              {isRunning ? "Streaming CDP..." : "Waiting for execution..."}
-                            </span>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Final Result Card */}
-                  <div className="bg-gradient-to-br from-indigo-600/20 to-purple-600/20 rounded-[32px] border border-indigo-500/30 p-6 space-y-4 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-6 opacity-10">
-                      <Shield className="w-20 h-20 text-foreground" />
-                    </div>
-                    <div className="relative z-10 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                          <h3 className="text-xs font-black text-foreground uppercase tracking-[0.2em]">Final Result</h3>
+                  {isRunning && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="flex-grow flex flex-col min-h-0 bg-card/40 rounded-[32px] border border-border overflow-hidden"
+                    >
+                      <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-white/[0.02] shrink-0">
+                        <div className="flex items-center gap-2">
+                          <Globe className="w-4 h-4 text-indigo-500" />
+                          <span className="text-[10px] font-black text-foreground uppercase tracking-widest">Live Browser</span>
                         </div>
-                        {selectedSchedule.email_recipient && selectedSchedule.extracted_content && (
-                          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                            <Mail className="w-3 h-3 text-emerald-400" />
-                            <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Email Sent</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="p-4 rounded-2xl bg-background/60 border border-white/5 backdrop-blur-sm max-h-28 overflow-y-auto hide-scrollbar">
-                        <p className="text-xs text-muted-foreground leading-relaxed font-medium whitespace-pre-wrap">
-                          {selectedSchedule.extracted_content || "No results available yet. Run the schedule to see data."}
-                        </p>
-                      </div>
-                      {selectedSchedule.extracted_content && (
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            onClick={() => setActiveModal('result')}
-                            className="flex-1 h-11 rounded-xl border-white/20 bg-transparent text-foreground text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all gap-2"
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setActiveModal('browser')}
+                            className="p-1.5 rounded-lg hover:bg-foreground/5 text-muted-foreground hover:text-foreground transition-all"
                           >
                             <Maximize2 className="w-3.5 h-3.5" />
-                            View Full
-                          </Button>
-                          <Button
-                            onClick={() => {
-                              const blob = new Blob([selectedSchedule.extracted_content], { type: 'text/plain' });
-                              const url = URL.createObjectURL(blob);
-                              const a = document.createElement('a');
-                              a.href = url;
-                              a.download = `report-${selectedSchedule.schedule_id}.txt`;
-                              a.click();
-                            }}
-                            className="flex-1 h-11 rounded-xl bg-white text-indigo-600 text-[10px] font-black uppercase tracking-widest hover:bg-background transition-all gap-2"
-                          >
-                            <Download className="w-4 h-4" />
-                            Download
-                          </Button>
+                          </button>
                         </div>
-                      )}
-                    </div>
-                  </div>
+                      </div>
+                      <div className="flex-grow min-h-0 bg-black relative group cursor-pointer flex items-center justify-center overflow-hidden" onClick={() => setActiveModal('browser')}>
+                        {liveScreenshot ? (
+                          <img 
+                            src={liveScreenshot.startsWith('data:') ? liveScreenshot : `data:image/jpeg;base64,${liveScreenshot}`} 
+                            alt="Live Browser" 
+                            className="w-full h-full object-contain"
+                          />
+                        ) : (
+                          <>
+                            <img 
+                              src="https://images.unsplash.com/photo-1614064641938-3bbee52942c7?q=80&w=1000&auto=format&fit=crop" 
+                              alt="Browser Preview" 
+                              className="w-full h-full object-cover opacity-40 grayscale"
+                            />
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
+                              <div className="w-12 h-12 rounded-full border-2 border-indigo-500/30 border-t-indigo-500 animate-spin" />
+                              <span className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em] animate-pulse">
+                                Streaming CDP...
+                              </span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
 
                 </div>
               </div>
@@ -1202,6 +1421,192 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
         )}
       </AnimatePresence>
 
+      {/* Execution Monitor Overlay Modal */}
+      <AnimatePresence>
+        {activeModal === 'monitor' && selectedSchedule && (
+          <ModalShell
+            title={isRunning ? "Executing Automation..." : "Execution Finished"}
+            icon={Activity}
+            onClose={() => {
+              setActiveModal(null);
+            }}
+            maxWidth="max-w-6xl"
+            headerAction={
+              !isRunning && selectedSchedule.extracted_content ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const formatted = extractAndPrettifyJSON(selectedSchedule.extracted_content);
+                    const isJson = formatted.trim().startsWith('[') || formatted.trim().startsWith('{');
+                    const blob = new Blob([formatted], { type: isJson ? 'application/json' : 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `result-${selectedSchedule.schedule_id}.${isJson ? 'json' : 'txt'}`;
+                    a.click();
+                  }}
+                  className="h-9 px-4 rounded-xl border-border bg-white/5 text-muted-foreground text-[10px] font-black uppercase tracking-widest hover:bg-white/10 gap-2"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  DOWNLOAD RESULTS
+                </Button>
+              ) : isRunning ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleStopRun}
+                  className="h-9 px-4 rounded-xl border-red-500/20 bg-red-500/10 text-red-400 text-[10px] font-black uppercase tracking-widest hover:bg-red-500/20 gap-2"
+                >
+                  <Square className="w-3.5 h-3.5 fill-current" />
+                  STOP RUN
+                </Button>
+              ) : undefined
+            }
+          >
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[70vh] min-h-[500px]">
+              
+              {/* Left Column: Progress & Logs */}
+              <div className={cn(
+                "flex flex-col min-h-0 space-y-4",
+                liveScreenshot ? "col-span-1 lg:col-span-7" : "col-span-1 lg:col-span-12"
+              )}>
+                
+                {/* Progress / Status Header */}
+                <div className="bg-background p-4 rounded-2xl border border-border flex items-center gap-6 shrink-0">
+                  <div className="relative w-16 h-16 shrink-0">
+                    <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                      <circle className="text-border" strokeWidth="10" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50" />
+                      <circle 
+                        className="text-indigo-500" 
+                        strokeWidth="10" 
+                        strokeDasharray={251}
+                        strokeDashoffset={251 - (251 * effectiveProgress) / 100}
+                        strokeLinecap="round" 
+                        stroke="currentColor" 
+                        fill="transparent" 
+                        r="40" cx="50" cy="50" 
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-sm font-black text-foreground">{effectiveProgress}%</span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex-grow min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Execution Status</div>
+                      {isRunning && (
+                        <div className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">
+                          ETA: {Math.max(0, Math.round(((100 - effectiveProgress) / 100) * 30))}s
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-sm font-black text-foreground uppercase tracking-tight mt-1 truncate">
+                      {effectiveStatus}
+                    </div>
+                    
+                    {/* Tiny stats strip */}
+                    <div className="flex items-center gap-4 mt-2">
+                      <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-bold">
+                        <Timer className="w-3 h-3 text-indigo-500" />
+                        <span>Elapsed: {Math.floor(effectiveElapsed / 60)}:{String(effectiveElapsed % 60).padStart(2, '0')}</span>
+                      </div>
+                      {resourceUsage && (
+                        <>
+                          <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-bold">
+                            <Gauge className="w-3 h-3 text-orange-500" />
+                            <span>CPU: {resourceUsage.cpu_percent}%</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-bold">
+                            <HardDrive className="w-3 h-3 text-pink-500" />
+                            <span>Mem: {resourceUsage.memory_mb.toFixed(0)} MB</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Logs scrolling panel or Final Result */}
+                <div className="flex-grow min-h-0 bg-background rounded-2xl border border-border overflow-hidden flex flex-col">
+                  {!isRunning && selectedSchedule.extracted_content ? (
+                    // Show final result
+                    <div className="flex-grow flex flex-col min-h-0">
+                      <div className="px-4 py-2 border-b border-border bg-white/[0.01] flex items-center justify-between shrink-0">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                          <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">scraped_results.json</span>
+                        </div>
+                      </div>
+                      <pre className="flex-grow overflow-y-auto p-4 text-[11px] font-mono text-slate-300 leading-relaxed select-all whitespace-pre">
+                        <code>{extractAndPrettifyJSON(selectedSchedule.extracted_content)}</code>
+                      </pre>
+                    </div>
+                  ) : (
+                    // Show live logs
+                    <div className="flex-grow flex flex-col min-h-0">
+                      <div className="px-4 py-2.5 border-b border-border bg-white/[0.01] flex items-center gap-2 shrink-0">
+                        <Terminal className="w-3.5 h-3.5 text-indigo-400" />
+                        <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Live Terminal Output</span>
+                      </div>
+                      <div className="flex-grow overflow-y-auto p-4 space-y-2 font-mono text-[10px]">
+                        {liveLogs.length > 0 ? (
+                          liveLogs.map((log, i) => (
+                            <div key={i} className="flex items-start gap-3 py-0.5 rounded transition-colors">
+                              <span className="text-muted-foreground/60 shrink-0">{log.time}</span>
+                              <span className={cn("font-black shrink-0 w-16", log.type === 'error' ? 'text-red-400' : 'text-indigo-400')}>[{log.engine || 'SYS'}]</span>
+                              <span className="text-muted-foreground break-all">{log.message}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="h-full flex flex-col items-center justify-center py-16 text-center">
+                            <Terminal className="w-8 h-8 text-border mb-3 animate-pulse" />
+                            <p className="text-[10px] font-black text-muted-foreground/60 uppercase tracking-widest">Waiting for execution logs...</p>
+                          </div>
+                        )}
+                        {isRunning && (
+                          <div className="flex items-center gap-2 text-[10px] py-1 px-1">
+                            <Loader2 className="w-3 h-3 animate-spin text-indigo-500" />
+                            <span className="text-indigo-500 animate-pulse">Executing next script instruction...</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column: Live Browser (only if liveScreenshot is present!) */}
+              {liveScreenshot && (
+                <div className="col-span-1 lg:col-span-5 flex flex-col min-h-0 bg-background rounded-2xl border border-border overflow-hidden">
+                  <div className="px-4 py-3.5 border-b border-border flex items-center justify-between bg-white/[0.01] shrink-0">
+                    <div className="flex items-center gap-2">
+                      <Globe className="w-4 h-4 text-indigo-500" />
+                      <span className="text-[10px] font-black text-foreground uppercase tracking-widest">Live Browser View</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-400 animate-pulse">
+                        CDP Stream Active
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex-grow min-h-0 bg-black relative flex items-center justify-center overflow-hidden">
+                    <img 
+                      src={liveScreenshot.startsWith('data:') ? liveScreenshot : `data:image/jpeg;base64,${liveScreenshot}`} 
+                      alt="Live Browser" 
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </ModalShell>
+        )}
+      </AnimatePresence>
+
       {/* Final Result Modal */}
       <AnimatePresence>
         {activeModal === 'result' && selectedSchedule && (
@@ -1216,11 +1621,13 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const blob = new Blob([selectedSchedule.extracted_content], { type: 'text/plain' });
+                    const formatted = extractAndPrettifyJSON(selectedSchedule.extracted_content);
+                    const isJson = formatted.trim().startsWith('[') || formatted.trim().startsWith('{');
+                    const blob = new Blob([formatted], { type: isJson ? 'application/json' : 'text/plain' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `report-${selectedSchedule.schedule_id}.txt`;
+                    a.download = `result-${selectedSchedule.schedule_id}.${isJson ? 'json' : 'txt'}`;
                     a.click();
                   }}
                   className="h-9 px-4 rounded-xl border-border bg-white/5 text-muted-foreground text-[10px] font-black uppercase tracking-widest hover:bg-white/10 gap-2"
@@ -1231,10 +1638,10 @@ export const SchedulesPage: React.FC<SchedulesPageProps> = ({ onBack }) => {
               ) : undefined
             }
           >
-            <div className="p-5 rounded-2xl bg-background border border-border">
-              <p className="text-sm text-muted-foreground leading-relaxed font-medium whitespace-pre-wrap">
-                {selectedSchedule.extracted_content || "No results available yet. Run the schedule to see data."}
-              </p>
+            <div className="p-5 rounded-2xl bg-black/25 border border-border overflow-x-auto">
+              <pre className="text-xs text-slate-300 font-mono leading-relaxed select-all whitespace-pre">
+                {extractAndPrettifyJSON(selectedSchedule.extracted_content)}
+              </pre>
             </div>
           </ModalShell>
         )}

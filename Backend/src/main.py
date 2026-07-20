@@ -418,6 +418,8 @@ def _start_resource_sampler(
     thread.start()
     return thread
 
+active_schedule_processes: dict[str, subprocess.Popen] = {}
+stopped_schedules: set[str] = set()
 
 async def _run_schedule_task(schedule_id: str, run_id: str) -> None:
     """
@@ -471,6 +473,9 @@ async def _run_schedule_task(schedule_id: str, run_id: str) -> None:
     current_framework = "playwright"
 
     while current_try < max_tries:
+        if schedule_id in stopped_schedules:
+            logger.info(f"Schedule {schedule_id} execution stopped because it was manually cancelled.")
+            break
         current_try += 1
 
         await plan_stream_manager.broadcast_schedule_update(schedule_id, {
@@ -486,6 +491,9 @@ async def _run_schedule_task(schedule_id: str, run_id: str) -> None:
                 temp_path = f.name
 
             # Pass browser configuration to the subprocess environment
+            session = brain.session_manager.get_session(owner_user_id)
+            cdp_url = session.get("cdp_url") if session else None
+
             run_env = {
                 **os.environ,
                 "BROWSER_USE_HEADLESS": "false" if not headless else "true",
@@ -493,12 +501,14 @@ async def _run_schedule_task(schedule_id: str, run_id: str) -> None:
                 "BROWSER_USER_DATA_DIR": config.BROWSER_USER_DATA_DIR,
                 "BROWSER_PROXY_URL": config.BROWSER_PROXY_URL or "",
                 "BROWSER_ENGINE": config.BROWSER_ENGINE,
+                "BROWSER_CDP_URL": cdp_url or "",
             }
             process = subprocess.Popen(
                 [sys.executable, "-u", temp_path],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
+                encoding="utf-8",
                 bufsize=1,
                 env=run_env,
             )
@@ -509,6 +519,7 @@ async def _run_schedule_task(schedule_id: str, run_id: str) -> None:
             )
 
             try:
+                active_schedule_processes[schedule_id] = process
                 full_output: List[str] = []
                 if process.stdout:
                     loop = asyncio.get_running_loop()
@@ -533,8 +544,12 @@ async def _run_schedule_task(schedule_id: str, run_id: str) -> None:
                                     
                                     prompt_t = token_data.get("prompt_tokens", 0)
                                     completion_t = token_data.get("completion_tokens", 0)
-                                    cost_usd = token_data.get("cost", 0.0)
                                     model_name = token_data.get("model", "unknown")
+                                    
+                                    from src.services.brain import get_model_pricing
+                                    ip_price, op_price = get_model_pricing(model_name)
+                                    cost_usd = (prompt_t * ip_price + completion_t * op_price) / 1_000_000
+                                    
                                     p_user_id = token_data.get("user_id", owner_user_id)
                                     p_chat_id = token_data.get("chat_id")
                                     
@@ -574,6 +589,7 @@ async def _run_schedule_task(schedule_id: str, run_id: str) -> None:
 
                 await loop.run_in_executor(None, lambda: process.wait(timeout=300))
             finally:
+                active_schedule_processes.pop(schedule_id, None)
                 resource_stop_event.set()
                 if os.path.exists(temp_path):
                     os.unlink(temp_path)
@@ -636,8 +652,9 @@ async def _run_schedule_task(schedule_id: str, run_id: str) -> None:
                         await db.commit()
 
         except Exception as e:
+            import traceback
             last_error = str(e)
-            logger.error(f"Schedule {schedule_id} execution error (attempt {current_try}): {e}")
+            logger.error(f"Schedule {schedule_id} execution error (attempt {current_try}): {traceback.format_exc()}")
             if current_try >= max_tries:
                 break
             async with AsyncSessionLocal() as db:
@@ -646,6 +663,10 @@ async def _run_schedule_task(schedule_id: str, run_id: str) -> None:
                 run_db = res.scalar_one()
                 run_db.attempt = current_try + 1
                 await db.commit()
+
+    if schedule_id in stopped_schedules:
+        stopped_schedules.discard(schedule_id)
+        return
 
     # All attempts failed
     async with AsyncSessionLocal() as db:
@@ -1042,6 +1063,14 @@ async def get_my_conversation_usage(
 ):
     return await ChatService.get_user_conversation_usage(db, current_user.user_id)
 
+@app.get("/sciparser/v1/user/analytics", response_model=AdminUserAnalyticsResponse)
+async def get_my_user_analytics(
+    days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(ChatService.get_current_user),
+):
+    return await ChatService.admin_get_user_analytics(db, current_user.user_id, days=days)
+
 @app.get("/sciparser/v1/admin/metrics/operations", response_model=OperationsMetricsResponse)
 async def admin_operations_metrics(
     days: int = Query(30, ge=1, le=365),
@@ -1393,6 +1422,17 @@ async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db), current_use
 
     ai_msg_data = result.get("message", {})
     
+    # Retrieve the session's title to return to the frontend
+    session_title = None
+    try:
+        from src.database.chat_db import ChatSession
+        async with AsyncSessionLocal() as db_session:
+            session_obj = (await db_session.execute(select(ChatSession).where(ChatSession.id == chat_id))).scalar_one_or_none()
+            if session_obj:
+                session_title = session_obj.title
+    except Exception as e:
+        logger.error(f"Failed to fetch session title in chat endpoint: {e}")
+
     return {
         "message": {
             "id": ai_msg_data.get("id", str(uuid.uuid4())),
@@ -1404,7 +1444,8 @@ async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db), current_use
             "tool_calls": ai_msg_data.get("tool_calls", [])
         },
         "chat_id": chat_id,
-        "plan": result.get("plan", [])
+        "plan": result.get("plan", []),
+        "title": session_title
     }
 
 @app.patch("/sciparser/v1/chat/messages/{message_id}")
@@ -1560,22 +1601,12 @@ async def create_schedule(req: ScheduleRequest, db: AsyncSession = Depends(get_d
         for item in (req.tool_context or [])
     ]
 
-    # 4. Auto-detect the best script framework from the tools that were actually used.
-    _TAVILY_TOOLS    = {"tavily_search_results_json", "ai_parser_dynamic_search"}
-    _BROWSER_PREFIXES = ("browser_", "navigate", "click", "type", "scroll", "fill", "select", "playwright")
+    # 4. Use a hybrid Playwright + browser-use strategy for script generation.
+    #    Playwright handles fast CSS-based extraction; browser-use Agent kicks in
+    #    as an AI fallback for any URL where Playwright returns no data.
+    framework = "playwright+browser-use"
 
-    all_tool_names = {
-        (item.get("tool_name") or item.get("tool") or "").lower()
-        for item in (tool_context or []) + execution_history
-    }
-    all_tool_names.discard("")
-
-    has_browser = any(name.startswith(p) for name in all_tool_names for p in _BROWSER_PREFIXES)
-    has_tavily  = any(name in _TAVILY_TOOLS for name in all_tool_names)
-    framework   = "tavily" if (has_tavily and not has_browser) else "playwright"
-
-    logger.info(f"Script generation framework selected: {framework} "
-                f"(tools: {all_tool_names or 'none from context'})")
+    logger.info(f"Script generation framework selected: {framework}")
 
     # 5. Reload the freshly created schedule to get user_prompt / plan_data
     stmt = select(ScheduleModel).where(ScheduleModel.schedule_id == schedule.schedule_id)
@@ -1592,6 +1623,7 @@ async def create_schedule(req: ScheduleRequest, db: AsyncSession = Depends(get_d
         plan_context=schedule_db.plan_data or "",
         user_id=current_user.user_id,
         chat_id=f"schedule:{schedule.schedule_id}",
+        assistant_response=schedule_db.assistant_response or "",
     )
 
     # 7. Save generated script + compute next_run
@@ -1809,6 +1841,52 @@ async def run_schedule(schedule_id: str, db: AsyncSession = Depends(get_db), cur
 
     asyncio.create_task(_run_schedule_task(schedule_id, run_id))
     return {"status": "success", "run_id": run_id}
+
+
+@app.post("/sciparser/v1/scheduler/{schedule_id}/stop")
+async def stop_schedule(schedule_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_user)):
+    """Stop a currently running schedule by killing its subprocess."""
+    from src.database.chat_db import Schedule as ScheduleModel, ScheduleRun
+    stmt = select(ScheduleModel).where(ScheduleModel.schedule_id == schedule_id)
+    res = await db.execute(stmt)
+    sched = res.scalar_one_or_none()
+    if not sched:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+
+    stopped_schedules.add(schedule_id)
+    process = active_schedule_processes.get(schedule_id)
+    if not process:
+        return {"status": "ignored", "message": "Schedule is not currently running"}
+
+    try:
+        # Forcefully terminate the subprocess
+        process.kill()
+    except Exception as e:
+        logger.error(f"Error killing schedule process {schedule_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to kill subprocess: {e}")
+
+    # Find the active runs and mark them as FAILED
+    run_stmt = select(ScheduleRun).where(
+        ScheduleRun.schedule_id == schedule_id,
+        ScheduleRun.status.in_(["running", "PENDING", "IN_PROGRESS"])
+    )
+    active_runs = (await db.execute(run_stmt)).scalars().all()
+    for run in active_runs:
+        run.status = "FAILED"
+        run.error_log = "Stopped manually by user."
+        run.finished_at = datetime.now(timezone.utc)
+    
+    await db.commit()
+    
+    # Broadcast status update via Websocket to update UI
+    await plan_stream_manager.broadcast_schedule_update(schedule_id, {
+        "type": "pipeline_update",
+        "step_id": 4,
+        "status": "failed",
+        "details": "Stopped manually by user.",
+    })
+    
+    return {"status": "success", "message": "Schedule stopped successfully"}
 
 
 # --- WebSocket Endpoints ---

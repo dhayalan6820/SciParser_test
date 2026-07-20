@@ -1163,6 +1163,8 @@ class ChatService:
         db: AsyncSession, page: int = 1, page_size: int = 20, search: Optional[str] = None,
         sort_by: str = "created_at", sort_dir: str = "desc",
     ) -> dict:
+        from src.database.chat_db import LlmRequest
+
         base_stmt = select(Schedule)
         if search:
             like = f"%{search}%"
@@ -1194,6 +1196,25 @@ class ChatService:
         for r in runs:
             runs_by_schedule.setdefault(r.schedule_id, []).append(r)
 
+        # ── Aggregate LLM costs per schedule from the llm_requests table ──
+        # Different code paths write chat_id as "schedule:{id}" or "schedule_{id}",
+        # so we query both prefixes in a single batch.
+        costs_by_schedule: dict = {}
+        if schedule_ids:
+            cost_chat_ids = []
+            for sid in schedule_ids:
+                cost_chat_ids.extend([f"schedule:{sid}", f"schedule_{sid}"])
+            cost_stmt = (
+                select(LlmRequest.chat_id, func.sum(LlmRequest.cost_usd))
+                .where(LlmRequest.chat_id.in_(cost_chat_ids))
+                .group_by(LlmRequest.chat_id)
+            )
+            cost_rows = (await db.execute(cost_stmt)).all()
+            for chat_id_val, cost_val in cost_rows:
+                # Normalise both prefix formats back to the raw schedule_id
+                sid = chat_id_val.replace("schedule:", "").replace("schedule_", "")
+                costs_by_schedule[sid] = costs_by_schedule.get(sid, 0.0) + (cost_val or 0.0)
+
         automations = []
         for s in schedules:
             s_runs = runs_by_schedule.get(s.schedule_id, [])
@@ -1201,6 +1222,9 @@ class ChatService:
             success_runs = sum(1 for r in s_runs if r.status == "COMPLETED")
             failed_runs = sum(1 for r in s_runs if r.status == "FAILED")
             success_rate = round((success_runs / total_runs) * 100, 2) if total_runs else 0.0
+            from src.main import active_schedule_processes
+            is_running = s.schedule_id in active_schedule_processes
+
             automations.append({
                 "schedule_id": s.schedule_id,
                 "title": s.title,
@@ -1212,6 +1236,8 @@ class ChatService:
                 "success_runs": success_runs,
                 "failed_runs": failed_runs,
                 "success_rate": success_rate,
+                "total_cost": round(costs_by_schedule.get(s.schedule_id, 0.0), 6),
+                "is_running": is_running,
             })
 
         return {"automations": automations, "total": total}
@@ -1632,6 +1658,15 @@ class ChatService:
             entry["total_tokens"] += total_tokens
             entry["total_cost"] += cost
 
+        # Get count of messages for each session to display in the sidebar
+        from src.database.chat_db import Message
+        from sqlalchemy import func
+        msg_counts = {}
+        if chat_ids:
+            count_stmt = select(Message.chat_id, func.count(Message.id)).where(Message.chat_id.in_(chat_ids)).group_by(Message.chat_id)
+            count_res = await db.execute(count_stmt)
+            msg_counts = {row[0]: row[1] for row in count_res.all()}
+
         out = []
         for s in sessions:
             usage = usage_by_chat.get(s.id, {
@@ -1647,6 +1682,7 @@ class ChatService:
                 "total_output_tokens": usage["total_output_tokens"],
                 "total_tokens": usage["total_tokens"],
                 "total_cost": round(usage["total_cost"], 4),
+                "message_count": msg_counts.get(s.id, 0)
             })
         return out
 
@@ -2334,7 +2370,9 @@ class ChatService:
             )).scalar() or 0
 
             # Get user info
-            user_obj = await db.get(User, s.user_id) if s.user_id else None
+            user_obj = (await db.execute(
+                select(User).where(User.user_id == s.user_id)
+            )).scalar_one_or_none() if s.user_id else None
             username = user_obj.username if user_obj else "unknown"
 
             # Get messages count
@@ -2550,6 +2588,9 @@ class ChatService:
                 entry["completed"] += 1
             else:
                 entry["failed"] += 1
+                
+            if tl.updated_at and tl.created_at:
+                entry["durations"].append((tl.updated_at - tl.created_at).total_seconds())
             
             llm_metrics = tool_llm_map.get(name, {"tokens": 0, "cost": 0.0})
             entry["tokens"] = llm_metrics["tokens"]
@@ -2705,14 +2746,12 @@ class ChatService:
                 "stage_type": "agent",
                 "status": al.status or "COMPLETED",
                 "duration_ms": int(dur),
-                "tokens": toks,
-                "cost": round(cost, 6),
+                "tokens": 0, # Tokens are tracked individually in LLM logs
+                "cost": 0.0, # Cost is tracked individually in LLM logs
                 "started_at": al.created_at,
                 "error_message": al.error_message
             })
             total_duration += dur
-            total_cost += cost
-            total_tokens += toks
 
         for tl in tool_logs:
             dur = 800.0

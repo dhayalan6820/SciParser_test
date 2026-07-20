@@ -16,6 +16,7 @@ import { SchedulesPage } from "./schedules-page";
 import { SettingsPage } from "./settings-page";
 import { ProcessingPanel } from "./processing-panel";
 import { PremiumScheduler } from "./premium-scheduler";
+import { UserAnalyticsPanel } from "./admin/user-analytics-panel";
 import {
   Sparkles,
   User2,
@@ -59,6 +60,11 @@ import {
   ThumbsUp,
   ThumbsDown,
   Share2,
+  Eye,
+  Zap,
+  FolderOpen,
+  User as UserIcon,
+  DollarSign,
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import Plan, { Task } from "./agent-plan";
@@ -83,9 +89,241 @@ interface Thread {
   id: string;
   title: string;
   messages: ChatMessage[];
+  messageCount?: number;
   uploads: UploadedFile[];
   createdAt: string;
 }
+
+// Render-prop component: manages per-cell AND per-column expand/collapse state for a table
+function TableExpandContext({
+  tableId: _tableId,
+  children,
+}: {
+  tableId: string;
+  children: (
+    expandedCells: Set<string>,
+    toggleCell: (key: string) => void,
+    expandedCols: Set<number>,
+    toggleCol: (colIdx: number) => void,
+    collapseAll: () => void,
+  ) => React.ReactNode;
+}) {
+  const [expandedCells, setExpandedCells] = React.useState<Set<string>>(new Set());
+  const [expandedCols, setExpandedCols] = React.useState<Set<number>>(new Set());
+
+  const toggleCell = React.useCallback((key: string) => {
+    setExpandedCells((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }, []);
+
+  const toggleCol = React.useCallback((colIdx: number) => {
+    setExpandedCols((prev) => {
+      const next = new Set(prev);
+      if (next.has(colIdx)) next.delete(colIdx); else next.add(colIdx);
+      return next;
+    });
+  }, []);
+
+  const collapseAll = React.useCallback(() => {
+    setExpandedCols(new Set());
+  }, []);
+
+  return <>{children(expandedCells, toggleCell, expandedCols, toggleCol, collapseAll)}</>;
+}
+
+// Resizable table: all columns truncated by default, drag border to resize, double-click to auto-fit
+function ResizableTable({
+  header,
+  body,
+  tableId,
+  selectedTableRows,
+  toggleAllRowSelections,
+  toggleRowSelection,
+  parseTableCellContent,
+  getColumnIcon,
+  isTableSelected,
+}: {
+  header: string[];
+  body: string[][];
+  tableId: string;
+  selectedTableRows: Record<string, Set<number>>;
+  toggleAllRowSelections: (tableId: string, total: number) => void;
+  toggleRowSelection: (tableId: string, rowIndex: number) => void;
+  parseTableCellContent: (text: string) => React.ReactNode;
+  getColumnIcon: (h: string) => React.ReactNode;
+  isTableSelected: boolean;
+}) {
+  const DEFAULT_W = 120;
+  const MIN_W = 48;
+  const CHECKBOX_W = 36;
+
+  const [colWidths, setColWidths] = React.useState<number[]>(() =>
+    header.map(() => DEFAULT_W)
+  );
+
+  const dragRef = React.useRef<{ ci: number; startX: number; startW: number } | null>(null);
+
+  const startResize = React.useCallback((e: React.MouseEvent, ci: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragRef.current = { ci, startX: e.clientX, startW: colWidths[ci] };
+
+    const onMove = (ev: MouseEvent) => {
+      if (!dragRef.current) return;
+      const { ci, startX, startW } = dragRef.current;
+      const newW = Math.max(MIN_W, startW + (ev.clientX - startX));
+      setColWidths((prev) => {
+        const next = [...prev];
+        next[ci] = newW;
+        return next;
+      });
+    };
+    const onUp = () => {
+      dragRef.current = null;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, [colWidths]);
+
+  const autoFit = React.useCallback((ci: number) => {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.font = "13px Inter, ui-sans-serif, sans-serif";
+    let max = ctx.measureText(header[ci] ?? "").width;
+    for (const row of body) { 
+      const w = ctx.measureText(row[ci] ?? "").width; 
+      if (w > max) max = w; 
+    }
+    const finalW = Math.min(Math.ceil(max) + 28, 600);
+    setColWidths(p => { const n = [...p]; n[ci] = finalW; return n; });
+  }, [header, body]);
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="overflow-y-auto" style={{ maxHeight: "480px" }}>
+        <table
+          className="text-left text-[13px] border-collapse"
+          style={{ tableLayout: "fixed", width: `${CHECKBOX_W + colWidths.reduce((a, b) => a + b, 0)}px`, minWidth: "100%" }}
+        >
+          <colgroup>
+            <col style={{ width: `${CHECKBOX_W}px` }} />
+            {colWidths.map((w, ci) => (
+              <col key={ci} style={{ width: `${w}px` }} />
+            ))}
+          </colgroup>
+
+          <thead className="sticky top-0 z-10">
+            <tr className="border-b border-border/80">
+              <th className="px-2 py-1.5 text-center bg-card border-b border-border/80" style={{ width: `${CHECKBOX_W}px` }}>
+                <div className="flex items-center justify-center">
+                  <input
+                    type="checkbox"
+                    checked={isTableSelected}
+                    onChange={() => toggleAllRowSelections(tableId, body.length)}
+                    className="w-3.5 h-3.5 rounded border-border text-sky-500 focus:ring-sky-500/20 bg-background cursor-pointer"
+                  />
+                </div>
+              </th>
+
+              {header.map((h, ci) => {
+                return (
+                  <th
+                    key={ci}
+                    className="relative bg-card border-b border-border/80 text-left select-none"
+                    style={{ width: `${colWidths[ci]}px`, padding: "6px 8px" }}
+                  >
+                    <div className="flex items-center gap-1 overflow-hidden">
+                      <div className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider overflow-hidden text-muted-foreground">
+                        {getColumnIcon(h)}
+                        <span className="truncate">{h}</span>
+                      </div>
+                    </div>
+                    <div
+                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize z-10 group/rh flex items-center justify-end pr-px"
+                      onMouseDown={(e) => startResize(e, ci)}
+                      onDoubleClick={(e) => { e.stopPropagation(); autoFit(ci); }}
+                      title="Drag to resize · Double-click to auto-fit"
+                    >
+                      <div className="w-px h-3/4 bg-border/50 group-hover/rh:bg-indigo-400 group-hover/rh:h-full transition-all" />
+                    </div>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+
+          <tbody>
+            {body.map((row, ri) => {
+              const isRowSelected = selectedTableRows[tableId]?.has(ri) || false;
+              return (
+                <tr
+                  key={ri}
+                  className={cn(
+                    "border-b border-border/40 transition-colors",
+                    isRowSelected ? "bg-sky-500/5 dark:bg-sky-500/10" : "hover:bg-muted/20"
+                  )}
+                >
+                  <td className="px-2 py-1.5 text-center align-middle">
+                    <div className="flex items-center justify-center">
+                      <input
+                        type="checkbox"
+                        checked={isRowSelected}
+                        onChange={() => toggleRowSelection(tableId, ri)}
+                        className="w-3.5 h-3.5 rounded border-border text-sky-500 focus:ring-sky-500/20 bg-background cursor-pointer"
+                      />
+                    </div>
+                  </td>
+
+                  {row.map((cell, ci) => {
+                    const h = header[ci] || "";
+                    const lowerHeader = h.toLowerCase();
+                    const isPriceCol = lowerHeader.includes("price") || lowerHeader.includes("cost") || lowerHeader.includes("fee") || cell.includes("$") || cell.includes("₹");
+                    const isDateCol = lowerHeader.includes("date") || lowerHeader.includes("time");
+                    const isStatusCol = lowerHeader.includes("status") || lowerHeader.includes("type");
+                    const isPrimaryCol = ci === 0 || lowerHeader.includes("name") || lowerHeader.includes("title") || lowerHeader.includes("product");
+
+                    return (
+                      <td
+                        key={ci}
+                        className="px-2 py-1.5 align-middle"
+                        style={{ maxWidth: `${colWidths[ci]}px` }}
+                        title={cell}
+                      >
+                        <div
+                          className={cn(
+                            "text-[13px] overflow-hidden text-ellipsis whitespace-nowrap",
+                            isPrimaryCol && "font-semibold text-foreground",
+                            isPriceCol && "font-mono font-semibold text-emerald-600 dark:text-emerald-400",
+                            isDateCol && "text-muted-foreground/80 text-[12px]",
+                            isStatusCol && "text-sky-600 dark:text-sky-400 font-medium",
+                            !isPrimaryCol && !isPriceCol && !isDateCol && !isStatusCol && "text-foreground/85"
+                          )}
+                        >
+                          {parseTableCellContent(cell)}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="px-3 py-1.5 border-t border-border/40 flex items-center gap-2 text-[11px] text-muted-foreground/50">
+        <span>↔ Drag column edge to resize · Double-click edge to auto-fit</span>
+      </div>
+    </div>
+  );
+}
+
 
 const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const { theme, toggleTheme } = useTheme();
@@ -113,6 +351,34 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const [activeBrowserEngine, setActiveBrowserEngine] = React.useState<"camoufox" | "chrome" | null>(null);
   const [mousePos, setMousePos] = React.useState<{ x: number; y: number; event: string; vpW: number; vpH: number } | null>(null);
   const [lastManualToggle, setLastManualToggle] = React.useState<number>(0);
+  const [selectedTableRows, setSelectedTableRows] = React.useState<Record<string, Set<number>>>({});
+
+  const toggleRowSelection = (tableId: string, rowIndex: number) => {
+    setSelectedTableRows((prev) => {
+      const current = new Set(prev[tableId] || []);
+      if (current.has(rowIndex)) {
+        current.delete(rowIndex);
+      } else {
+        current.add(rowIndex);
+      }
+      return { ...prev, [tableId]: current };
+    });
+  };
+
+  const toggleAllRowSelections = (tableId: string, totalRows: number) => {
+    setSelectedTableRows((prev) => {
+      const current = new Set(prev[tableId] || []);
+      if (current.size === totalRows) {
+        return { ...prev, [tableId]: new Set() };
+      } else {
+        const next = new Set<number>();
+        for (let i = 0; i < totalRows; i++) {
+          next.add(i);
+        }
+        return { ...prev, [tableId]: next };
+      }
+    });
+  };
   const [browserBlink, setBrowserBlink] = React.useState<
     "green" | "red" | null
   >(null);
@@ -125,6 +391,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [voiceEnabled, setVoiceEnabled] = React.useState(false);
   const [isAiTyping, setIsAiTyping] = React.useState(false);
+  const requestInFlightRef = React.useRef(false);
   const [isCancellingStep, setIsCancellingStep] = React.useState(false);
   const [currentPlan, setCurrentPlan] = React.useState<Task[] | null>(null);
   const [agentThoughts, setAgentThoughts] = React.useState<string[]>([]);
@@ -189,6 +456,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
   // Usage modal state
   const [showUsageModal, setShowUsageModal] = React.useState(false);
+  const [showAnalyticsPanel, setShowAnalyticsPanel] = React.useState(false);
   const [isProfileExpanded, setIsProfileExpanded] = React.useState(false);
   const [usageData, setUsageData] = React.useState<
     import("../../api").ConversationTokenUsage[] | null
@@ -226,24 +494,49 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const [isSelectionMode, setIsSelectionMode] = React.useState(false);
 
   // Automatically derive which tool runs to include from the chat message(s)
-  // the user selected — each AI message carries the real ToolExecutionLog ids
-  // of the tools used to produce it (Message.tool_calls). No manual tool
-  // checkbox UI; selecting a message is enough.
+  // the user selected. If a user message is selected, we automatically search
+  // the next message in sequence (the corresponding AI response) to include its tool calls.
   React.useEffect(() => {
     if (selectedMessages.length === 0) {
       setSelectedToolIds([]);
       return;
     }
     const derivedIds = new Set<string>();
-    for (const msg of messages) {
-      if (msg.id && selectedMessages.includes(msg.id) && Array.isArray(msg.tool_calls)) {
-        for (const tc of msg.tool_calls) {
-          if (tc?.id) derivedIds.add(tc.id);
+    messages.forEach((msg, idx) => {
+      if (msg.id && selectedMessages.includes(msg.id)) {
+        if (Array.isArray(msg.tool_calls)) {
+          for (const tc of msg.tool_calls) {
+            if (tc?.id) derivedIds.add(tc.id);
+          }
+        }
+        
+        // Fallback: If a user message is selected, check the next message (the AI response)
+        if (msg.role === 'user' || msg.role === 'human') {
+          const nextMsg = messages[idx + 1];
+          if (nextMsg && (nextMsg.role === 'ai' || nextMsg.role === 'assistant') && Array.isArray(nextMsg.tool_calls)) {
+            for (const tc of nextMsg.tool_calls) {
+              if (tc?.id) derivedIds.add(tc.id);
+            }
+          }
         }
       }
-    }
+    });
     setSelectedToolIds(Array.from(derivedIds));
   }, [selectedMessages, messages]);
+
+  // Synchronize active thread's messages & messageCount in the threads sidebar list
+  React.useEffect(() => {
+    if (activeThreadId) {
+      setThreads((prev) =>
+        prev.map((t) =>
+          t.id === activeThreadId
+            ? { ...t, messages: messages, messageCount: messages.length }
+            : t,
+        ),
+      );
+    }
+  }, [messages, activeThreadId]);
+
   const [scheduleType, setScheduleType] = React.useState("daily");
   const [emailRecipient, setEmailRecipient] = React.useState("");
 
@@ -331,6 +624,12 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         const output = normalizeJsonValue(latestPlanLog.output_data);
         if (Array.isArray(output)) {
           setCurrentPlan(output as Task[]);
+        }
+      } else {
+        // Fallback: Find the last AI message in the messages list and use its plan
+        const lastAi = [...messages].reverse().find((m: any) => m.role === 'ai' || m.role === 'assistant');
+        if (lastAi && Array.isArray(lastAi.plan) && lastAi.plan.length > 0) {
+          setCurrentPlan(lastAi.plan);
         }
       }
     } catch (err) {
@@ -833,11 +1132,63 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             const stillRunning = Array.isArray(msg.data) && msg.data.some(
               (t: any) => t.status === "in-progress" || t.status === "running" || t.status === "pending"
             );
-            if (stillRunning) setIsAiTyping(true);
+            if (stillRunning && requestInFlightRef.current) {
+              setIsAiTyping(true);
+            } else {
+              setIsAiTyping(false);
+            }
           } else if (msg.type === "thought_update") {
             setAgentThoughts((prev) => [...prev, msg.data]);
           } else if (msg.type === "notification" && msg.notification_type === "camoufox_fallback") {
             setCamoufoxFallbackWarning(true);
+          } else if (msg.type === "notification" && msg.notification_type === "final_response") {
+            try {
+              const aiMsg = JSON.parse(msg.message);
+              setMessages((prev) => {
+                if (prev.some((m) => m.id === aiMsg.id)) return prev;
+                return [...prev, aiMsg];
+              });
+              setThreads((prev) =>
+                prev.map((t) =>
+                  t.id === activeThreadId
+                    ? {
+                        ...t,
+                        messages: t.messages.some((m) => m.id === aiMsg.id)
+                          ? t.messages
+                          : [...t.messages, aiMsg],
+                      }
+                    : t,
+                ),
+              );
+              setIsAiTyping(false);
+              requestInFlightRef.current = false;
+            } catch (err) {
+              console.error("Failed to parse websocket final response:", err);
+            }
+          } else if (msg.type === "notification" && msg.notification_type === "error_response") {
+            try {
+              const errorMsg = JSON.parse(msg.message);
+              setMessages((prev) => {
+                if (prev.some((m) => m.id === errorMsg.id)) return prev;
+                return [...prev, errorMsg];
+              });
+              setThreads((prev) =>
+                prev.map((t) =>
+                  t.id === activeThreadId
+                    ? {
+                        ...t,
+                        messages: t.messages.some((m) => m.id === errorMsg.id)
+                          ? t.messages
+                          : [...t.messages, errorMsg],
+                      }
+                    : t,
+                ),
+              );
+              setIsAiTyping(false);
+              requestInFlightRef.current = false;
+            } catch (err) {
+              console.error("Failed to parse websocket error response:", err);
+            }
           }
         } catch {
           /* ignore non-JSON keep-alive responses */
@@ -933,8 +1284,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         id: s.id,
         title: s.title || "Untitled Chat",
         messages: [],
+        messageCount: s.message_count || 0,
         uploads: [],
-        createdAt: s.createdAt || new Date().toISOString(),
+        createdAt: s.created_at || s.createdAt || new Date().toISOString(),
       }));
 
       setThreads(loadedThreads);
@@ -1136,6 +1488,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     if (!text.trim()) return;
 
     setAgentThoughts([]);
+    requestInFlightRef.current = true;
+    let isConnectionTimeout = false;
 
     const currentThreadId = activeThreadId ? String(activeThreadId) : uuidv4();
     // ... (rest of the function)
@@ -1221,7 +1575,11 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         setThreads((prev) =>
           prev.map((t) =>
             t.id === currentThreadId
-              ? { ...t, messages: [...t.messages, userMsg, msgToAdd] }
+              ? {
+                  ...t,
+                  messages: [...t.messages, userMsg, msgToAdd],
+                  title: response.title || t.title,
+                }
               : t,
           ),
         );
@@ -1281,27 +1639,52 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       console.error("Message sending failed:", e);
       // Extract readable message from FastAPI JSON error responses
       let errText = e?.message || "An unexpected error occurred.";
+      let errorId = "";
       try {
         const parsed = JSON.parse(errText);
-        errText = parsed?.detail || parsed?.message || errText;
+        if (parsed && parsed.error) {
+          errText = parsed.error.message || parsed.error.title || "An internal error occurred.";
+          errorId = parsed.error.id || parsed.error.support_reference || "";
+        } else {
+          errText = parsed?.detail || parsed?.message || errText;
+        }
         if (typeof errText === "object") errText = JSON.stringify(errText);
       } catch { }
+
+      const isTimeout = errText.toLowerCase().includes("failed to fetch") || errText.toLowerCase().includes("load failed");
+      if (isTimeout) {
+        isConnectionTimeout = true;
+        // Show warning toast and keep typing state active since WebSocket stream handles final response
+        import("./toast-notifications").then(({ toast }) => {
+          toast("warning", "Connection Interrupted", "The connection to the backend timed out, but the task is still running. Please wait...");
+        });
+        return;
+      }
+      
+      const formattedMessage = errorId 
+        ? `${errText} (Reference: ${errorId})` 
+        : errText;
+
       const errorMsg: ChatMessage = {
         id: uuidv4(),
         role: "assistant",
-        content: `⚠️ ${errText}`,
+        content: `⚠️ ${formattedMessage}`,
         timestamp: new Date().toISOString(),
         form: undefined,
       };
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
-      setIsAiTyping(false);
+      if (!isConnectionTimeout) {
+        requestInFlightRef.current = false;
+        setIsAiTyping(false);
+      }
     }
   };
 
   const handleStopProcess = async () => {
     if (!activeThreadId) return;
     try {
+      requestInFlightRef.current = false;
       await sciparserApi.stopChatProcess(activeThreadId);
       setIsAiTyping(false);
     } catch (e) {
@@ -1415,7 +1798,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
       >
         {/* Agent Plan Section (Above AI Response) */}
         {!isUser && msg.plan && msg.plan.length > 0 && (
-          <div className="w-full max-w-2xl ml-12 mb-2">
+          <div className="w-full max-w-full ml-12 mb-2 pr-4">
             <div className="flex items-center gap-3 mb-3 px-1">
               <div className="flex items-center gap-2">
                 <div
@@ -1509,8 +1892,10 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             >
               <div
                 className={cn(
-                  "text-sm leading-relaxed font-medium whitespace-pre-wrap break-words",
-                  isUser ? "text-white" : "text-foreground",
+                  "leading-relaxed whitespace-pre-wrap break-words",
+                  isUser
+                    ? "text-sm font-medium text-white"
+                    : "chat-prose text-foreground",
                 )}
               >
                 {renderFormattedContent(msg.content, isUser)}
@@ -1731,7 +2116,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           <strong
             key={bIdx}
             className={cn(
-              "font-extrabold",
+              "font-bold",
               isUser ? "text-white" : "text-foreground",
             )}
           >
@@ -1786,8 +2171,102 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     return parseInlineFormatting(text.replace(/\s+/g, " ").trim(), isUser);
   };
 
+  const cleanCsvCellText = (text: string): string => {
+    if (!text) return "";
+    // Remove Markdown Bold (**text** -> text)
+    let cleaned = text.replace(/\*\*(.*?)\*\*/g, "$1");
+    // Remove Markdown Italic (*text* -> text)
+    cleaned = cleaned.replace(/\*(.*?)\*/g, "$1");
+    // Remove Inline Code (`text` -> text)
+    cleaned = cleaned.replace(/\`(.*?)\`/g, "$1");
+    // Remove any remaining * or ` characters
+    cleaned = cleaned.replace(/[\*\`]/g, "");
+    return cleaned.replace(/\s+/g, " ").trim();
+  };
+
+  const formatCsvCell = (text: string): string => {
+    const cleaned = cleanCsvCellText(text);
+    // Double quotes escaping
+    let escaped = cleaned.replace(/"/g, '""');
+    // Wrap in quotes if cell contains commas, quotes or newlines
+    if (
+      escaped.includes(",") ||
+      escaped.includes('"') ||
+      escaped.includes("\n") ||
+      escaped.includes("\r")
+    ) {
+      escaped = `"${escaped}"`;
+    }
+    return escaped;
+  };
+
+  const getInitials = (val: string) => {
+    const cleanVal = val.replace(/[^a-zA-Z0-9\s]/g, "").trim();
+    const parts = cleanVal.split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return parts[0] ? parts[0].slice(0, 2).toUpperCase() : "";
+  };
+
+  const getAvatarColor = (val: string) => {
+    const colors = [
+      "bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30",
+      "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
+      "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30",
+      "bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30",
+      "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/30",
+      "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30",
+      "bg-pink-500/15 text-pink-600 dark:text-pink-400 border-pink-500/30",
+    ];
+    let hash = 0;
+    for (let i = 0; i < val.length; i++) {
+      hash = val.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const index = Math.abs(hash) % colors.length;
+    return colors[index];
+  };
+
+  const getColumnIcon = (name: string) => {
+    const lower = name.toLowerCase();
+    if (lower.includes("category") || lower.includes("type") || lower.includes("group")) {
+      return <FolderOpen className="w-3.5 h-3.5 text-indigo-500/70 dark:text-indigo-400/70" />;
+    }
+    if (
+      lower.includes("name") ||
+      lower.includes("user") ||
+      lower.includes("client") ||
+      lower.includes("customer") ||
+      lower.includes("to/from") ||
+      lower.includes("recipient") ||
+      lower.includes("sender")
+    ) {
+      return <UserIcon className="w-3.5 h-3.5 text-sky-500/70 dark:text-sky-400/70" />;
+    }
+    if (
+      lower.includes("price") ||
+      lower.includes("pricing") ||
+      lower.includes("cost") ||
+      lower.includes("fee") ||
+      lower.includes("amount") ||
+      lower.includes("balance")
+    ) {
+      return <DollarSign className="w-3.5 h-3.5 text-emerald-500/70 dark:text-emerald-400/70" />;
+    }
+    if (lower.includes("date") || lower.includes("time") || lower.includes("created")) {
+      return <Calendar className="w-3.5 h-3.5 text-amber-500/70 dark:text-amber-400/70" />;
+    }
+    if (lower.includes("speed") || lower.includes("performance") || lower.includes("zap")) {
+      return <Zap className="w-3.5 h-3.5 text-rose-500/70 dark:text-rose-400/70" />;
+    }
+    if (lower.includes("action") || lower.includes("settings")) {
+      return <Settings className="w-3.5 h-3.5 text-gray-500/70 dark:text-gray-400/70" />;
+    }
+    return null;
+  };
+
   const downloadTableData = (data: any[][], filename: string) => {
-    const csvContent = data.map((row) => row.join(",")).join("\n");
+    const csvContent = data.map((row) => row.map((cell) => formatCsvCell(String(cell))).join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -1891,64 +2370,51 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             .filter((l) => !l.trim().startsWith("|") && l.trim())
             .join("\n");
 
+          const tableId = `${header.join("_")}_${body.length}`;
+          const isTableSelected = selectedTableRows[tableId]?.size === body.length && body.length > 0;
+
+          // Per-cell expand state lives outside the map so we need a unique key
+          // We derive it from the outer closure variables that are already available.
+          const tableCellExpandKey = `expand_${tableId}`;
+
           return (
             <div key={partIdx} className="space-y-3">
               {nonTableText && (
                 <div>{renderFormattedContent(nonTableText, isUser)}</div>
               )}
-              <div className="my-3 overflow-hidden rounded-2xl border border-border bg-card shadow-lg">
-                <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-muted border-b border-border">
-                  <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                    <TableIcon className="w-3.5 h-3.5 text-indigo-500" />
-                    Data Table
-                  </div>
+              <div className="my-3.5 rounded-2xl group/table">
+                {/* Hover-only Export CSV bar */}
+                <div className="flex justify-end mb-1 h-7 opacity-0 group-hover/table:opacity-100 transition-opacity duration-200">
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    onClick={() =>
-                      downloadTableData([header, ...body], "sciparser_data")
-                    }
-                    className="h-7 px-3 text-[10px] font-black text-sky-400 hover:bg-sky-500/10 gap-1 rounded-xl"
+                    onClick={() => {
+                      const selectedIndices = selectedTableRows[tableId];
+                      const rowsToExport = (selectedIndices && selectedIndices.size > 0)
+                        ? body.filter((_, ri) => selectedIndices.has(ri))
+                        : body;
+                      downloadTableData([header, ...rowsToExport], "sciparser_data");
+                    }}
+                    className="h-7 px-3 text-xs font-semibold text-sky-500 dark:text-sky-400 hover:bg-sky-500/10 border-sky-500/20 hover:border-sky-500/40 gap-1.5 rounded-lg shadow-sm transition-all"
                   >
                     <Download className="w-3 h-3" />
-                    EXPORT CSV
+                    Export CSV
                   </Button>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-[13px] border-collapse">
-                    <thead>
-                      <tr className="bg-muted">
-                        {header.map((h, i) => (
-                          <th
-                            key={i}
-                            className="px-4 py-3 font-black text-foreground border-b border-border whitespace-nowrap"
-                          >
-                            {parseTableCellContent(h, isUser)}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {body.map((row, ri) => (
-                        <tr
-                          key={ri}
-                          className={cn(
-                            "border-b border-border transition-colors hover:bg-muted/50",
-                            ri % 2 === 0 ? "bg-card" : "bg-muted/20",
-                          )}
-                        >
-                          {row.map((cell, ci) => (
-                            <td
-                              key={ci}
-                              className="px-4 py-3 text-card-foreground align-top"
-                            >
-                              {parseTableCellContent(cell, isUser)}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+
+                {/* Resizable Table */}
+                <div className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-md">
+                  <ResizableTable
+                    header={header}
+                    body={body}
+                    tableId={tableId}
+                    selectedTableRows={selectedTableRows}
+                    toggleAllRowSelections={toggleAllRowSelections}
+                    toggleRowSelection={toggleRowSelection}
+                    parseTableCellContent={parseTableCellContent}
+                    getColumnIcon={getColumnIcon}
+                    isTableSelected={isTableSelected}
+                  />
                 </div>
               </div>
             </div>
@@ -1980,7 +2446,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           continue;
         }
 
-        // ATX Headings  # / ## / ###
+        // ATX Headings  # / ## / ### / ####
+        const h4 = trimmed.match(/^####\s+(.*)/);
         const h3 = trimmed.match(/^###\s+(.*)/);
         const h2 = trimmed.match(/^##\s+(.*)/);
         const h1 = trimmed.match(/^#\s+(.*)/);
@@ -1988,7 +2455,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           rendered.push(
             <h2
               key={i}
-              className="mt-4 mb-1 text-[18px] font-black text-foreground tracking-tight leading-snug"
+              className="mt-4 mb-1 text-[18px] font-bold text-foreground tracking-tight leading-snug"
             >
               {parseInlineFormatting(h1[1], isUser)}
             </h2>,
@@ -2000,7 +2467,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           rendered.push(
             <h3
               key={i}
-              className="mt-3 mb-1 text-[15px] font-black text-foreground tracking-tight"
+              className="mt-3 mb-1 text-[15px] font-bold text-foreground tracking-tight"
             >
               {parseInlineFormatting(h2[1], isUser)}
             </h3>,
@@ -2012,10 +2479,22 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           rendered.push(
             <h4
               key={i}
-              className="mt-2 mb-0.5 text-[13px] font-black text-muted-foreground uppercase tracking-wider"
+              className="mt-2 mb-0.5 text-[13px] font-semibold text-foreground/80 uppercase tracking-wider"
             >
               {parseInlineFormatting(h3[1], isUser)}
             </h4>,
+          );
+          i++;
+          continue;
+        }
+        if (!isUser && h4) {
+          rendered.push(
+            <h5
+              key={i}
+              className="mt-2 mb-0.5 text-[13px] font-semibold text-foreground/70 tracking-wide"
+            >
+              {parseInlineFormatting(h4[1], isUser)}
+            </h5>,
           );
           i++;
           continue;
@@ -2060,7 +2539,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               {items.map((item, idx) => (
                 <li
                   key={idx}
-                  className="flex gap-2 leading-relaxed text-[14px] text-muted-foreground"
+                  className="flex gap-2 leading-relaxed text-[14px] text-foreground/90"
                 >
                   <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500/70" />
                   <span>{parseInlineFormatting(item, isUser)}</span>
@@ -2085,16 +2564,16 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             }
           }
           rendered.push(
-            <ol key={`ol-${i}`} className="my-1.5 space-y-1 pl-4">
+            <ol key={`ol-${i}`} className="my-2 space-y-1.5 pl-2">
               {items.map((item, idx) => (
                 <li
                   key={idx}
-                  className="flex gap-2.5 leading-relaxed text-[14px] text-muted-foreground"
+                  className="flex gap-2.5 leading-relaxed text-[14px] text-foreground"
                 >
-                  <span className="shrink-0 text-[12px] font-black text-sky-500 mt-0.5 w-4 text-right">
+                  <span className="shrink-0 text-[13px] font-black text-white mt-0.5 w-5 text-right">
                     {item.n}.
                   </span>
-                  <span>{parseInlineFormatting(item.text, isUser)}</span>
+                  <span className="font-semibold">{parseInlineFormatting(item.text, isUser)}</span>
                 </li>
               ))}
             </ol>,
@@ -2108,7 +2587,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             key={i}
             className={cn(
               "leading-relaxed text-[14px]",
-              isUser ? "text-white" : "text-muted-foreground",
+              isUser ? "text-white" : "text-foreground/90",
             )}
           >
             {parseInlineFormatting(line, isUser)}
@@ -2681,8 +3160,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         {!isMobile && isSidebarCollapsed && (
           <div className="flex h-full flex-col items-center py-4 gap-3 overflow-hidden">
             <div className="pointer-events-none absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,color-mix(in_oklab,var(--primary)_8%,transparent),transparent_28%)]" />
-            <div className="relative z-10 flex h-12 w-12 items-center justify-center rounded-full border border-primary/20 bg-muted shadow-[0_0_18px_rgba(16,185,129,0.16)]">
-              <img src={atomIcon} alt="SciParser" className="h-8 w-8 object-contain" />
+            {/* Logo */}
+            <div className="relative z-10 flex h-12 w-12 items-center justify-center">
+              <img src={atomIcon} alt="SciParser" className="h-9 w-9 object-contain" />
             </div>
             <div className="relative z-10 w-8 h-px bg-border" />
             <button
@@ -2750,8 +3230,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           <div className="flex h-full flex-col items-center py-4 gap-3">
             <div className="pointer-events-none absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,color-mix(in_oklab,var(--primary)_8%,transparent),transparent_28%)]" />
             {/* Logo */}
-            <div className="relative z-10">
-              <img src={theme === "dark" ? logoDark : logoLight} alt="SciParser" className="h-10 w-auto object-contain" />
+            <div className="relative z-10 flex h-12 w-12 items-center justify-center">
+              <img src={atomIcon} alt="SciParser" className="h-9 w-9 object-contain" />
             </div>
             <div className="relative z-10 w-8 h-px bg-border" />
             {/* Chat nav icon */}
@@ -2998,7 +3478,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                           <span className="text-[11px] text-muted-foreground">
                             {isActive
                               ? "Pinned chat"
-                              : `${t.messages?.length || 0} messages`}
+                              : `${t.messageCount || t.messages?.length || 0} messages`}
                           </span>
                           <span className="text-[10px] text-muted-foreground">
                             {t.createdAt
@@ -3092,8 +3572,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={openUsageModal}
-                        title="Usage"
+                        onClick={() => setShowAnalyticsPanel(true)}
+                        title="View Analytics"
                         className="h-10 w-10 rounded-[12px] border border-border bg-card text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-90"
                       >
                         <BarChart3 className="w-5 h-5" />
@@ -3127,11 +3607,16 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
           {/* Usage Modal */}
           {showUsageModal && (
-            <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/65 backdrop-blur-sm p-4">
+            <div
+              className="fixed inset-0 z-[150] flex justify-start bg-black/40 backdrop-blur-xs"
+              onClick={() => setShowUsageModal(false)}
+            >
               <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                className="w-full max-w-lg rounded-[20px] border border-border bg-card p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
+                initial={{ x: "-100%" }}
+                animate={{ x: 0 }}
+                transition={{ type: "spring", damping: 28, stiffness: 260 }}
+                onClick={(e) => e.stopPropagation()}
+                className="h-full w-full max-w-[340px] border-r border-border bg-card p-6 shadow-[8px_0_30px_rgba(0,0,0,0.3)] flex flex-col"
               >
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
@@ -3155,7 +3640,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   </p>
                 )}
 
-                <div className="mt-4 max-h-[50vh] space-y-2 overflow-y-auto pr-1">
+                <div className="mt-4 flex-1 space-y-2 overflow-y-auto pr-1">
                   {usageLoading && (
                     <p className="py-8 text-center text-sm text-muted-foreground">
                       Loading usage…
@@ -3176,13 +3661,13 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     usageData?.map((u) => (
                       <div
                         key={u.chat_id}
-                        className="flex items-center justify-between rounded-[12px] border border-border bg-muted/30 px-4 py-3"
+                        className="flex items-center justify-between rounded-[12px] border border-border bg-muted/30 px-4 py-3 shadow-sm hover:border-[#10B981]/20 transition-all duration-200"
                       >
                         <div className="min-w-0 pr-3">
                           <p className="truncate text-sm font-semibold text-foreground">
                             {chatTitleById[u.chat_id] || "Untitled chat"}
                           </p>
-                          <p className="text-[11px] text-muted-foreground">
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
                             {u.total_tokens.toLocaleString()} tokens ({u.input_tokens.toLocaleString()} in /{" "}
                             {u.output_tokens.toLocaleString()} out)
                           </p>
@@ -3324,7 +3809,12 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                       <Button
                         variant="default"
                         size="sm"
-                        onClick={() => setIsSchedulerOpen(true)}
+                        onClick={async () => {
+                          if (activeThreadId) {
+                            await loadExecutionLogs(activeThreadId);
+                          }
+                          setIsSchedulerOpen(true);
+                        }}
                         className="gap-1.5 text-xs font-semibold shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white border-none"
                       >
                         <RefreshCw className="w-4 h-4" />
@@ -3409,7 +3899,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   className="flex-1 overflow-y-auto flex flex-col"
                 >
                   {messages.length === 0 && !isAiTyping ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-center p-4 sm:p-6 chat-content-cap space-y-4">
+                    <div className={cn("flex-1 flex flex-col items-center justify-center text-center p-4 sm:p-6 chat-content-cap space-y-4", browserActive && "browser-active")}>
                       <div className="w-20 h-20 rounded-2xl bg-muted flex items-center justify-center border border-border">
                         <img src={atomIcon} alt="SciParser" className="w-14 h-14 object-contain" />
                       </div>
@@ -3446,12 +3936,12 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   ) : (
                     <>
                       <div className="flex-1" />
-                      <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 chat-content-cap">
+                      <div className={cn("p-3 sm:p-6 space-y-4 sm:space-y-6 chat-content-cap", browserActive && "browser-active")}>
                         {messages.map(renderMessage)}
 
                         {/* Live Plan / Loading State */}
                         {isAiTyping && (
-                          <div className="mt-4 max-w-2xl space-y-4">
+                          <div className="mt-4 max-w-full space-y-4">
                             <div className="flex items-center justify-between px-1">
                               <div className="flex items-center gap-3">
                                 <div className="flex items-center gap-2">
@@ -3518,7 +4008,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
               {/* Chat Input Area */}
               <div className="px-3 py-3 sm:px-4 sm:py-4 bg-card border-t border-border">
-                <div className="chat-content-cap relative flex items-end gap-2 bg-card border border-border rounded-xl p-2">
+                <div className={cn("chat-content-cap relative flex items-end gap-2 bg-card border border-border rounded-xl p-2", browserActive && "browser-active")}>
                   <input
                     type="file"
                     ref={fileInputRef}
@@ -3562,6 +4052,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     <Send className="w-4 h-4" />
                   </Button>
                 </div>
+                <p className="text-center text-xs text-muted-foreground mt-2 select-none">
+                  SciParser can make mistakes. Check important info.
+                </p>
               </div>
             </div>
 
@@ -3611,6 +4104,15 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           </>
         )}
       </div>
+
+      {/* User Analytics Panel */}
+      {showAnalyticsPanel && userProfile && (
+        <UserAnalyticsPanel
+          user={userProfile as any}
+          isSelf={true}
+          onClose={() => setShowAnalyticsPanel(false)}
+        />
+      )}
     </div>
   );
 };

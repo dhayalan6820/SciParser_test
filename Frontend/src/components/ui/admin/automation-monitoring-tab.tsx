@@ -1,7 +1,7 @@
 import * as React from "react";
 import { sciparserApi, AdminAutomation } from "../../../api";
 import { KPICard, Panel, EmptyState, LoadingState, StatusBadge, formatRelativeTime, useAutoRefresh, RefreshButton } from "./shared";
-import { Calendar, CheckCircle2, XCircle, Repeat, Search, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar, CheckCircle2, XCircle, Repeat, Search, ArrowUpDown, ChevronLeft, ChevronRight, DollarSign, Square } from "lucide-react";
 
 const PAGE_SIZE = 15;
 const SORT_OPTIONS: { value: string; label: string }[] = [
@@ -11,6 +11,7 @@ const SORT_OPTIONS: { value: string; label: string }[] = [
   { value: "success_rate", label: "Success Rate" },
   { value: "last_run", label: "Last Run" },
   { value: "next_run", label: "Next Run" },
+  { value: "total_cost", label: "Cost" },
 ];
 
 export const AutomationMonitoringTab: React.FC = () => {
@@ -24,7 +25,7 @@ export const AutomationMonitoringTab: React.FC = () => {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
-  const [summary, setSummary] = React.useState({ totalRuns: 0, totalSuccess: 0, totalFailed: 0, active: 0 });
+  const [summary, setSummary] = React.useState({ totalRuns: 0, totalSuccess: 0, totalFailed: 0, active: 0, totalCost: 0 });
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -63,6 +64,7 @@ export const AutomationMonitoringTab: React.FC = () => {
         totalSuccess: all.reduce((sum, a) => sum + a.success_runs, 0),
         totalFailed: all.reduce((sum, a) => sum + a.failed_runs, 0),
         active: all.filter((a) => a.status === "active").length,
+        totalCost: all.reduce((sum, a) => sum + (a.total_cost || 0), 0),
       });
     } catch {
       // summary is best-effort; ignore failures
@@ -80,6 +82,15 @@ export const AutomationMonitoringTab: React.FC = () => {
 
   useAutoRefresh(refreshAll, 20000, true);
 
+  const handleStop = async (scheduleId: string) => {
+    try {
+      await sciparserApi.stopSchedule(scheduleId);
+      refreshAll();
+    } catch (err: any) {
+      alert(`Failed to stop schedule: ${err.message || err}`);
+    }
+  };
+
   const toggleSort = (value: string) => {
     if (sortBy === value) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -91,11 +102,12 @@ export const AutomationMonitoringTab: React.FC = () => {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <KPICard index={0} icon={<Repeat className="h-4 w-4" />} label="Active Schedules" value={summary.active.toLocaleString()} />
         <KPICard index={1} icon={<Calendar className="h-4 w-4" />} label="Total Runs" value={summary.totalRuns.toLocaleString()} />
         <KPICard index={2} icon={<CheckCircle2 className="h-4 w-4" />} label="Successful Runs" value={summary.totalSuccess.toLocaleString()} />
         <KPICard index={3} icon={<XCircle className="h-4 w-4" />} label="Failed Runs" value={summary.totalFailed.toLocaleString()} />
+        <KPICard index={4} icon={<DollarSign className="h-4 w-4" />} label="Total Cost" value={`$${summary.totalCost.toFixed(4)}`} />
       </div>
 
       <Panel
@@ -173,6 +185,12 @@ export const AutomationMonitoringTab: React.FC = () => {
                         Next Run <ArrowUpDown className="h-3 w-3" />
                       </button>
                     </th>
+                    <th className="px-3 py-2 font-medium">
+                      <button className="flex items-center gap-1" onClick={() => toggleSort("total_cost")}>
+                        Cost <ArrowUpDown className="h-3 w-3" />
+                      </button>
+                    </th>
+                    <th className="px-3 py-2 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -189,6 +207,19 @@ export const AutomationMonitoringTab: React.FC = () => {
                       <td className="px-3 py-2">{a.success_rate}%</td>
                       <td className="px-3 py-2 text-muted-foreground text-xs whitespace-nowrap">{formatRelativeTime(a.last_run)}</td>
                       <td className="px-3 py-2 text-muted-foreground text-xs whitespace-nowrap">{formatRelativeTime(a.next_run)}</td>
+                      <td className="px-3 py-2 text-xs font-mono whitespace-nowrap">{(a.total_cost || 0) > 0 ? `$${a.total_cost.toFixed(4)}` : "--"}</td>
+                      <td className="px-3 py-2 text-right">
+                        {a.is_running ? (
+                          <button
+                            onClick={() => handleStop(a.schedule_id)}
+                            className="inline-flex items-center gap-1 text-red-500 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-950/50 bg-red-50 dark:bg-red-950/20 px-2 py-1 rounded text-xs font-medium transition"
+                          >
+                            <Square className="h-2.5 w-2.5 fill-current" /> Stop
+                          </button>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">--</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

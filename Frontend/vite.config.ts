@@ -4,7 +4,11 @@ import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '');
+  // Load env from the project root (unified .env), then Frontend/ overrides
+  const projectRoot = path.resolve(__dirname, '..');
+  const rootEnv = loadEnv(mode, projectRoot, '');
+  const localEnv = loadEnv(mode, process.cwd(), '');
+  const env = { ...rootEnv, ...localEnv };
   const backendTarget = env.VITE_DEV_PROXY_TARGET || 'http://localhost:8000';
 
   return {

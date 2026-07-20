@@ -202,7 +202,7 @@ const Signup1 = ({
           <Button 
             type="button" 
             variant="outline" 
-            className="w-full h-10 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-850 text-slate-700 dark:text-slate-300 font-medium rounded-md text-sm shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full h-10 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium rounded-md text-sm shadow-sm flex items-center justify-center gap-2 cursor-pointer"
           >
             <div className="shrink-0 flex items-center justify-center">
               <FcGoogle size={18} />

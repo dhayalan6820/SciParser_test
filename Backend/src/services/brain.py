@@ -37,6 +37,49 @@ class DatabaseManager:
     async def get_or_create_chat_session(self, user_id: str, chat_id: str):
         pass
 
+def suggest_chat_title(message: str) -> str:
+    if not message:
+        return "New Chat"
+    
+    clean = message.strip()
+    
+    # 1. Extract domain from URL
+    url_match = re.search(r'https?://(?:www\.)?([a-zA-Z0-9-]+\.[a-zA-Z]{2,})', clean, re.IGNORECASE)
+    domain = url_match.group(1) if url_match else ""
+    
+    # Remove URLs
+    clean = re.sub(r'https?://[^\s]+', '', clean).strip()
+    
+    # 2. Clean prefixes
+    clean = re.sub(r'^(please\s+)?(go\s+to|navigate\s+to|open\s+the|open|check\s+out|visit|browse)\s+', '', clean, flags=re.IGNORECASE)
+    
+    # 3. Clean transitions
+    clean = re.sub(r'^(and\s+)?(the\s+|a\s+|an\s+)?', '', clean, flags=re.IGNORECASE)
+    
+    if domain:
+        clean_action = re.sub(r'^[.,;:!?\s]+|[.,;:!?\s]+$', '', clean)
+        if not clean_action or len(clean_action) < 3:
+            return f"Browse — {domain}"
+        
+        action_str = clean_action[0].upper() + clean_action[1:]
+        if len(action_str) > 35:
+            action_str = action_str[:32] + "..."
+        return f"{action_str} — {domain}"
+    
+    # 4. No domain, take first sentence or segment
+    end_match = re.search(r'[.:;!?\n]', clean)
+    if end_match:
+        clean = clean[:end_match.start()]
+    
+    clean = clean.strip()
+    if not clean:
+        return "New Chat"
+    
+    title_str = clean[0].upper() + clean[1:]
+    if len(title_str) > 45:
+        title_str = title_str[:42] + "..."
+    return title_str
+
 class CodeProcessor:
     def __init__(self, llm):
         self.llm = llm
@@ -51,32 +94,200 @@ class CodeProcessor:
         plan_context: str,
         user_id: str,
         chat_id: str,
+        assistant_response: str = "",
     ) -> str:
         from langchain_core.messages import SystemMessage
         import json
 
-        prompt = (
-            "You are an expert autonomous Python script compiler and developer.\n"
-            f"Your job is to generate a fully functional, self-contained Python script to automate the task: '{title}'.\n"
-            f"USER GOAL: {user_goal}\n"
-            f"AUTOMATION FRAMEWORK: {framework}\n\n"
-        )
-        
+        # Set contextvars so TokenTrackingCallbackHandler records the LLM call
+        # with the correct user_id / chat_id in the LlmRequest table.
+        token_user = current_user_id.set(user_id)
+        token_chat = current_chat_id.set(chat_id)
+        try:
+            return await self._generate_script_inner(
+                title, execution_history, framework, tool_context,
+                user_goal, plan_context, user_id, chat_id, assistant_response,
+            )
+        finally:
+            current_user_id.reset(token_user)
+            current_chat_id.reset(token_chat)
+
+    async def _generate_script_inner(
+        self, title, execution_history, framework, tool_context,
+        user_goal, plan_context, user_id, chat_id, assistant_response: str = "",
+    ) -> str:
+        from langchain_core.messages import SystemMessage
+        import json
+
+        # ── Build a navigation-only breadcrumb list from tool logs ──────────
+        # We strip the actual OUTPUT values to prevent the LLM from copying
+        # scraped data as hardcoded constants into the generated script.
+        nav_breadcrumbs = []
+        for item in execution_history:
+            tool = item.get("tool") or item.get("tool_name") or ""
+            inp  = item.get("input") or {}
+            status = item.get("status") or ""
+            # Include the tool name + inputs (URLs, selectors) but NOT the output
+            crumb = {"tool": tool, "input": inp, "status": status}
+            nav_breadcrumbs.append(crumb)
+
+        # Also strip output from tool_context
+        nav_tool_context = [
+            {"tool_name": item.get("tool_name", ""),
+             "input":     item.get("input", {}),
+             "note": "output omitted -- extract live from site"}
+            for item in (tool_context or [])
+        ]
+
+        prompt = f"""You are an expert Python automation engineer specializing in Playwright for web scraping.
+
+        YOUR TASK:
+        Generate a fully functional, self-contained Python script using ONLY Playwright to visit and extract data from a list of target URLs sequentially.
+        The script MUST NOT use browser-use or any AI agent. It must extract details directly from the page using standard CSS selectors.
+
+        The script must automate the following goal on a DAILY schedule. You MUST align it strictly with the user's initial goals and format the output fields exactly as agreed in the AI's final response:
+
+        GOAL (User Requirements): {user_goal}
+        TITLE: {title}
+        """
+
+        if assistant_response:
+            prompt += f"""\nAI ASSISTANT RESPONSE (use this as reference for output fields & structure):
+        {assistant_response}\n"""
+
         if plan_context:
-            prompt += f"EXECUTION PLAN PATHWAYS:\n{plan_context}\n\n"
-            
-        if tool_context:
-            context_str = json.dumps(tool_context, indent=2)
-            prompt += f"OBSERVED TOOLS EXECUTIONS LOGS:\n{context_str}\n\n"
-            
-        prompt += (
-            "INSTRUCTIONS:\n"
-            "1. Output ONLY the raw Python code. Do NOT wrap the code in markdown code blocks like ```python ... ```. Start the response directly with the first line of code (e.g. imports).\n"
-            "2. The script must be fully self-contained and run standalone. Implement standard try/except blocks for robust error handling.\n"
-            "3. If using Playwright, use standard Playwright async API with chromium headless browser.\n"
-            "4. Do not add any conversational text before or after the code block."
-        )
-        
+            prompt += f"""\nAGENT EXECUTION PLAN (use this to understand WHAT to collect):
+            {plan_context}\n"""
+
+        if nav_breadcrumbs:
+            breadcrumb_str = json.dumps(nav_breadcrumbs, indent=2)
+            prompt += f"""\nNAVIGATION BREADCRUMBS (tool calls showing HOW the agent navigated -- NOT data to copy):
+        {breadcrumb_str}\n"""
+
+        if nav_tool_context:
+            tc_str = json.dumps(nav_tool_context, indent=2)
+            prompt += f"""\nTOOL CONTEXT (navigation inputs and outputs showing exactly what was extracted and which CSS selectors correspond to each data field):
+        {tc_str}\n"""
+
+        prompt += """
+        ==============================================================
+        HOW TO USE CONTEXT DATA:
+        - Navigation breadcrumbs = MAP of how the agent explored the site.
+            Use the visited URLs to build TARGET_URLS.
+        - Tool Context (especially outputs with `*_selector` properties) = Selector map showing exactly where the plan details are located in the DOM. Use these exact selectors in your Playwright locators.
+        - DO NOT copy any values from outputs -- the script fetches FRESH data
+            on every daily run.
+
+        CRITICAL RULES -- VIOLATIONS WILL BREAK DAILY AUTOMATION:
+        1. NEVER hardcode any prices, package names, plan details, speeds, fees,
+            contract terms, or any other scraped values into the script.
+        2. NEVER write static lists/dicts pre-filled with website data.
+        3. ALL output values must be extracted LIVE at runtime.
+        4. URLs from navigation breadcrumbs MAY be hardcoded as TARGET_URLS.
+            That is the ONLY thing you may hardcode.
+        5. Wrap every page interaction and extraction in try/except for robustness.
+        6. NEVER use Unicode characters (arrows, em-dashes, etc.) in print()
+            statements -- use only ASCII (e.g. -> instead of the arrow symbol).
+        7. Stick STRICTLY to the user goal and the structure shown in the AI Assistant Response.
+            Do NOT create any extra categories, include unsanctioned attributes, or make out-of-the-box assumptions.
+        8. Write a clean, high-performance Playwright script. Execute inputs (e.g., typing address details, selecting inputs, clicking buttons) sequentially to reach the correct page state before attempting extraction.
+
+        ==============================================================
+        REQUIRED CODE STRUCTURE (Playwright only):
+
+        ```
+        import asyncio
+        import json
+        import os
+        import sys
+        from dotenv import load_dotenv
+        from playwright.async_api import async_playwright
+
+        load_dotenv()
+
+        # Force UTF-8 stdout on Windows to avoid encoding errors
+        if sys.platform == "win32":
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+        # -- Configuration ----------------------------------------------------------
+        TARGET_URLS = [
+            # Fill with actual URLs from navigation breadcrumbs
+        ]
+
+        async def playwright_extract(page, url: str) -> list[dict]:
+            results = []
+            try:
+                # 1. Navigate to target URL
+                await page.goto(url, wait_until="domcontentloaded", timeout=45000)
+                await page.wait_for_timeout(2000)
+                
+                # 2. Perform any interactive steps (typing addresses, clicking search availability, form submits) 
+                # required to see the plans, matching the user goal and navigation history.
+                # E.g.
+                # await page.fill("input[placeholder='Enter address']", "1017 Franklin St, Poplar Bluff, MO 63901")
+                # await page.click(".suggestion-item")
+                # await page.click("button#check-availability")
+                # await page.wait_for_selector("your_selector")
+                
+                # 3. Extract the target plans/details using the exact CSS selectors 
+                # (found in the tool_context *_selector fields)
+                # E.g.
+                # plans = await page.locator("your_plan_card_selector").all()
+                # for plan in plans:
+                #     name = await plan.locator("your_name_selector").inner_text()
+                #     price = await plan.locator("your_price_selector").inner_text()
+                #     results.append({"name": name.strip(), "price": price.strip()})
+                pass
+            except Exception as e:
+                print(f"  [Playwright] Error on {url}: {e}")
+            return results
+
+        async def run():
+            cdp_url = os.environ.get("BROWSER_CDP_URL")
+            all_results = []
+
+            async with async_playwright() as p:
+                if cdp_url:
+                    print(f"Connecting Playwright over CDP: {cdp_url}")
+                    browser = await p.chromium.connect_over_cdp(cdp_url)
+                    context = browser.contexts[0] if browser.contexts else await browser.new_context()
+                else:
+                    browser = await p.chromium.launch(headless=True)
+                    context = await browser.new_context(
+                        user_agent=(
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                            "AppleWebKit/537.36 (KHTML, like Gecko) "
+                            "Chrome/120.0.0.0 Safari/537.36"
+                        )
+                    )
+                
+                page = await context.new_page()
+
+                for url in TARGET_URLS:
+                    print(f"\\n[Playwright] Scraping: {url}")
+                    pw_results = await playwright_extract(page, url)
+                    print(f"  -> Playwright found {len(pw_results)} item(s)")
+                    all_results.extend(pw_results)
+
+                await page.close()
+                if not cdp_url:
+                    await browser.close()
+
+            print("\\n=== FINAL EXTRACTED DATA ===")
+            print(json.dumps(all_results, indent=2))
+
+        if __name__ == "__main__":
+            asyncio.run(run())
+        ```
+
+        INSTRUCTIONS:
+        1. Output ONLY the raw Python code. Do NOT wrap in markdown code blocks.
+        2. Start directly with `import asyncio` -- no preamble text.
+        3. Populate TARGET_URLS with actual URLs from navigation breadcrumbs.
+        4. Implement custom, robust Playwright interaction steps to mimic user address input/checking availability.
+        5. Extract fields strictly using Playwright locators based on the live CSS selectors from tool_context.
+"""
+
         try:
             resp = await self.llm.ainvoke([SystemMessage(content=prompt)])
             code = resp.content.strip()
@@ -87,7 +298,18 @@ class CodeProcessor:
                 code = code.split("```", 1)[-1]
             if code.endswith("```"):
                 code = code.rsplit("```", 1)[0]
-            return code.strip()
+            code = code.strip()
+            
+            # Anti-hallucination fix for OpenRouter base URL & Model Prefix:
+            code = code.replace('"https://api.openai.com/v1"', '"https://openrouter.ai/api/v1"')
+            code = code.replace("'https://api.openai.com/v1'", "'https://openrouter.ai/api/v1'")
+            code = code.replace('"gemini-3.1-flash-lite"', '"google/gemini-3.1-flash-lite"')
+            code = code.replace("'gemini-3.1-flash-lite'", "'google/gemini-3.1-flash-lite'")
+            # If the LLM already wrote openai/openai/gpt-4o-mini, fix it:
+            code = code.replace('"openai/openai/', '"openai/')
+            code = code.replace("'openai/openai/", "'openai/")
+            
+            return code
         except Exception as e:
             logger.error(f"Failed to generate automated script: {e}")
             return f"# Error generating automated script: {e}"
@@ -103,12 +325,14 @@ def get_model_pricing(model_name: str) -> tuple[float, float]:
         return 0.15, 0.60
     elif "gpt-4o" in name:
         return 2.50, 10.00
-    elif "claude-3-5-sonnet" in name:
-        return 3.00, 15.00
+    elif "google/gemini-3.1-flash-lite" in name:
+        return 0.25, 1.50
     elif "claude-3-haiku" in name:
         return 0.25, 1.25
     elif "minimax-m3" in name:
         return 0.30, 1.20
+    elif "gpt-5.1-codex-mini" in name:
+        return 0.20, 0.80
     # Default fallback to config settings
     from src import config
     return getattr(config, "LLM_INPUT_COST_PER_MILLION", 0.1), getattr(config, "LLM_OUTPUT_COST_PER_MILLION", 0.4)
@@ -347,7 +571,8 @@ class SemanticCompressor:
         return summary
 
 class Brain:
-    def __init__(self,model_name: str = os.getenv("MAIN_MODEL")):
+    def __init__(self, model_name: str = None):
+        model_name = model_name or config.MAIN_MODEL
         self.active_tasks: Dict[str, asyncio.Task] = {}
         self.active_plans: Dict[str, Any] = {}
         self.active_users: set = set()
@@ -359,13 +584,20 @@ class Brain:
         self.model_name = model_name
         self.llm = MemoryPruningLLM(
             model_name=self.model_name,
-            openrouter_api_key=os.getenv("OPENROUTER_API_KEY"),
+            openrouter_api_key=config.OPENROUTER_API_KEY,
             temperature=0.8,
             max_retries=3,
             max_tokens=16384,
         )
+        self.code_gen_llm = MemoryPruningLLM(
+            model_name=config.CODE_GENERATION_MODEL,
+            openrouter_api_key=config.OPENROUTER_API_KEY,
+            temperature=0.2,
+            max_retries=3,
+            max_tokens=16384,
+        )
         self.tool_selector = ToolSelector(model_name=self.model_name)
-        self.code_processor = CodeProcessor(self.llm)
+        self.code_processor = CodeProcessor(self.code_gen_llm)
         self.semantic_compressor = SemanticCompressor(self.tool_selector)
 
     def is_user_active(self, user_id: str) -> bool:
@@ -376,13 +608,17 @@ class Brain:
         try:
             from src.utils.session_manager import find_free_port
             
-            # Temporarily force headless and disable system Chrome for startup tools discovery
+            # Temporarily force headless, disable system Chrome, and use a safe temp profile dir for startup tools discovery
             old_headless = os.environ.get("BROWSER_USE_HEADLESS")
             old_system_chrome = os.environ.get("BROWSER_USE_SYSTEM_CHROME")
+            old_user_data_dir = os.environ.get("BROWSER_USER_DATA_DIR")
+            
             os.environ["BROWSER_USE_HEADLESS"] = "true"
             os.environ["BROWSER_USE_SYSTEM_CHROME"] = "false"
             
             temp_port = find_free_port()
+            os.environ["BROWSER_USER_DATA_DIR"] = os.path.join(config.TEMP_DIR_PATH, f"startup_discovery_{temp_port}")
+            
             temp_manager = MCPToolManager(port=temp_port, user_id="system")
             all_tools = await temp_manager.get_tools()
             
@@ -396,6 +632,11 @@ class Brain:
                 os.environ["BROWSER_USE_SYSTEM_CHROME"] = old_system_chrome
             else:
                 os.environ.pop("BROWSER_USE_SYSTEM_CHROME", None)
+                
+            if old_user_data_dir is not None:
+                os.environ["BROWSER_USER_DATA_DIR"] = old_user_data_dir
+            else:
+                os.environ.pop("BROWSER_USER_DATA_DIR", None)
                 
             for tool in all_tools:
                 tool_text = f"{tool.name} {tool.description or ''}"
@@ -661,6 +902,202 @@ class Brain:
                             await asyncio.sleep(5.0)
                             logger.warning(f"User {user_id} throttled due to budget limits.")
             
+            # --------------------------------------------------------------------------
+            # PII / System Introspection Guardrail
+            # --------------------------------------------------------------------------
+            # If the user is asking about personal data, system internals, API keys,
+            # model architecture, or how the agent works — respond with a friendly,
+            # transparent description of the system instead of proceeding with the
+            # full agent loop (which would waste tokens and time).
+            # --------------------------------------------------------------------------
+            _msg_lower = message.lower()
+            _pii_triggers = [
+                "system prompt", "your prompt", "your instructions", "what are your instructions",
+                "what model are you", "which model", "what llm", "what ai model", "underlying model",
+                "api key", "openrouter", "secret key", "environment variable", "your config",
+                "how do you work", "how does this work", "how are you built", "your architecture",
+                "what tools do you have", "list your tools", "show your tools",
+                "your source code", "your code", "internal", "backend",
+                "are you gpt", "are you claude", "are you gemini", "are you chatgpt",
+                "who made you", "who created you", "who built you", "who trained you",
+                "tell me about yourself", "what are you",
+            ]
+            if any(trigger in _msg_lower for trigger in _pii_triggers):
+                pii_response = (
+                    "As **SciParser AI**, I don't simply relay information from a static training database. "
+                    "Instead, I am an **autonomous AI agent** that uses a combination of advanced reasoning, "
+                    "real-time browser automation, and specialized tools to complete your requests.\n\n"
+                    "Here's how I approach tasks:\n\n"
+                    "1. **Real-Time Web Search**: I can navigate the live web, open URLs, and extract "
+                    "structured data directly from pages — finding the most current, accurate information.\n\n"
+                    "2. **Live Browser Automation**: I control a real browser session, interact with "
+                    "web elements, handle authentication flows, and read dynamic content that traditional "
+                    "APIs cannot access.\n\n"
+                    "3. **Data Synthesis**: After gathering information across multiple sources and steps, "
+                    "I compile, compare, and consolidate everything into a clean, structured final report "
+                    "tailored to your specific request.\n\n"
+                    "This approach allows me to provide you with live, accurate results rather than "
+                    "relying on potentially outdated knowledge from a fixed training cutoff. "
+                    "If you have a specific research, comparison, or data extraction task in mind, "
+                    "I'm ready to get started! 🚀"
+                )
+
+                # Save the PII response to the database
+                pii_msg_id = str(uuid.uuid4())
+                async with AsyncSessionLocal() as db:
+                    session_obj = (await db.execute(select(ChatSession).where(ChatSession.id == chat_id))).scalar_one_or_none()
+                    if not session_obj:
+                        session_obj = ChatSession(
+                            id=chat_id,
+                            user_id=user_id,
+                            title="About SciParser AI",
+                            status="active"
+                        )
+                        db.add(session_obj)
+
+                    user_msg = Message(
+                        message_id=str(uuid.uuid4()),
+                        chat_id=chat_id,
+                        user_id=user_id,
+                        role="user",
+                        content=message
+                    )
+                    db.add(user_msg)
+
+                    ai_msg = Message(
+                        message_id=pii_msg_id,
+                        chat_id=chat_id,
+                        user_id=user_id,
+                        role="ai",
+                        content=pii_response,
+                        plan_data=json.dumps([]),
+                        tool_calls=json.dumps([]),
+                        token_usage=json.dumps({"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}),
+                        cost="0"
+                    )
+                    db.add(ai_msg)
+                    await db.commit()
+
+                return {
+                    "success": True,
+                    "message": {
+                        "id": pii_msg_id,
+                        "content": pii_response,
+                        "tool_calls": [],
+                        "plan": [],
+                        "token_usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                        "cost": 0
+                    }
+                }
+            # --------------------------------------------------------------------------
+
+            # --------------------------------------------------------------------------
+            # Non-Automation Guardrail
+            # --------------------------------------------------------------------------
+            # SciParser is a focused autonomous automation agent. If the user asks
+            # general knowledge questions, math, trivia, opinions, greetings, or
+            # anything unrelated to browser automation / web tasks — short-circuit
+            # immediately with a friendly redirect. Zero tokens wasted.
+            # --------------------------------------------------------------------------
+            _non_automation_triggers = [
+                # Math / calculations
+                "what is", "calculate", "solve", "compute", "how much is", "what's",
+                "what does", "define", "explain", "tell me", "can you tell",
+                # General knowledge / trivia
+                "who is", "who was", "where is", "where was", "when is", "when was",
+                "why is", "why does", "how many", "how old", "what year",
+                # Opinions / recommendations (non-automation)
+                "do you think", "what do you think", "what's your opinion",
+                "what's the best", "recommend me", "suggest me",
+                # Greetings / chitchat
+                "hello", "hi ", "hey ", "good morning", "good afternoon", "good evening",
+                "how are you", "what's up", "how's it going",
+                # Weather / news / facts
+                "weather", "news today", "latest news", "joke", "tell me a joke",
+                "fun fact", "did you know",
+                # Translation / writing
+                "translate", "write a poem", "write a story", "write an essay",
+                "summarize this text", "proofread",
+                # Coding help (unrelated to automation tasks)
+                "write code for", "give me code", "python code", "javascript code",
+            ]
+            # Only trigger if the message does NOT look like an automation/browser task
+            _automation_keywords = [
+                "automate", "automation", "browser", "scrape", "scraping", "crawl",
+                "navigate", "click", "fill", "form", "login", "extract", "download",
+                "website", "url", "http", "www.", ".com", ".org", ".net",
+                "schedule", "run every", "monitor", "track", "watch",
+                "data extraction", "web data", "open page", "go to",
+            ]
+            _is_automation_task = any(kw in _msg_lower for kw in _automation_keywords)
+
+            if not _is_automation_task and any(trigger in _msg_lower for trigger in _non_automation_triggers):
+                non_auto_response = (
+                    "I'm **SciParser AI** — an **autonomous automation agent** built exclusively "
+                    "for browser automation, web scraping, data extraction, and scheduled web tasks. 🤖\n\n"
+                    "I'm not a general-purpose chatbot or search engine, so I'm unable to answer "
+                    "general knowledge questions, math problems, or casual conversations.\n\n"
+                    "**Here's what I *can* do for you:**\n\n"
+                    "- 🌐 **Navigate & Automate** — Open any website and perform actions (click, fill forms, login)\n"
+                    "- 📊 **Extract Data** — Scrape structured data from web pages, tables, and documents\n"
+                    "- ⏰ **Schedule Tasks** — Run automations daily, weekly, or monthly automatically\n"
+                    "- 🔍 **Monitor & Track** — Watch pages for changes and report back\n\n"
+                    "**Try asking me something like:**\n"
+                    "> *\"Go to amazon.com and extract the top 10 bestselling books\"*\n"
+                    "> *\"Login to my dashboard and download the monthly report\"*\n"
+                    "> *\"Monitor this URL every day and alert me if the price drops\"*\n\n"
+                    "Give me an automation task and I'll get it done! 🚀"
+                )
+
+                # Save to database
+                non_auto_msg_id = str(uuid.uuid4())
+                async with AsyncSessionLocal() as db:
+                    session_obj = (await db.execute(select(ChatSession).where(ChatSession.id == chat_id))).scalar_one_or_none()
+                    if not session_obj:
+                        session_obj = ChatSession(
+                            id=chat_id,
+                            user_id=user_id,
+                            title="SciParser — Automation Only",
+                            status="active"
+                        )
+                        db.add(session_obj)
+
+                    user_msg = Message(
+                        message_id=str(uuid.uuid4()),
+                        chat_id=chat_id,
+                        user_id=user_id,
+                        role="user",
+                        content=message
+                    )
+                    db.add(user_msg)
+
+                    ai_msg = Message(
+                        message_id=non_auto_msg_id,
+                        chat_id=chat_id,
+                        user_id=user_id,
+                        role="ai",
+                        content=non_auto_response,
+                        plan_data=json.dumps([]),
+                        tool_calls=json.dumps([]),
+                        token_usage=json.dumps({"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}),
+                        cost="0"
+                    )
+                    db.add(ai_msg)
+                    await db.commit()
+
+                return {
+                    "success": True,
+                    "message": {
+                        "id": non_auto_msg_id,
+                        "content": non_auto_response,
+                        "tool_calls": [],
+                        "plan": [],
+                        "token_usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                        "cost": 0
+                    }
+                }
+            # --------------------------------------------------------------------------
+
             # Setup session
             session_data = self.session_manager.get_session(user_id)
             if not session_data.get("mcp_manager"):
@@ -698,10 +1135,28 @@ class Brain:
             if self.stream_manager:
                 await self.stream_manager.broadcast_thought(chat_id, "Planning workflow task queue...")
 
+            # Fetch chat history context for the planner
+            chat_context = ""
+            try:
+                async with AsyncSessionLocal() as db:
+                    history_stmt = select(Message).where(Message.chat_id == chat_id).order_by(Message.created_at.asc())
+                    history_res = await db.execute(history_stmt)
+                    history_msgs = history_res.scalars().all()
+                    
+                    if history_msgs:
+                        context_parts = []
+                        for msg in history_msgs[-10:]: # last 10 messages
+                            role_str = "USER" if msg.role == "user" else "AGENT"
+                            context_parts.append(f"{role_str}: {msg.content}")
+                        chat_context = "\n".join(context_parts)
+            except Exception as e:
+                logger.error(f"Failed to fetch chat history for planner: {e}")
+
             planner_prompt = (
                 "You are an expert Task Planner.\n"
                 "Decompose the following user request into a sequence of isolated, focused sub-tasks to execute sequentially.\n"
                 "Each task must target a single URL or document, or perform a single specific extraction step.\n"
+                "If the user is continuing a previous task, DO NOT create redundant tasks (e.g. do not re-navigate to a page if already there).\n"
                 "Output ONLY a valid JSON list of objects. Do NOT output any markdown tags, commentary or code blocks. Start directly with [\n"
                 "JSON format:\n"
                 "[\n"
@@ -710,13 +1165,24 @@ class Brain:
                 "    \"description\": \"Detailed task instruction\"\n"
                 "  }\n"
                 "]\n\n"
-                f"USER REQUEST: {message}"
             )
+            if chat_context:
+                planner_prompt += f"PREVIOUS CHAT CONTEXT:\n{chat_context}\n\n"
+            
+            planner_prompt += f"CURRENT USER REQUEST: {message}"
             
             tasks = []
             try:
                 planner_res = await self.llm.ainvoke([SystemMessage(content=planner_prompt)])
                 plan_text = planner_res.content.strip()
+                
+                # Write raw planner response to a debug file
+                try:
+                    with open("planner_debug.txt", "w", encoding="utf-8") as debug_f:
+                        debug_f.write(f"Raw Planner Response:\n{plan_text}\n")
+                except Exception as write_err:
+                    logger.error(f"Failed to write planner_debug.txt: {write_err}")
+
                 if plan_text.startswith("```json"):
                     plan_text = plan_text.split("```json", 1)[-1]
                 elif plan_text.startswith("```"):
@@ -725,10 +1191,16 @@ class Brain:
                     plan_text = plan_text.rsplit("```", 1)[0]
                 plan_text = plan_text.strip()
                 tasks = json.loads(plan_text)
-                if not isinstance(tasks, list):
-                    raise ValueError("Planner output is not a list")
-            except Exception as plan_err:
-                logger.warning(f"Failed to generate task plan: {plan_err}. Defaulting to single task.")
+                if not isinstance(tasks, list) or len(tasks) == 0:
+                    raise ValueError("Planner output is not a list or is empty")
+            except Exception as e:
+                logger.error(f"Planner decomposition failed: {e}")
+                try:
+                    with open("planner_debug.txt", "a", encoding="utf-8") as debug_f:
+                        debug_f.write(f"\nDecomposition Exception: {e}\n{traceback.format_exc()}\n")
+                except Exception as write_err:
+                    logger.error(f"Failed to append exception to planner_debug.txt: {write_err}")
+                logger.warning(f"Failed to generate task plan: {e}. Defaulting to single task.")
                 tasks = [{"id": 1, "description": message}]
 
             # 3. Initialize visual plan checklist for UI
@@ -774,7 +1246,7 @@ class Brain:
             )
             fallback_llm = MemoryPruningLLM(
                 model_name="openai/gpt-4o-mini",
-                openrouter_api_key=os.getenv("OPENROUTER_API_KEY"),
+                openrouter_api_key=config.OPENROUTER_API_KEY,
                 temperature=0.8,
                 max_retries=3,
             )
@@ -786,10 +1258,29 @@ class Brain:
             async with AsyncSessionLocal() as db:
                 session_obj = (await db.execute(select(ChatSession).where(ChatSession.id == chat_id))).scalar_one_or_none()
                 if not session_obj:
+                    # Dynamically generate a short, friendly, and meaningful title via LLM
+                    title = suggest_chat_title(message)
+                    try:
+                        title_prompt = (
+                            "You are a helpful assistant. Generate a short, friendly, and meaningful conversation title "
+                            "(maximum 3-5 words) summarizing the user's intent from the following first message. "
+                            "Do not include quotes, prefixes like 'Title:', or trailing punctuation.\n\n"
+                            f"User message: {message}"
+                        )
+                        title_res = await self.llm.completion(
+                            messages=[{"role": "user", "content": title_prompt}],
+                            max_tokens=15
+                        )
+                        candidate = title_res.strip().strip('"\'')
+                        if candidate and len(candidate) > 2 and len(candidate) < 60 and "generate" not in candidate.lower():
+                            title = candidate
+                    except Exception as e:
+                        logger.warning(f"Failed to generate LLM chat title: {e}")
+
                     session_obj = ChatSession(
                         id=chat_id,
                         user_id=user_id,
-                        title=message[:50] + ("..." if len(message) > 50 else ""),
+                        title=title,
                         status="active"
                     )
                     db.add(session_obj)
@@ -863,17 +1354,66 @@ class Brain:
                             if isinstance(msg, ToolMessage) or (hasattr(msg, "type") and msg.type == "tool"):
                                 content = msg.content
                                 
-                                # HALT ON ANY TOOL ERROR TO SAVE COSTS
+                                # Non-fatal error patterns the agent can recover from —
+                                # log a warning and let the loop continue instead of halting.
+                                # Most tool errors are self-correctable by the LLM on the next turn;
+                                # only truly catastrophic errors (unmatched by this list) should halt.
+                                _RECOVERABLE_ERROR_PATTERNS = [
+                                    # deepagents internal tool guardrails
+                                    "write_todos",
+                                    "should never be called multiple times in parallel",
+                                    "todo",
+                                    # File operation errors (LLM can retry with corrected args)
+                                    "exceeds file length",
+                                    "line offset",
+                                    "file not found",
+                                    "no such file",
+                                    "is not a file",
+                                    "is a directory",
+                                    "permission denied",
+                                    # Tool argument / validation errors
+                                    "invalid argument",
+                                    "invalid parameter",
+                                    "missing required",
+                                    "expected type",
+                                    "out of range",
+                                    "out of bounds",
+                                    # Browser-use / MCP tool transient errors
+                                    "element not found",
+                                    "selector not found",
+                                    "no element found",
+                                    "stale element",
+                                    "not interactable",
+                                    "timed out",
+                                    "timeout",
+                                    "navigation failed",
+                                    "target closed",
+                                    "session closed",
+                                    "connection refused",
+                                    "connection reset",
+                                ]
+
+                                def _is_recoverable_error(text: str) -> bool:
+                                    lowered = text.lower()
+                                    return any(pat in lowered for pat in _RECOVERABLE_ERROR_PATTERNS)
+
+                                # HALT ON TOOL ERRORS TO SAVE COSTS — but skip recoverable ones
                                 if isinstance(content, str) and content.startswith("Error:"):
-                                    logger.error(f"Halting agent execution due to tool failure: {content}")
-                                    return {"success": False, "error": content}
+                                    if _is_recoverable_error(content):
+                                        logger.warning(f"Non-fatal tool error (skipping): {content}")
+                                    else:
+                                        logger.error(f"Halting agent execution due to tool failure: {content}")
+                                        return {"success": False, "error": content}
                                 if isinstance(content, list):
                                     for block in content:
                                         if isinstance(block, dict) and block.get("type") == "text":
                                             text_content = block.get("text", "")
                                             if text_content.startswith("Error:"):
-                                                logger.error(f"Halting agent execution due to tool failure: {text_content}")
-                                                return {"success": False, "error": text_content}
+                                                if _is_recoverable_error(text_content):
+                                                    logger.warning(f"Non-fatal tool error (skipping): {text_content}")
+                                                else:
+                                                    logger.error(f"Halting agent execution due to tool failure: {text_content}")
+                                                    return {"success": False, "error": text_content}
                                     
                                 b64_frame = None
                                 if isinstance(content, list):
@@ -922,11 +1462,19 @@ class Brain:
 
             aggregator_prompt = (
                 "You are the final consolidated report builder.\n"
-                "Decompose, merge, deduplicate, and compile the final structured results based on the data extracted across all steps.\n\n"
+                "Your job is to compile a clear, accurate, and concise final response based on the data extracted across all completed steps.\n\n"
                 f"USER GOAL: {message}\n\n"
                 f"EXTRACTED DATA FROM ALL COMPLETED STEPS:\n{json.dumps(completed_metadata, indent=2)}\n\n"
-                "Please present the complete gathered data clearly in the final consolidated layout requested by the user (e.g. compile a structured table). "
-                "Ensure no details are lost. If no data was successfully extracted, output a friendly error message explaining what failed."
+                "CRITICAL FORMATTING RULES:\n"
+                "1. ONLY generate a markdown table if the user's goal involved extracting structured/tabular data "
+                "(e.g. product listings, prices, search results, comparisons). "
+                "DO NOT generate a table for navigation tasks, action tasks, or tasks with no structured data.\n"
+                "2. For simple navigation or action tasks (e.g. 'go to google.com', 'click the button', 'login'), "
+                "respond with a SHORT plain-text summary (1-3 sentences) confirming what was done. No headers, no tables.\n"
+                "3. For data extraction tasks, compile all extracted data into a clean structured table with proper column names.\n"
+                "4. Never invent data. If no data was extracted, say so clearly in plain text.\n"
+                "5. Do not include execution metadata like 'Step ID', 'Task Description', 'Status', or 'Outcome' columns — "
+                "those are internal agent internals, not useful output for the user."
             )
 
             aggregator_res = await self.llm.ainvoke([SystemMessage(content=aggregator_prompt)])
@@ -1033,6 +1581,24 @@ class Brain:
                 )
                 await db.commit()
 
+            # Broadcast the final response over WebSocket to handle any HTTP timeout/drop cases
+            if self.stream_manager:
+                try:
+                    await self.stream_manager.broadcast_notification(
+                        chat_id,
+                        "final_response",
+                        json.dumps({
+                            "id": ai_msg_id,
+                            "role": "ai",
+                            "content": final_response,
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                            "plan": self.active_plans.get(chat_id, []),
+                            "tool_calls": executed_tool_calls
+                        })
+                    )
+                except Exception as ws_err:
+                    logger.error(f"Failed to broadcast final response via WS: {ws_err}")
+
             return {
                 "success": True,
                 "message": {
@@ -1051,6 +1617,21 @@ class Brain:
 
         except Exception as e:
             logger.error(f"Error in process_message: {traceback.format_exc()}")
+            if self.stream_manager:
+                try:
+                    await self.stream_manager.broadcast_notification(
+                        chat_id,
+                        "error_response",
+                        json.dumps({
+                            "id": str(uuid.uuid4()),
+                            "role": "assistant",
+                            "content": f"⚠️ An error occurred during execution: {str(e)}",
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        })
+                    )
+                except Exception as ws_err:
+                    logger.error(f"Failed to broadcast error response via WS: {ws_err}")
+
             if execution_id:
                 try:
                     async with AsyncSessionLocal() as db:

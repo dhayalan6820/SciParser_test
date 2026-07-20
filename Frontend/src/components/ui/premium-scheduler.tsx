@@ -10,10 +10,17 @@ import {
   Settings, Bell, Shield, Zap, Info, ChevronRight, ChevronDown,
   Layout, Cpu, Terminal, Layers, Activity, Database,
   Search, MessageSquare, Target, Check, List, Workflow,
-  ArrowRight, Loader2, Sparkles, User as UserIcon, Brain
+  ArrowRight, Loader2, Sparkles, User as UserIcon, Brain,
+  FolderOpen, DollarSign, Table
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Task, Subtask } from "./agent-plan";
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { TimeClock } from '@mui/x-date-pickers/TimeClock';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import dayjs from 'dayjs';
+import * as Popover from '@radix-ui/react-popover';
 
 const TIMEZONE_OPTIONS = [
   { label: "(GMT-05:00) EST — New York", value: "America/New_York", abbr: "EST" },
@@ -34,12 +41,14 @@ const DAY_OF_WEEK_OPTIONS = [
   { label: "Sun", value: "sun" },
 ];
 
-const TIME_OPTIONS = Array.from({ length: 24 }, (_, h) => {
+const TIME_OPTIONS = Array.from({ length: 24 * 4 }, (_, i) => {
+  const h = Math.floor(i / 4);
+  const m = (i % 4) * 15;
   const ampm = h < 12 ? "AM" : "PM";
   const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
   return {
-    label: `${String(h12).padStart(2, "0")}:00 ${ampm}`,
-    value: `${String(h).padStart(2, "0")}:00`,
+    label: `${String(h12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${ampm}`,
+    value: `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`,
   };
 });
 
@@ -93,6 +102,543 @@ interface PremiumSchedulerProps {
   toolLogs: any[];
 }
 
+const parseInlineFormatting = (text: string, isUser: boolean = false) => {
+  const boldParts = text.split(/(\*\*.*?\*\*)/g);
+  return boldParts.map((bPart, bIdx) => {
+    if (bPart.startsWith("**") && bPart.endsWith("**")) {
+      return (
+        <strong
+          key={bIdx}
+          className={cn(
+            "font-extrabold",
+            isUser ? "text-white" : "text-foreground",
+          )}
+        >
+          {bPart.slice(2, -2)}
+        </strong>
+      );
+    }
+    const inlineParts = bPart.split(/(\`.*?\`)/g);
+    return inlineParts.map((iPart, iIdx) => {
+      if (iPart.startsWith("`") && iPart.endsWith("`")) {
+        return (
+          <code
+            key={iIdx}
+            className={cn(
+              "px-1.5 py-0.5 mx-0.5 rounded font-mono text-[13px] font-bold",
+              isUser
+                ? "bg-white/20 text-white"
+                : "bg-sky-500/10 text-sky-600 dark:bg-white/10 dark:text-sky-400",
+            )}
+          >
+            {iPart.slice(1, -1)}
+          </code>
+        );
+      }
+      const urlRegex = /(https?:\/\/[^\s)]+)|www\.[^\s)]+/g;
+      return iPart.split(urlRegex).map((segment, segIdx) => {
+        if (!segment) return null;
+        if (urlRegex.test(segment)) {
+          urlRegex.lastIndex = 0;
+          const href = segment.startsWith("http")
+            ? segment
+            : `https://${segment}`;
+          return (
+            <a
+              key={`${iIdx}-${segIdx}`}
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sky-400 underline underline-offset-2 decoration-sky-400/50 hover:text-sky-300"
+            >
+              {segment}
+            </a>
+          );
+        }
+        return segment;
+      });
+    });
+  });
+};
+
+const getColumnIcon = (name: string) => {
+  const lower = name.toLowerCase();
+  if (lower.includes("category") || lower.includes("type") || lower.includes("group")) {
+    return <FolderOpen className="w-3.5 h-3.5 text-indigo-500/70 dark:text-indigo-400/70" />;
+  }
+  if (
+    lower.includes("name") ||
+    lower.includes("user") ||
+    lower.includes("client") ||
+    lower.includes("customer") ||
+    lower.includes("to/from") ||
+    lower.includes("recipient") ||
+    lower.includes("sender")
+  ) {
+    return <UserIcon className="w-3.5 h-3.5 text-sky-500/70 dark:text-sky-400/70" />;
+  }
+  if (
+    lower.includes("price") ||
+    lower.includes("pricing") ||
+    lower.includes("cost") ||
+    lower.includes("fee") ||
+    lower.includes("amount") ||
+    lower.includes("balance")
+  ) {
+    return <DollarSign className="w-3.5 h-3.5 text-emerald-500/70 dark:text-emerald-400/70" />;
+  }
+  if (lower.includes("date") || lower.includes("time") || lower.includes("created")) {
+    return <Calendar className="w-3.5 h-3.5 text-amber-500/70 dark:text-amber-400/70" />;
+  }
+  if (lower.includes("speed") || lower.includes("performance") || lower.includes("zap")) {
+    return <Zap className="w-3.5 h-3.5 text-rose-500/70 dark:text-rose-400/70" />;
+  }
+  if (lower.includes("action") || lower.includes("settings")) {
+    return <Settings className="w-3.5 h-3.5 text-gray-500/70 dark:text-gray-400/70" />;
+  }
+  return null;
+};
+
+const renderFormattedContent = (content: string, isUser: boolean = false) => {
+  if (!content) return null;
+
+  // Split out fenced code blocks first
+  const parts = content.split(/(```[\s\S]*?```)/g);
+
+  return parts.map((part, partIdx) => {
+    // Fenced code block
+    if (part.startsWith("```") && part.endsWith("```")) {
+      const inner = part.slice(3, -3).trim().split("\n");
+      const lang = inner[0] && !/\s/.test(inner[0]) ? inner[0] : "";
+      const code = (lang ? inner.slice(1) : inner).join("\n");
+      return (
+        <div
+          key={partIdx}
+          className="my-3.5 rounded-xl border border-border bg-card overflow-hidden font-mono text-[13px] shadow-md"
+        >
+          <div className="flex justify-between items-center px-4 py-1.5 bg-muted border-b border-border select-none">
+            <span className="uppercase text-[10px] font-black tracking-widest text-muted-foreground">
+              {lang || "text"}
+            </span>
+            <span className="text-[10px] text-muted-foreground/60 font-medium">
+              ready
+            </span>
+          </div>
+          <pre className="p-4 overflow-x-auto text-foreground leading-relaxed whitespace-pre">
+            {code}
+          </pre>
+        </div>
+      );
+    }
+
+    // Detect markdown table blocks
+    const hasTable =
+      part.includes("|") &&
+      part.split("\n").some((l) => l.trim().startsWith("|"));
+
+    if (hasTable) {
+      const tableLines = part
+        .split("\n")
+        .filter((l) => l.trim().startsWith("|"));
+      if (tableLines.length > 1) {
+        const isSep = (row: string[]) =>
+          row.every((c) => /^:?-{2,}:?$/.test(c.replace(/\s/g, "")));
+        const rows = tableLines.map((l) =>
+          l
+            .split("|")
+            .map((c) => c.trim())
+            .filter(Boolean),
+        );
+        const sepIdx = rows.findIndex(isSep);
+        const header = sepIdx > 0 ? rows[0] : rows[0];
+        const body = (
+          sepIdx >= 0 ? rows.slice(sepIdx + 1) : rows.slice(1)
+        ).filter((r) => !isSep(r));
+        const nonTableText = part
+          .split("\n")
+          .filter((l) => !l.trim().startsWith("|") && l.trim())
+          .join("\n");
+
+        return (
+          <div key={partIdx} className="space-y-3">
+            {nonTableText && (
+              <div>{renderFormattedContent(nonTableText, isUser)}</div>
+            )}
+            <div className="my-3.5 overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-all duration-300">
+              <div className="flex items-center gap-2.5 px-6 py-4 bg-muted/20 border-b border-border">
+                <Table className="w-4 h-4 text-indigo-500/80 dark:text-indigo-400/80" />
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Data Table</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-[13px] border-collapse">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/10">
+                      {header.map((h, i) => (
+                        <th
+                          key={i}
+                          className="px-6 py-4 font-semibold text-muted-foreground border-b border-border whitespace-nowrap"
+                        >
+                          <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider">
+                            {getColumnIcon(h)}
+                            {parseInlineFormatting(h, isUser)}
+                          </div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {body.map((row, ri) => (
+                      <tr
+                        key={ri}
+                        className="border-b border-border/40 hover:bg-muted/30 transition-colors align-middle"
+                      >
+                        {row.map((cell, ci) => {
+                          const h = header[ci] || "";
+                          const lowerHeader = h.toLowerCase();
+                          
+                          const isPrimaryTextCol = ci === 0 || lowerHeader.includes("category") || lowerHeader.includes("name") || lowerHeader.includes("to/from") || lowerHeader.includes("user");
+                          const isPriceCol = lowerHeader.includes("price") || lowerHeader.includes("pricing") || lowerHeader.includes("cost") || lowerHeader.includes("fee") || lowerHeader.includes("amount") || cell.includes("$");
+                          const isAccountCol = lowerHeader.includes("account") || lowerHeader.includes("group") || lowerHeader.includes("method") || lowerHeader.includes("status");
+                          const isSpeedCol = lowerHeader.includes("speed") || lowerHeader.includes("performance") || lowerHeader.includes("down/up") || cell.toLowerCase().includes("mbps") || cell.toLowerCase().includes("gbps");
+                          const isDateCol = lowerHeader.includes("date") || lowerHeader.includes("time") || lowerHeader.includes("created");
+
+                          let cellContent;
+                          if (isPrimaryTextCol) {
+                            cellContent = (
+                              <span className="font-semibold text-foreground dark:text-gray-100">
+                                {parseInlineFormatting(cell, isUser)}
+                              </span>
+                            );
+                          } else if (isPriceCol) {
+                            cellContent = (
+                              <span className="font-semibold text-foreground dark:text-gray-100 font-mono">
+                                {parseInlineFormatting(cell, isUser)}
+                              </span>
+                            );
+                          } else if (isAccountCol) {
+                            cellContent = (
+                              <span className="text-sky-500 dark:text-sky-400 hover:underline cursor-pointer font-semibold transition-all">
+                                {parseInlineFormatting(cell, isUser)}
+                              </span>
+                            );
+                          } else if (isSpeedCol) {
+                            cellContent = (
+                              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-muted dark:bg-muted/40 text-muted-foreground border border-border shadow-sm">
+                                <Zap className="w-3 h-3 text-rose-500/70 dark:text-rose-400/70" />
+                                <span>{parseInlineFormatting(cell, isUser)}</span>
+                              </div>
+                            );
+                          } else if (isDateCol) {
+                            cellContent = (
+                              <span className="text-muted-foreground font-medium">
+                                {parseInlineFormatting(cell, isUser)}
+                              </span>
+                            );
+                          } else {
+                            cellContent = (
+                              <span className="text-card-foreground font-medium">
+                                {parseInlineFormatting(cell, isUser)}
+                              </span>
+                            );
+                          }
+
+                          return (
+                            <td
+                              key={ci}
+                              className="px-6 py-4 align-middle whitespace-nowrap"
+                            >
+                              {cellContent}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        );
+      }
+    }
+
+    // Line-by-line rendering
+    const lines = part.split("\n");
+    const rendered: React.ReactNode[] = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      // Skip blank lines / table separator lines
+      if (!trimmed || trimmed.startsWith("|")) {
+        i++;
+        continue;
+      }
+
+      // Horizontal rule
+      if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+        rendered.push(
+          <hr key={i} className="my-3 border-t border-border" />,
+        );
+        i++;
+        continue;
+      }
+
+      // ATX Headings  # / ## / ###
+      const h3 = trimmed.match(/^###\s+(.*)/);
+      const h2 = trimmed.match(/^##\s+(.*)/);
+      const h1 = trimmed.match(/^#\s+(.*)/);
+      if (h1) {
+        rendered.push(
+          <h2
+            key={i}
+            className="mt-4 mb-1 text-[18px] font-black text-foreground tracking-tight leading-snug"
+          >
+            {parseInlineFormatting(h1[1], isUser)}
+          </h2>,
+        );
+        i++;
+        continue;
+      }
+      if (h2) {
+        rendered.push(
+          <h3
+            key={i}
+            className="mt-3 mb-1 text-[15px] font-black text-foreground tracking-tight"
+          >
+            {parseInlineFormatting(h2[1], isUser)}
+          </h3>,
+        );
+        i++;
+        continue;
+      }
+      if (h3) {
+        rendered.push(
+          <h4
+            key={i}
+            className="mt-2 mb-0.5 text-[13px] font-black text-muted-foreground uppercase tracking-wider"
+          >
+            {parseInlineFormatting(h3[1], isUser)}
+          </h4>,
+        );
+        i++;
+        continue;
+      }
+
+      // Setext-style bold heading: "Text:" alone on a line
+      if (/^[A-Z][^.!?]*:$/.test(trimmed) && trimmed.length < 60) {
+        rendered.push(
+          <p
+            key={i}
+            className="mt-3 mb-0.5 text-[13px] font-black text-sky-500 uppercase tracking-wider"
+          >
+            {trimmed}
+          </p>,
+        );
+        i++;
+        continue;
+      }
+
+      // Bullet list
+      if (
+        trimmed.startsWith("- ") ||
+        trimmed.startsWith("* ") ||
+        trimmed.startsWith("• ")
+      ) {
+        const items: string[] = [];
+        while (i < lines.length) {
+          const t = lines[i].trim();
+          if (
+            t.startsWith("- ") ||
+            t.startsWith("* ") ||
+            t.startsWith("• ")
+          ) {
+            items.push(t.replace(/^[-*•]\s+/, ""));
+            i++;
+          } else {
+            break;
+          }
+        }
+        rendered.push(
+          <ul key={`ul-${i}`} className="my-1.5 space-y-1 pl-4 list-disc">
+            {items.map((item, idx) => (
+              <li
+                key={idx}
+                className="text-[13px] text-muted-foreground leading-relaxed"
+              >
+                <span>{parseInlineFormatting(item, isUser)}</span>
+              </li>
+            ))}
+          </ul>,
+        );
+        continue;
+      }
+
+      // Numbered list
+      const numMatch = trimmed.match(/^(\d+)\.\s+(.*)/);
+      if (numMatch) {
+        const items: { num: string; text: string }[] = [];
+        while (i < lines.length) {
+          const t = lines[i].trim();
+          const m = t.match(/^(\d+)\.\s+(.*)/);
+          if (m) {
+            items.push({ num: m[1], text: m[2] });
+            i++;
+          } else {
+            break;
+          }
+        }
+        rendered.push(
+          <ol key={`ol-${i}`} className="my-1.5 space-y-1 pl-4 list-decimal">
+            {items.map((item, idx) => (
+              <li
+                key={idx}
+                className="text-[13px] text-muted-foreground leading-relaxed"
+              >
+                <span>{parseInlineFormatting(item.text, isUser)}</span>
+              </li>
+            ))}
+          </ol>,
+        );
+        continue;
+      }
+
+      // Blockquote
+      if (trimmed.startsWith(">")) {
+        const bqLines: string[] = [];
+        while (i < lines.length) {
+          const t = lines[i].trim();
+          if (t.startsWith(">")) {
+            bqLines.push(t.replace(/^>\s*/, ""));
+            i++;
+          } else {
+            break;
+          }
+        }
+        rendered.push(
+          <blockquote
+            key={`bq-${i}`}
+            className="my-3 border-l-4 border-sky-500/50 bg-sky-500/5 px-4 py-2 rounded-r-lg italic text-[13px] text-muted-foreground"
+          >
+            {bqLines.map((l, lIdx) => (
+              <p key={lIdx} className="leading-relaxed">
+                {parseInlineFormatting(l, isUser)}
+              </p>
+            ))}
+          </blockquote>,
+        );
+        continue;
+      }
+
+      // Normal paragraph
+      rendered.push(
+        <p
+          key={i}
+          className="text-[13px] text-muted-foreground leading-relaxed mb-2"
+        >
+          {parseInlineFormatting(line, isUser)}
+        </p>,
+      );
+      i++;
+    }
+
+    return (
+      <div key={partIdx} className="space-y-1">
+        {rendered}
+      </div>
+    );
+  });
+};
+
+const suggestTaskName = (prompt: string): string => {
+  if (!prompt || prompt === "No prompt selected") return "Automation Task";
+  
+  let clean = prompt.trim();
+  
+  // 1. Extract URL/Domain if any
+  const urlRegex = /https?:\/\/(?:www\.)?([a-zA-Z0-9-]+\.[a-zA-Z]{2,})(\/[^\s]*)?/gi;
+  const urlMatch = urlRegex.exec(clean);
+  let domain = "";
+  if (urlMatch && urlMatch[1]) {
+    domain = urlMatch[1];
+  }
+  
+  // Remove URLs from the text
+  clean = clean.replace(/https?:\/\/[^\s]+/gi, "").trim();
+  
+  // 2. Clean prefixes & common fillers
+  clean = clean.replace(/^(please\s+)?(go\s+to|navigate\s+to|open\s+the|open|check\s+out|visit|browse)\s+/i, "");
+  
+  // 3. Clean transition words at the start
+  clean = clean.replace(/^(and\s+)?(the\s+|a\s+|an\s+)?/i, "");
+  
+  // 4. If we have a domain, try to extract action
+  if (domain) {
+    const cleanAction = clean.trim()
+      .replace(/^[.,;:!?\s]+|[.,;:!?\s]+$/g, ""); // strip trailing/leading punctuation
+    
+    if (!cleanAction || cleanAction.length < 3) {
+      return `Browse — ${domain}`;
+    }
+    
+    let actionStr = cleanAction.charAt(0).toUpperCase() + cleanAction.slice(1);
+    if (actionStr.length > 35) {
+      actionStr = actionStr.slice(0, 32) + "...";
+    }
+    return `${actionStr} — ${domain}`;
+  }
+  
+  // 5. If no domain/URL was found, clean up prefix and take first sentence
+  const endIdx = clean.search(/[.:;!?\n]/);
+  if (endIdx > 0) {
+    clean = clean.slice(0, endIdx);
+  }
+  clean = clean.trim().charAt(0).toUpperCase() + clean.slice(1);
+  if (clean.length > 45) {
+    clean = clean.slice(0, 42) + "...";
+  }
+  return clean || "Automation Task";
+};
+
+const suggestUniqueTaskName = (prompt: string, existingList: any[]): string => {
+  const baseName = suggestTaskName(prompt);
+  const existingTitles = new Set((existingList || []).map(s => s.title?.toLowerCase().trim()).filter(Boolean));
+  
+  if (!existingTitles.has(baseName.toLowerCase().trim())) {
+    return baseName;
+  }
+  
+  let counter = 2;
+  while (true) {
+    const candidate = `${baseName} (${counter})`;
+    if (!existingTitles.has(candidate.toLowerCase().trim())) {
+      return candidate;
+    }
+    counter++;
+  }
+};
+
+const suggestDescription = (prompt: string, aiResp?: string): string => {
+  if (!prompt || prompt === "No prompt selected") return "";
+  let cleanPrompt = prompt.trim();
+  if (cleanPrompt.length > 200) {
+    cleanPrompt = cleanPrompt.slice(0, 197) + "...";
+  }
+  let desc = `Recurring scheduled run for: "${cleanPrompt}"`;
+  if (aiResp && aiResp !== "No response selected") {
+    let cleanResp = aiResp.trim()
+      .replace(/[\*\_`#|]/g, "")
+      .replace(/\s+/g, " ");
+    if (cleanResp.length > 250) {
+      cleanResp = cleanResp.slice(0, 247) + "...";
+    }
+    desc += `\n\nAI Expected Output Summary: ${cleanResp}`;
+  }
+  return desc;
+};
+
 export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({ 
   isOpen, 
   onClose, 
@@ -105,7 +651,33 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
   toolLogs
 }) => {
   const { theme } = useTheme();
+  
+  const muiTheme = React.useMemo(() => createTheme({
+    palette: {
+      mode: theme === 'dark' ? 'dark' : 'light',
+      primary: { main: '#6366f1' },
+      background: { paper: 'transparent' },
+    },
+    typography: {
+      fontFamily: 'inherit',
+    }
+  }), [theme]);
   const [loading, setLoading] = React.useState(false);
+  const [existingSchedules, setExistingSchedules] = React.useState<any[]>([]);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      const fetchExisting = async () => {
+        try {
+          const list = await sciparserApi.getSchedules();
+          setExistingSchedules(list || []);
+        } catch (err) {
+          console.error("Failed to load existing schedules:", err);
+        }
+      };
+      fetchExisting();
+    }
+  }, [isOpen]);
   const [scheduleType, setScheduleType] = React.useState("daily");
   const [emailRecipient, setEmailRecipient] = React.useState("");
   const [taskName, setTaskName] = React.useState("");
@@ -126,11 +698,23 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
 
   const [draftLoading, setDraftLoading] = React.useState(false);
   const [draftSuccess, setDraftSuccess] = React.useState(false);
+  const [selectedToolDetail, setSelectedToolDetail] = React.useState<any | null>(null);
 
   // Empty tool log warning state
   const [showEmptyToolsWarning, setShowEmptyToolsWarning] = React.useState(false);
   const [taskNameMissing, setTaskNameMissing] = React.useState(false);
   const taskNameInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Reset form status when opening
+  React.useEffect(() => {
+    if (isOpen) {
+      setScheduleSuccess(false);
+      setDraftSuccess(false);
+      setScheduleError("");
+      setTaskNameMissing(false);
+      setShowEmptyToolsWarning(false);
+    }
+  }, [isOpen]);
 
   // Truncate tool output to keep token cost low
   const summarizeOutput = (raw: unknown, maxChars = 500): string => {
@@ -245,22 +829,35 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   // --- FIX: Extract data from selected context ---
   // Filter messages that are in the selectedMessages list
   const selectedMsgs = messages.filter(m => selectedMessages.includes(m.id));
   
-  // Find the last AI message in the selection for plan and response
-  const selectedAiMsg = [...selectedMsgs].reverse().find(m => m.role === 'ai' || m.role === 'assistant');
-  // Find the first user message in the selection for the prompt
-  const selectedUserMsg = selectedMsgs.find(m => m.role === 'user' || m.role === 'human');
+  // Find the last AI message in the selection for plan and response, falling back to the last AI message in the thread
+  const selectedAiMsgDirect = [...selectedMsgs].reverse().find(m => m.role === 'ai' || m.role === 'assistant');
+  const lastAiMsgInThread = [...messages].reverse().find(m => m.role === 'ai' || m.role === 'assistant');
+  const selectedAiMsg = selectedAiMsgDirect || lastAiMsgInThread;
+
+  // Find the first user message in the selection for the prompt, falling back to the last User message in the thread
+  const selectedUserMsgDirect = selectedMsgs.find(m => m.role === 'user' || m.role === 'human');
+  const lastUserMsgInThread = [...messages].reverse().find(m => m.role === 'user' || m.role === 'human');
+  const selectedUserMsg = selectedUserMsgDirect || lastUserMsgInThread;
 
   const userPrompt = selectedUserMsg?.content || "No prompt selected";
   const aiResponse = selectedAiMsg?.content || "No response selected";
+
+  // Pre-populate recommended task name and description from the selected chat message context
+  React.useEffect(() => {
+    if (isOpen && userPrompt && userPrompt !== "No prompt selected") {
+      setTaskName(prev => prev.trim() ? prev : suggestUniqueTaskName(userPrompt, existingSchedules));
+      setDescription(prev => prev.trim() ? prev : suggestDescription(userPrompt, aiResponse));
+    }
+  }, [isOpen, userPrompt, aiResponse, existingSchedules]);
+
+  if (!isOpen) return null;
   
-  // Use the plan from the selected AI message
-  const displayPlan = selectedAiMsg?.plan || [];
+  // Use the plan from the selected AI message, falling back to currentPlan prop
+  const displayPlan = (selectedAiMsg?.plan && selectedAiMsg.plan.length > 0) ? selectedAiMsg.plan : (currentPlan || []);
 
   // Tools auto-derived from the chat message(s) the user selected (see
   // chat_page.tsx) — not a manual checkbox list.
@@ -375,16 +972,48 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                   <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">Time of Day</label>
                   <div className="relative">
                     <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <select
-                      value={scheduleTime}
-                      onChange={e => setScheduleTime(e.target.value)}
-                      className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-card border border-border text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 appearance-none"
-                    >
-                      {TIME_OPTIONS.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                    <Popover.Root>
+                      <Popover.Trigger asChild>
+                        <button className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-card border border-border text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-left flex items-center justify-between">
+                          <span>
+                            {(() => {
+                              const [h, m] = scheduleTime.split(":");
+                              const hh = parseInt(h, 10);
+                              const ampm = hh < 12 ? "AM" : "PM";
+                              const h12 = hh === 0 ? 12 : hh > 12 ? hh - 12 : hh;
+                              return `${String(h12).padStart(2, "0")}:${m} ${ampm}`;
+                            })()}
+                          </span>
+                          <ChevronDown className="w-4 h-4 text-muted-foreground pointer-events-none" />
+                        </button>
+                      </Popover.Trigger>
+                      <Popover.Content className="z-50 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800" align="start">
+                        <ThemeProvider theme={muiTheme}>
+                          <LocalizationProvider dateAdapter={AdapterDayjs}>
+                            <TimeClock 
+                              value={dayjs().hour(parseInt(scheduleTime.split(":")[0], 10)).minute(parseInt(scheduleTime.split(":")[1], 10))} 
+                              onChange={(newValue) => {
+                                if (newValue) {
+                                  setScheduleTime(`${String(newValue.hour()).padStart(2, '0')}:${String(newValue.minute()).padStart(2, '0')}`);
+                                }
+                              }} 
+                              sx={{
+                                '& .MuiClock-pin': {
+                                  backgroundColor: '#6366f1',
+                                },
+                                '& .MuiClockPointer-root': {
+                                  backgroundColor: '#6366f1',
+                                },
+                                '& .MuiClockPointer-thumb': {
+                                  borderColor: '#6366f1',
+                                  backgroundColor: '#6366f1',
+                                }
+                              }}
+                            />
+                          </LocalizationProvider>
+                        </ThemeProvider>
+                      </Popover.Content>
+                    </Popover.Root>
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -454,7 +1083,16 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
               </div>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">Task Name <span className="text-red-500">*</span></label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">Task Name <span className="text-red-500">*</span></label>
+                    <button
+                      type="button"
+                      onClick={() => setTaskName(suggestTaskName(userPrompt))}
+                      className="text-[9px] font-black text-indigo-500 hover:text-indigo-400 uppercase tracking-wider flex items-center gap-1 transition-all mr-1 cursor-pointer"
+                    >
+                      <Sparkles className="w-2.5 h-2.5" /> Suggest Name
+                    </button>
+                  </div>
                   <input
                     ref={taskNameInputRef}
                     type="text"
@@ -479,14 +1117,26 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                   )}
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">Description (Optional)</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">Description (Optional)</label>
+                    <button
+                      type="button"
+                      onClick={() => setDescription(suggestDescription(userPrompt, aiResponse))}
+                      className="text-[9px] font-black text-indigo-500 hover:text-indigo-400 uppercase tracking-wider flex items-center gap-1 transition-all mr-1 cursor-pointer"
+                    >
+                      <Sparkles className="w-2.5 h-2.5" /> Suggest Description
+                    </button>
+                  </div>
                   <textarea
                     placeholder="Provide a brief description of this task..."
                     value={description}
+                    maxLength={500}
                     onChange={(e) => setDescription(e.target.value)}
                     className="w-full px-4 py-4 rounded-xl bg-card border border-border text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all placeholder:text-muted-foreground min-h-[100px] resize-none"
                   />
-                  <div className="text-right text-[10px] font-bold text-muted-foreground uppercase tracking-widest">0 / 500</div>
+                  <div className="text-right text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                    {description.length} / 500
+                  </div>
                 </div>
               </div>
             </section>
@@ -665,9 +1315,11 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                       </div>
                       <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider">AI understanding and response.</p>
                       <div className="p-5 rounded-xl bg-background border border-border overflow-y-auto max-h-[200px] hide-scrollbar">
-                        <p className="text-sm text-muted-foreground leading-relaxed">
-                          {aiResponse || "I will check the website availability by navigating to the provided URL, validating the HTTP status code and page content. If the site is down or returns an error, I will notify you via email with the details."}
-                        </p>
+                        {aiResponse ? renderFormattedContent(aiResponse, false) : (
+                          <p className="text-sm text-muted-foreground leading-relaxed">
+                            I will check the website availability by navigating to the provided URL, validating the HTTP status code and page content. If the site is down or returns an error, I will notify you via email with the details.
+                          </p>
+                        )}
                       </div>
                       <button 
                         onClick={() => handleTabChange('response')}
@@ -733,6 +1385,11 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                         <div className="py-20 flex flex-col items-center justify-center bg-card border border-border rounded-[32px] border-dashed">
                           <Workflow className="w-10 h-10 text-muted-foreground/60 mb-4" />
                           <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">No plan data available</p>
+                          <p className="text-[10px] text-muted-foreground mt-2 font-mono">
+                            Debug: selectedAiMsg: {selectedAiMsg ? "yes" : "no"} | 
+                            selectedAiMsg.plan: {selectedAiMsg?.plan ? `Array(${selectedAiMsg.plan.length})` : "undefined"} | 
+                            currentPlan: {currentPlan ? `Array(${currentPlan.length})` : "undefined"}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -764,9 +1421,11 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                       </div>
                     ) : (
                       <div className="p-8 rounded-[32px] bg-card border border-border min-h-[400px] overflow-y-auto hide-scrollbar">
-                        <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap text-sm">
-                          {aiResponse || "No AI response available"}
-                        </p>
+                        {aiResponse ? renderFormattedContent(aiResponse, false) : (
+                          <p className="text-muted-foreground leading-relaxed text-sm">
+                            No AI response available
+                          </p>
+                        )}
                       </div>
                     )}
                   </motion.div>
@@ -858,8 +1517,9 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
                           return (
                             <div
                               key={log.id || i}
+                              onClick={() => setSelectedToolDetail(log)}
                               className={cn(
-                                "p-5 rounded-2xl border transition-all",
+                                "p-5 rounded-2xl border transition-all cursor-pointer hover:border-indigo-500/50 hover:shadow-md hover:scale-[1.01] duration-200",
                                 isSuccess
                                   ? "bg-card border-emerald-500/30"
                                   : isFailed
@@ -1156,6 +1816,108 @@ export const PremiumScheduler: React.FC<PremiumSchedulerProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Tool Log Detail Modal Popup */}
+        <AnimatePresence>
+          {selectedToolDetail && (
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-background/80 backdrop-blur-xl p-4 md:p-8">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="w-full max-w-4xl h-full max-h-[85vh] bg-card rounded-[24px] shadow-2xl border border-border overflow-hidden flex flex-col"
+              >
+                {/* Header */}
+                <div className="px-6 py-5 border-b border-border flex items-center justify-between bg-card shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
+                      <Cpu className="w-5 h-5 text-indigo-500" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-black text-foreground uppercase tracking-widest">
+                        {selectedToolDetail.tool_name}
+                      </h3>
+                      <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-0.5">
+                        Tool Execution Log Details
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setSelectedToolDetail(null)}
+                    className="h-10 w-10 rounded-2xl hover:bg-foreground/5"
+                  >
+                    <X className="w-5 h-5" />
+                  </Button>
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 hide-scrollbar">
+                  {/* Meta details */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div className="p-4 rounded-xl bg-border/40 border border-border">
+                      <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider block">Status</span>
+                      <span className={cn(
+                        "text-xs font-black uppercase tracking-wider mt-1 inline-block px-2 py-0.5 rounded-md",
+                        selectedToolDetail.status === 'SUCCESS' || selectedToolDetail.status === 'COMPLETED'
+                          ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+                          : "bg-red-500/10 text-red-500 border border-red-500/20"
+                      )}>
+                        {selectedToolDetail.status}
+                      </span>
+                    </div>
+                    <div className="p-4 rounded-xl bg-border/40 border border-border col-span-2">
+                      <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider block">Log ID</span>
+                      <span className="text-xs font-mono font-bold text-foreground block mt-1 select-all">{selectedToolDetail.id}</span>
+                    </div>
+                    <div className="p-4 rounded-xl bg-border/40 border border-border">
+                      <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider block">Agent ID</span>
+                      <span className="text-xs font-black text-foreground block mt-1 uppercase tracking-wider">{selectedToolDetail.agent_id}</span>
+                    </div>
+                  </div>
+
+                  {/* Inputs */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest block ml-1">Tool Input Arguments</label>
+                    <pre className="p-5 rounded-2xl bg-card border border-border overflow-x-auto text-xs font-mono text-indigo-400 select-all max-h-[180px] scrollbar-thin">
+                      {JSON.stringify(selectedToolDetail.tool_input, null, 2)}
+                    </pre>
+                  </div>
+
+                  {/* Outputs / Error */}
+                  {selectedToolDetail.error_message && (
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-red-500 uppercase tracking-widest block ml-1">Error Message</label>
+                      <pre className="p-5 rounded-2xl bg-red-500/5 border border-red-500/20 overflow-x-auto text-xs font-mono text-red-500 select-all max-h-[150px] scrollbar-thin">
+                        {selectedToolDetail.error_message}
+                      </pre>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest block ml-1">Tool Output Response</label>
+                    <pre className="p-5 rounded-2xl bg-card border border-border overflow-x-auto text-xs font-mono text-foreground select-all max-h-[350px] scrollbar-thin whitespace-pre-wrap">
+                      {typeof selectedToolDetail.tool_output === 'string'
+                        ? selectedToolDetail.tool_output
+                        : JSON.stringify(selectedToolDetail.tool_output, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="px-6 py-4 border-t border-border bg-card shrink-0 flex justify-end">
+                  <Button
+                    onClick={() => setSelectedToolDetail(null)}
+                    className="px-6 rounded-xl bg-foreground text-background hover:bg-foreground/90 font-bold uppercase tracking-wider text-xs"
+                  >
+                    Close
+                  </Button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </div>
   );

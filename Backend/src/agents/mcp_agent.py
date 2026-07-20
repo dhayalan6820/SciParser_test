@@ -41,7 +41,7 @@ def load_extra_mcp_servers() -> Dict[str, Any]:
     if not os.path.exists(_EXTRA_SERVERS_PATH):
         return {}
     try:
-        with open(_EXTRA_SERVERS_PATH, "r") as f:
+        with open(_EXTRA_SERVERS_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
         if not isinstance(data, dict):
             logger.warning(f"{_EXTRA_SERVERS_PATH} must contain a JSON object of server_name -> config; ignoring.")
@@ -105,12 +105,12 @@ class MCPToolManager:
                 "env": {
                     **os.environ,
                     "PYTHONPATH": config.BACKEND_ROOT,
-                    "OPENAI_API_KEY": config.OPENROUTER_API_KEY or os.getenv("OPENAI_API_KEY", ""),
-                    "OPENROUTER_API_KEY": config.OPENROUTER_API_KEY or os.getenv("OPENROUTER_API_KEY", ""),
-                    "OPENAI_BASE_URL": config.OPENROUTER_BASE_URL or os.getenv("OPENAI_BASE_URL", ""),
-                    "OPENAI_API_BASE": config.OPENROUTER_BASE_URL or os.getenv("OPENAI_API_BASE", ""),
-                    "BROWSER_USE_MODEL": config.OPENROUTER_MODEL,
-                    "LLM_EXTRACTION_MODEL": os.getenv("LLM_EXTRACTION_MODEL", "openai/gpt-4o-mini-2024-07-18"),
+                    "OPENAI_API_KEY": config.OPENROUTER_API_KEY,
+                    "OPENROUTER_API_KEY": config.OPENROUTER_API_KEY,
+                    "OPENAI_BASE_URL": config.OPENROUTER_BASE_URL,
+                    "OPENAI_API_BASE": config.OPENROUTER_BASE_URL,
+                    "BROWSER_USE_MODEL": config.BROWSER_USE_MODEL,
+                    "LLM_EXTRACTION_MODEL": config.LLM_EXTRACTION_MODEL,
                     "MCP_BROWSER_CDP_URL": self.cdp_url,  # per-session override
                     "BROWSER_CDP_URL": self.cdp_url, # Standard env var for some MCP servers
                     "BROWSER_USE_CDP_PORT": str(self.port),  # per-session override
@@ -166,34 +166,45 @@ class MCPToolManager:
             return
 
         logger.info(f">>> Starting MCP Server connecting to {self.cdp_url}...")
-        all_tools = []
-        try:
-            for server_name in self.config:
-                # Initialize session for each configured server with a timeout
-                try:
-                    async with asyncio.timeout(30): # 30 second timeout for server startup
-                        session = await self.stack.enter_async_context(
-                            self.client.session(server_name, auto_initialize=True)
-                        )
-                        # Load tools from the session using the adapter helper
-                        server_tools = await load_mcp_tools(session)
-                        all_tools.extend(server_tools)
-                except asyncio.TimeoutError:
-                    raise Exception(f"MCP Server '{server_name}' timed out during startup.")
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            try:
+                all_tools = []
+                if attempt > 1:
+                    await self.stack.aclose()
+                    self.stack = AsyncExitStack()
 
-            self._tools = all_tools
-            self._initialized = True
-            logger.info(f">>> MCP Session Ready. {len(self._tools)} tools active.")
-        except Exception as e:
-            logger.error(f">>> MCP Initialization Failed: {e}", exc_info=True)
-            # Unwrap ExceptionGroup if possible
-            error_msg = str(e)
-            if hasattr(e, 'exceptions') and e.exceptions:
-                error_msg = f"{error_msg} (Sub-errors: {', '.join([str(ex) for ex in e.exceptions])})"
+                for server_name in self.config:
+                    # Initialize session for each configured server with a timeout
+                    try:
+                        async with asyncio.timeout(120): # 120 second timeout for server startup
+                            session = await self.stack.enter_async_context(
+                                self.client.session(server_name, auto_initialize=True)
+                            )
+                            # Load tools from the session using the adapter helper
+                            server_tools = await load_mcp_tools(session)
+                            all_tools.extend(server_tools)
+                    except asyncio.TimeoutError:
+                        raise Exception(f"MCP Server '{server_name}' timed out during startup.")
 
-            await self.stack.aclose()
-            self._initialized = False
-            raise Exception(f"MCP Server failed to start: {error_msg}")
+                self._tools = all_tools
+                self._initialized = True
+                logger.info(f">>> MCP Session Ready. {len(self._tools)} tools active.")
+                return
+            except Exception as e:
+                if attempt < max_retries:
+                    logger.warning(f"MCP Server startup failed (attempt {attempt}/{max_retries}): {e}. Retrying in 5 seconds...")
+                    await asyncio.sleep(5)
+                else:
+                    logger.error(f">>> MCP Initialization Failed after {max_retries} attempts: {e}", exc_info=True)
+                    # Unwrap ExceptionGroup if possible
+                    error_msg = str(e)
+                    if hasattr(e, 'exceptions') and e.exceptions:
+                        error_msg = f"{error_msg} (Sub-errors: {', '.join([str(ex) for ex in e.exceptions])})"
+        
+                    await self.stack.aclose()
+                    self._initialized = False
+                    raise Exception(f"MCP Server failed to start: {error_msg}")
 
     async def get_tools(self) -> List[BaseTool]:
         if not self._initialized:
@@ -201,10 +212,44 @@ class MCPToolManager:
         return self._tools or []
 
     async def close(self):
-        """Only call this when the entire session is being destroyed."""
+        """Only call this when the entire session is being destroyed.
+
+        The AsyncExitStack may have been entered from a different asyncio task
+        (the agent's chat processing loop) than the one calling close() (e.g.
+        the HTTP endpoint for the 'Close Browser' button).  anyio's cancel
+        scope rejects cross-task exits with:
+            "Attempted to exit cancel scope in a different task than it was entered in"
+
+        We handle this by catching that error and forcefully cleaning up the
+        underlying subprocess transports instead of relying on a graceful
+        context-manager unwind.
+        """
         if self._initialized:
             logger.info(f">>> Closing MCP Session for {self.cdp_url}...")
-            await self.stack.aclose()
+            try:
+                await self.stack.aclose()
+            except RuntimeError as exc:
+                if "cancel scope" in str(exc).lower() or "different task" in str(exc).lower():
+                    logger.warning(
+                        f">>> Cross-task close detected ({exc}); "
+                        f"force-cleaning MCP session for {self.cdp_url}."
+                    )
+                    # Force-kill any subprocess transports the client may hold
+                    try:
+                        for server_name, session_ctx in list(
+                            getattr(self.client, '_sessions', {}).items()
+                        ):
+                            transport = getattr(session_ctx, '_transport', None) or \
+                                        getattr(session_ctx, 'transport', None)
+                            if transport and hasattr(transport, 'close'):
+                                try:
+                                    transport.close()
+                                except Exception:
+                                    pass
+                    except Exception:
+                        pass
+                else:
+                    raise
             self._initialized = False
             self._tools = None
 

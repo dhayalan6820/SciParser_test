@@ -19,8 +19,15 @@ from typing import Optional
 from dotenv import load_dotenv
 
 _backend_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_env_path = os.path.join(_backend_root, ".env")
-load_dotenv(dotenv_path=_env_path)
+_project_root = os.path.dirname(_backend_root)
+
+# Load the unified root .env first (single source of truth for the entire project),
+# then layer Backend/.env on top as an optional local override.
+_root_env_path = os.path.join(_project_root, ".env")
+_backend_env_path = os.path.join(_backend_root, ".env")
+load_dotenv(dotenv_path=_root_env_path)
+load_dotenv(dotenv_path=_backend_env_path, override=True)  # Backend/.env wins if both set a var
+
 
 _logger = logging.getLogger("sciparser")
 
@@ -114,6 +121,14 @@ OPENROUTER_API_KEY = _require("OPENROUTER_API_KEY") if IS_PRODUCTION else os.get
 OPENROUTER_BASE_URL = _str("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 OPENROUTER_MODEL = _str("OPENROUTER_MODEL", "openai/gpt-5.4-nano")
 
+# Model assignments — each controls a different subsystem.
+# Override via the root .env to switch models for any subsystem.
+MAIN_MODEL = _str("MAIN_MODEL", OPENROUTER_MODEL)          # Brain's primary reasoning LLM
+BROWSER_USE_MODEL = _str("BROWSER_USE_MODEL", MAIN_MODEL)    # Model used by browser-use MCP
+TOOL_SELECTION_MODEL = _str("TOOL_SELECTION_MODEL", "minimax/minimax-m3")  # Tool selector embeddings
+CODE_GENERATION_MODEL = _str("CODE_GENERATION_MODEL", "openai/gpt-5.1-codex-mini")  # Script generation
+LLM_EXTRACTION_MODEL = _str("LLM_EXTRACTION_MODEL", "openai/gpt-4o-mini-2024-07-18")  # Data extraction
+
 # ---------------------------------------------------------------------------
 # LangSmith Tracing (optional)
 # ---------------------------------------------------------------------------
@@ -184,7 +199,7 @@ if IS_PRODUCTION and CORS_ALLOWED_ORIGINS == ["*"]:
 # Server
 # ---------------------------------------------------------------------------
 SERVER_HOST = _str("SERVER_HOST", "0.0.0.0")
-SERVER_PORT = _int("SERVER_PORT", 5000)
+SERVER_PORT = _int("SERVER_PORT", 8000)
 
 # ---------------------------------------------------------------------------
 # SMTP / email notifications

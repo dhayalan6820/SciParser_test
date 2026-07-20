@@ -4,12 +4,41 @@ import { API_BASE_URL } from "./config";
 const TOKEN_KEY = "access_token";
 const BASE_URL = API_BASE_URL;
 
-// Intercept global fetch to catch errors and display toast notifications
+// Intercept global fetch to catch errors and display toast notifications, and automatically bypass ngrok warning pages
 if (typeof window !== "undefined") {
   const originalFetch = window.fetch;
-  window.fetch = async (...args) => {
+  window.fetch = async (input, init) => {
+    let finalInput = input;
+    let finalInit = init;
+
+    const targetUrl =
+      typeof input === "string"
+        ? input
+        : (input && typeof input === "object" && "url" in input)
+          ? (input as any).url
+          : input?.toString() || "";
+
+    if (targetUrl && (targetUrl.includes("ngrok") || targetUrl.includes("ngrok-free.dev"))) {
+      if (typeof input === "string" || (input && typeof input === "object" && "toString" in input && !(input instanceof Request))) {
+        finalInit = finalInit || {};
+        const headers = new Headers(finalInit.headers || {});
+        headers.set("ngrok-skip-browser-warning", "true");
+        finalInit.headers = headers;
+      } else if (input instanceof Request) {
+        try {
+          const newHeaders = new Headers(input.headers);
+          newHeaders.set("ngrok-skip-browser-warning", "true");
+          finalInput = new Request(input, { headers: newHeaders });
+        } catch (e) {
+          try {
+            input.headers.set("ngrok-skip-browser-warning", "true");
+          } catch (err) {}
+        }
+      }
+    }
+
     try {
-      const response = await originalFetch(...args);
+      const response = await originalFetch(finalInput, finalInit);
       if (!response.ok) {
         const clone = response.clone();
         try {
@@ -460,6 +489,19 @@ export const sciparserApi = {
     return res.json();
   },
 
+  stopSchedule: async (scheduleId: string) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+
+    const res = await fetch(`${BASE_URL}/sciparser/v1/scheduler/${scheduleId}/stop`, {
+      method: "POST",
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
   getScheduleRuns: async (scheduleId: string) => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
@@ -834,6 +876,17 @@ export const sciparserApi = {
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json() as Promise<ConversationTokenUsage[]>;
+  },
+
+  getMyUserAnalytics: async (days: number = 30) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/user/analytics?days=${days}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<AdminUserAnalytics>;
   },
 
   adminDeleteUser: async (userId: string) => {
@@ -1577,6 +1630,8 @@ export interface AdminAutomation {
   success_runs: number;
   failed_runs: number;
   success_rate: number;
+  total_cost: number;
+  is_running: boolean;
 }
 
 export interface AdminBrowserSession {

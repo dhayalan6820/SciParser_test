@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import uvicorn
 from src.main import app
+from src import config
 import asyncio
 
 # Force Windows to use ProactorEventLoop to support Playwright subprocesses
@@ -23,9 +24,9 @@ if sys.platform == 'win32':
 if __name__ == '__main__':
     uvicorn.run(
         "src.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
+        host=config.SERVER_HOST,
+        port=config.SERVER_PORT,
+        reload=False,
         log_level="info",
         lifespan="on"
     )

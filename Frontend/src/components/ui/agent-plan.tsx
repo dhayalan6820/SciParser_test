@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronUp,
   Zap,
+  Brain,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "../../../lib/utils";
@@ -137,6 +138,179 @@ export default function Plan({
     return "Waiting";
   };
 
+  const parseThoughtInline = (text: string) => {
+    // Unescape markdown characters like \* -> *, \_ -> _, \` -> `
+    let cleanText = text.replace(/\\([*_`~#|])/g, "$1");
+
+    // 1. Bold text (**text**)
+    const boldParts = cleanText.split(/(\*\*.*?\*\*)/g);
+    return boldParts.map((bPart, bIdx) => {
+      if (bPart.startsWith("**") && bPart.endsWith("**")) {
+        return <strong key={bIdx} className="font-bold text-foreground dark:text-gray-200">{bPart.slice(2, -2)}</strong>;
+      }
+      
+      // 2. Italic text (*text*)
+      const italicParts = bPart.split(/(\*.*?\*)/g);
+      return italicParts.map((tPart, tIdx) => {
+        if (tPart.startsWith("*") && tPart.endsWith("*")) {
+          return <em key={tIdx} className="italic text-foreground/80">{tPart.slice(1, -1)}</em>;
+        }
+
+        // 3. Inline code (`code`)
+        const codeParts = tPart.split(/(\`.*?\`)/g);
+        return codeParts.map((cPart, cIdx) => {
+          if (cPart.startsWith("`") && cPart.endsWith("`")) {
+            return (
+              <code key={cIdx} className="px-1.5 py-0.5 mx-0.5 rounded font-mono text-[11px] font-semibold bg-indigo-500/10 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400 border border-indigo-500/5 dark:border-indigo-500/10">
+                {cPart.slice(1, -1)}
+              </code>
+            );
+          }
+          
+          // 4. Links ([text](url))
+          const linkParts = cPart.split(/(\[.*?\]\(.*?\))/g);
+          return linkParts.map((lPart, lIdx) => {
+            const match = lPart.match(/\[(.*?)\]\((.*?)\)/);
+            if (match) {
+              return (
+                <a key={lIdx} href={match[2]} target="_blank" rel="noreferrer" className="text-sky-500 dark:text-sky-400 underline hover:text-sky-400">
+                  {match[1]}
+                </a>
+              );
+            }
+            return lPart;
+          });
+        });
+      });
+    });
+  };
+
+  const renderThoughtBlocks = (content: string) => {
+    if (!content) return null;
+    
+    const lines = content.split("\n");
+    const blocks: React.ReactNode[] = [];
+    let currentTableRows: string[][] = [];
+    let inTable = false;
+    
+    const pushTable = (key: number) => {
+      if (currentTableRows.length === 0) return;
+      
+      const isSepRow = (row: string[]) => row.every(cell => /^:?-+:?$/.test(cell.trim()));
+      const cleanedRows = currentTableRows.filter(row => !isSepRow(row));
+      
+      if (cleanedRows.length > 0) {
+        const header = cleanedRows[0];
+        const body = cleanedRows.slice(1);
+        
+        blocks.push(
+          <div key={`table-${key}`} className="my-2.5 overflow-hidden rounded-lg border border-border bg-card/50 shadow-sm max-w-full">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-[11px] border-collapse">
+                <thead>
+                  <tr className="bg-muted/30 border-b border-border/80">
+                    {header.map((h, i) => (
+                      <th key={i} className="px-3 py-2 font-bold text-muted-foreground uppercase tracking-wider">
+                        {parseThoughtInline(h)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {body.map((row, ri) => (
+                    <tr key={ri} className="border-b border-border/30 last:border-0 hover:bg-muted/15">
+                      {row.map((cell, ci) => (
+                        <td key={ci} className="px-3 py-2 text-foreground/80 align-middle">
+                          {parseThoughtInline(cell)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      }
+      currentTableRows = [];
+      inTable = false;
+    };
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      
+      // 1. Headings (###, ##, #)
+      if (trimmed.startsWith("### ")) {
+        blocks.push(
+          <h4 key={i} className="text-[12px] font-bold text-foreground mt-3 mb-1 uppercase tracking-wider text-indigo-500/90 dark:text-indigo-400/95">
+            {parseThoughtInline(trimmed.slice(4))}
+          </h4>
+        );
+        continue;
+      }
+      if (trimmed.startsWith("## ")) {
+        blocks.push(
+          <h3 key={i} className="text-[13px] font-bold text-foreground mt-3.5 mb-1.5 uppercase tracking-wide text-indigo-500 dark:text-indigo-400">
+            {parseThoughtInline(trimmed.slice(3))}
+          </h3>
+        );
+        continue;
+      }
+      if (trimmed.startsWith("# ")) {
+        blocks.push(
+          <h2 key={i} className="text-[14px] font-black text-foreground mt-4 mb-2 tracking-tight">
+            {parseThoughtInline(trimmed.slice(2))}
+          </h2>
+        );
+        continue;
+      }
+
+      // 2. Tables
+      if (trimmed.startsWith("|")) {
+        inTable = true;
+        const cells = line.split("|").map(c => c.trim()).filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+        currentTableRows.push(cells);
+        continue;
+      }
+      
+      if (inTable && !trimmed.startsWith("|")) {
+        pushTable(i);
+      }
+      
+      if (!trimmed) continue;
+      
+      // 3. Bullet list items (supporting -, *, ., •)
+      if (
+        trimmed.startsWith("- ") ||
+        trimmed.startsWith("* ") ||
+        trimmed.startsWith(". ") ||
+        trimmed.startsWith("• ")
+      ) {
+        blocks.push(
+          <div key={i} className="flex items-start gap-2 text-xs text-foreground/80 leading-relaxed pl-2 py-0.5">
+            <span className="text-indigo-400 mt-1 shrink-0">•</span>
+            <span>{parseThoughtInline(trimmed.slice(2))}</span>
+          </div>
+        );
+        continue;
+      }
+      
+      // 4. Regular paragraph
+      blocks.push(
+        <p key={i} className="text-xs text-foreground/85 leading-relaxed py-0.5">
+          {parseThoughtInline(line)}
+        </p>
+      );
+    }
+    
+    if (inTable) {
+      pushTable(lines.length);
+    }
+    
+    return <div className="space-y-1">{blocks}</div>;
+  };
+
   return (
     <div className="w-full rounded-2xl border border-border bg-card shadow-2xl overflow-hidden">
       {/* Header */}
@@ -225,7 +399,7 @@ export default function Plan({
                   isActive
                     ? "border-sky-500 bg-sky-500/10 shadow-[0_0_15px_rgba(56,189,248,0.12)] ring-1 ring-sky-500/20"
                     : isCompleted(task.status)
-                    ? "border-border bg-card/60 opacity-80"
+                    ? "border-emerald-500/15 bg-card dark:bg-emerald-950/[0.02] shadow-sm"
                     : isFailed(task.status)
                     ? "border-red-500/20 bg-red-500/[0.03]"
                     : "border-border bg-transparent"
@@ -243,7 +417,7 @@ export default function Plan({
                       <span className="text-[10px] font-bold text-muted-foreground tabular-nums">{String(idx + 1).padStart(2, "0")}</span>
                       <span className={cn(
                         "text-[14px] font-semibold leading-snug transition-colors",
-                        isCompleted(task.status) ? "text-muted-foreground line-through opacity-70" : isActive ? "text-sky-400 font-bold" : "text-foreground/75"
+                        isCompleted(task.status) ? "text-foreground/80 font-semibold" : isActive ? "text-sky-400 font-bold" : "text-foreground/75"
                       )}>
                         {task.title}
                       </span>
@@ -309,11 +483,14 @@ export default function Plan({
 
                         {/* Task Thought (Reasoning) */}
                         {task.thought && (
-                          <div className="bg-muted/20 border-l-2 border-indigo-500/35 p-3 rounded-lg text-xs text-muted-foreground leading-relaxed font-mono mt-2 shadow-sm">
-                            <div className="text-[9px] font-bold uppercase tracking-wider text-indigo-400 mb-1">
+                          <div className="bg-indigo-500/[0.02] dark:bg-indigo-500/[0.01] border-l-2 border-indigo-500/40 dark:border-indigo-400/30 border border-indigo-500/10 p-3.5 rounded-lg text-xs text-foreground/90 leading-relaxed mt-2 shadow-sm">
+                            <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-indigo-500 dark:text-indigo-400 mb-2">
+                              <Brain className="w-3 h-3 shrink-0" />
                               Stage Thoughts
                             </div>
-                            {task.thought}
+                            <div className="font-sans">
+                              {renderThoughtBlocks(task.thought)}
+                            </div>
                           </div>
                         )}
 
@@ -347,13 +524,13 @@ export default function Plan({
                                     <div>
                                       <p className={cn(
                                         "text-[12px] font-medium leading-snug",
-                                        isCompleted(sub.status) ? "text-muted-foreground" :
+                                        isCompleted(sub.status) ? "text-foreground/75" :
                                         (isRunning(sub.status) || subActive) ? "text-foreground/85" : "text-muted-foreground/50"
                                       )}>
                                         {subLabel}
                                       </p>
                                       {sub.description && (
-                                        <p className="text-[11px] text-muted-foreground/50 mt-0.5 leading-relaxed">{sub.description}</p>
+                                        <p className="text-[11px] text-muted-foreground/70 mt-0.5 leading-relaxed">{sub.description}</p>
                                       )}
                                     </div>
                                   </motion.div>

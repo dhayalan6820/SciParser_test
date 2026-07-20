@@ -4,11 +4,12 @@ import httpx
 import math
 from typing import List, Dict, Any, Tuple
 from src.utils.logger import logger
+from src import config
 
 class ToolSelector:
-    def __init__(self, model_name: str = os.getenv("TOOL_SELECTION_MODEL")):
-        self.model_name = model_name
-        self.api_key = os.getenv("OPENROUTER_API_KEY")
+    def __init__(self, model_name: str = None):
+        self.model_name = model_name or config.TOOL_SELECTION_MODEL
+        self.api_key = config.OPENROUTER_API_KEY
         self.embedding_model = "text-embedding-3-small"
         # Cache embeddings to avoid redundant network requests
         self._embedding_cache: Dict[str, List[float]] = {}

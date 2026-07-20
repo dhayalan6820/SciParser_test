@@ -56,7 +56,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
                 We're experiencing a temporary client-side error. Please try refreshing this section or reloading the page.
               </p>
             </div>
-            <div className="bg-slate-50 dark:bg-slate-950/50 py-2 px-4 rounded-lg font-mono text-[10px] text-slate-500 border border-slate-100 dark:border-slate-850">
+            <div className="bg-slate-50 dark:bg-slate-950/50 py-2 px-4 rounded-lg font-mono text-[10px] text-slate-500 border border-slate-100 dark:border-slate-800">
               Support Reference ID: <strong className="text-slate-800 dark:text-slate-200">{this.state.errorId}</strong>
             </div>
             <Button onClick={this.handleReset} variant="outline" size="sm" className="gap-1.5 w-full">

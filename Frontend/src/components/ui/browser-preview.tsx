@@ -149,7 +149,7 @@ export function BrowserPreview({
   useEffect(() => {
     if (!latestToolLog || !isAiTyping) return;
     const logId = latestToolLog.id;
-    const mappedStatus = (latestToolLog.status === 'IN_PROGRESS' || latestToolLog.status === 'running' || latestToolLog.status === 'in-progress')
+    const mappedStatus: "IN_PROGRESS" | "SUCCESS" | "FAILED" = (latestToolLog.status === 'IN_PROGRESS' || latestToolLog.status === 'running' || latestToolLog.status === 'in-progress')
       ? 'IN_PROGRESS'
       : (latestToolLog.status === 'FAILED' || latestToolLog.status === 'ERROR' || latestToolLog.status === 'failed' || latestToolLog.status === 'error')
         ? 'FAILED'
@@ -530,13 +530,8 @@ export function BrowserPreview({
             </AnimatePresence>
           </div>
 
-        </div>
-
-        {/* ── Browser viewport — takes all remaining height ─────────────── */}
-        <div className="flex-1 relative flex flex-col overflow-hidden bg-background">
-
-          {/* Floating control bar — overlays the top of the live preview itself */}
-          <div className="absolute top-3 right-3 z-40 flex items-center gap-1.5 px-1.5 py-1.5 rounded-xl bg-background/85 backdrop-blur-md border border-border shadow-lg">
+          {/* Control Buttons */}
+          <div className="flex items-center gap-1.5 shrink-0 border-l border-border pl-2 ml-1">
             <Button
               variant="ghost"
               size="sm"
@@ -570,6 +565,10 @@ export function BrowserPreview({
               <X className="h-4 w-4" />
             </Button>
           </div>
+        </div>
+
+        {/* ── Browser viewport — takes all remaining height ─────────────── */}
+        <div className="flex-1 relative flex flex-col overflow-hidden bg-background">
 
           {frame ? (
             <div

@@ -96,6 +96,8 @@ class AdminAutomationSummary(BaseModel):
     success_runs: int
     failed_runs: int
     success_rate: float
+    total_cost: float = 0.0
+    is_running: bool = False
 
 
 class AdminUserListItem(UserResponse):

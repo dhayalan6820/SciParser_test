@@ -7,11 +7,15 @@ interface AgentsToolsSubtabProps {
 }
 
 export const AgentsToolsSubtab: React.FC<AgentsToolsSubtabProps> = ({ data }) => {
+  const agentsList = data?.agents || [];
+  const toolsList = data?.tools || [];
+  const mcpList = data?.mcp_servers || [];
+
   return (
     <div className="space-y-6">
       {/* Agents Performance */}
       <Panel title="Agent Stage Performance" subtitle="Aggregations of Planner, Research, and Browser ReAct execution times">
-        {data.agents.length === 0 ? (
+        {agentsList.length === 0 ? (
           <div className="text-center py-6 text-sm text-muted-foreground">No agent run data recorded.</div>
         ) : (
           <div className="overflow-x-auto">
@@ -27,8 +31,8 @@ export const AgentsToolsSubtab: React.FC<AgentsToolsSubtabProps> = ({ data }) =>
                   <th className="py-3 px-4">Avg Cost</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-850 text-xs">
-                {data.agents.map((a: any) => (
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                {agentsList.map((a: any) => (
                   <tr key={a.agent} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/35 transition-colors">
                     <td className="py-3.5 px-4 font-semibold text-slate-800 dark:text-slate-200 capitalize">
                       <span className="flex items-center gap-2">
@@ -36,12 +40,12 @@ export const AgentsToolsSubtab: React.FC<AgentsToolsSubtabProps> = ({ data }) =>
                         {a.agent}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400">{a.runs}</td>
-                    <td className="py-3.5 px-4 font-mono text-emerald-500 font-medium">{a.completed}</td>
-                    <td className="py-3.5 px-4 font-mono text-red-500 font-medium">{a.failed}</td>
-                    <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400">{a.avg_duration.toFixed(2)}s</td>
-                    <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400">{a.avg_tokens.toLocaleString()}</td>
-                    <td className="py-3.5 px-4 font-mono text-emerald-500 font-semibold">${a.avg_cost.toFixed(4)}</td>
+                    <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400">{a.runs ?? 0}</td>
+                    <td className="py-3.5 px-4 font-mono text-emerald-500 font-medium">{a.completed ?? 0}</td>
+                    <td className="py-3.5 px-4 font-mono text-red-500 font-medium">{a.failed ?? 0}</td>
+                    <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400">{(a.avg_duration ?? 0).toFixed(2)}s</td>
+                    <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400">{(a.avg_tokens ?? 0).toLocaleString()}</td>
+                    <td className="py-3.5 px-4 font-mono text-emerald-500 font-semibold">${(a.avg_cost ?? 0).toFixed(4)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -52,7 +56,7 @@ export const AgentsToolsSubtab: React.FC<AgentsToolsSubtabProps> = ({ data }) =>
 
       {/* Tools Performance */}
       <Panel title="Tool Invocation Performance" subtitle="Execution metrics for browser actions, database access, and other utility tools">
-        {data.tools.length === 0 ? (
+        {toolsList.length === 0 ? (
           <div className="text-center py-6 text-sm text-muted-foreground">No tool calls recorded in this period.</div>
         ) : (
           <div className="overflow-x-auto">
@@ -68,8 +72,8 @@ export const AgentsToolsSubtab: React.FC<AgentsToolsSubtabProps> = ({ data }) =>
                   <th className="py-3 px-4">Avg Cost</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-850 text-xs">
-                {data.tools.map((t: any) => (
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                {toolsList.map((t: any) => (
                   <tr key={t.tool} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/35 transition-colors">
                     <td className="py-3.5 px-4 font-semibold text-slate-800 dark:text-slate-200">
                       <span className="flex items-center gap-2">
@@ -77,12 +81,12 @@ export const AgentsToolsSubtab: React.FC<AgentsToolsSubtabProps> = ({ data }) =>
                         {t.tool}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400">{t.calls}</td>
-                    <td className="py-3.5 px-4 font-mono text-emerald-500 font-medium">{t.completed}</td>
-                    <td className="py-3.5 px-4 font-mono text-red-500 font-medium">{t.failed}</td>
-                    <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400">{t.avg_duration}s</td>
-                    <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400">{t.avg_tokens.toLocaleString()}</td>
-                    <td className="py-3.5 px-4 font-mono text-emerald-500 font-semibold">${t.avg_cost.toFixed(6)}</td>
+                    <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400">{t.calls ?? 0}</td>
+                    <td className="py-3.5 px-4 font-mono text-emerald-500 font-medium">{t.completed ?? 0}</td>
+                    <td className="py-3.5 px-4 font-mono text-red-500 font-medium">{t.failed ?? 0}</td>
+                    <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400">{t.avg_duration ?? 0}s</td>
+                    <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400">{(t.avg_tokens ?? 0).toLocaleString()}</td>
+                    <td className="py-3.5 px-4 font-mono text-emerald-500 font-semibold">${(t.avg_cost ?? 0).toFixed(6)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -93,7 +97,7 @@ export const AgentsToolsSubtab: React.FC<AgentsToolsSubtabProps> = ({ data }) =>
 
       {/* MCP Servers */}
       <Panel title="MCP Server Observability" subtitle="Connection status, reconnect events, and request latencies for MCP nodes">
-        {data.mcp_servers.length === 0 ? (
+        {mcpList.length === 0 ? (
           <div className="text-center py-6 text-sm text-muted-foreground">No active MCP Server logs found.</div>
         ) : (
           <div className="overflow-x-auto">
@@ -107,8 +111,8 @@ export const AgentsToolsSubtab: React.FC<AgentsToolsSubtabProps> = ({ data }) =>
                   <th className="py-3 px-4">Avg Latency</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-850 text-xs">
-                {data.mcp_servers.map((m: any) => (
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                {mcpList.map((m: any) => (
                   <tr key={m.mcp_server} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/35 transition-colors">
                     <td className="py-3.5 px-4 font-semibold text-slate-800 dark:text-slate-200 capitalize">
                       <span className="flex items-center gap-2">
@@ -116,10 +120,10 @@ export const AgentsToolsSubtab: React.FC<AgentsToolsSubtabProps> = ({ data }) =>
                         {m.mcp_server}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400">{m.calls}</td>
-                    <td className="py-3.5 px-4 font-mono text-emerald-500 font-medium">{m.success}</td>
-                    <td className="py-3.5 px-4 font-mono text-red-500 font-medium">{m.failures}</td>
-                    <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400">{m.avg_latency}ms</td>
+                    <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400">{m.calls ?? 0}</td>
+                    <td className="py-3.5 px-4 font-mono text-emerald-500 font-medium">{m.success ?? 0}</td>
+                    <td className="py-3.5 px-4 font-mono text-red-500 font-medium">{m.failures ?? 0}</td>
+                    <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400">{m.avg_latency ?? 0}ms</td>
                   </tr>
                 ))}
               </tbody>

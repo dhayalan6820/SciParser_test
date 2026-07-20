@@ -1,5 +1,5 @@
 import * as React from "react";
-import { sciparserApi } from "../../../api";
+import { sciparserApi, User } from "../../../api";
 import { LoadingState } from "./shared";
 import { OverviewSubtab } from "./observability/overview-subtab";
 import { UsersSubtab } from "./observability/users-subtab";
@@ -28,7 +28,7 @@ export const ObservabilityTab: React.FC = () => {
   const [data, setData] = React.useState<any>(null);
   
   // Drill down detailed user state
-  const [selectedUser, setSelectedUser] = React.useState<{ id: string; username: string } | null>(null);
+  const [selectedUser, setSelectedUser] = React.useState<User | null>(null);
 
   const fetchObservabilityData = React.useCallback(async () => {
     setLoading(true);
@@ -66,7 +66,7 @@ export const ObservabilityTab: React.FC = () => {
   const handleOpenUserDetail = (userId: string) => {
     const userObj = data?.users?.find((u: any) => u.user_id === userId);
     if (userObj) {
-      setSelectedUser({ id: userObj.user_id, username: userObj.username });
+      setSelectedUser(userObj);
     }
   };
 
@@ -85,7 +85,7 @@ export const ObservabilityTab: React.FC = () => {
       case "overview":
         return <OverviewSubtab data={data} />;
       case "users":
-        return <UsersSubtab data={data} onOpenUserDetail={handleOpenUserDetail} />;
+        return <UsersSubtab data={data} onOpenUserDetail={handleOpenUserDetail} onRefresh={fetchObservabilityData} />;
       case "models":
         return <ModelsSubtab data={data} />;
       case "agents-tools":
@@ -133,7 +133,7 @@ export const ObservabilityTab: React.FC = () => {
       </div>
 
       {/* Sub Navigation Tabs */}
-      <div className="flex gap-1 border-b border-slate-100 dark:border-slate-850 overflow-x-auto pb-px">
+      <div className="flex gap-1 border-b border-slate-100 dark:border-slate-800 overflow-x-auto pb-px">
         <button
           onClick={() => setSubTab("overview")}
           className={`flex items-center gap-1.5 px-4 py-2 border-b-2 text-xs font-semibold whitespace-nowrap transition-colors ${
@@ -230,8 +230,7 @@ export const ObservabilityTab: React.FC = () => {
       {/* User drill-down panel */}
       {selectedUser && (
         <UserAnalyticsPanel
-          userId={selectedUser.id}
-          username={selectedUser.username}
+          user={selectedUser as any}
           onClose={() => setSelectedUser(null)}
         />
       )}

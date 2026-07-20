@@ -8,4 +8,10 @@ wheels/
 
 # Virtual environments
 .venv
-.envBackend/logs/sciparser-log
+
+# Environment files (contain secrets)
+.env
+!.env.example
+
+# Logs
+Backend/logs/sciparser-log
