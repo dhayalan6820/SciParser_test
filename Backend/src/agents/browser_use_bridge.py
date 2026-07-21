@@ -203,6 +203,17 @@ def _patch_mcp_server(browser_session: 'BrowserSession', get_cdp_url_func, headl
                 "required": ["code"],
             },
         ),
+        mcp_types.Tool(
+            name="browser_extract_from_vision",
+            description="Take a screenshot of the current page and use the Multimodal Vision LLM to extract data based on a query. Useful when data is trapped in images, canvas elements, PDFs or is otherwise missing from the text DOM.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The exact extraction query or data you need (e.g. 'Extract the monthly price and setup fee')."}
+                },
+                "required": ["query"],
+            },
+        ),
     ]
 
     async def _exec_evaluate(srv, args: dict) -> str:
@@ -215,12 +226,83 @@ def _patch_mcp_server(browser_session: 'BrowserSession', get_cdp_url_func, headl
         except Exception as e:
             return f"Error executing JavaScript: {e}"
 
+    async def _exec_extract_from_vision(srv, args: dict) -> str:
+        if not srv.browser_session: await srv._init_browser_session()
+        query = str(args.get("query", ""))
+        try:
+            page = await srv.browser_session.get_current_page()
+            screenshot_result = await page.screenshot()
+            import base64
+            # page.screenshot() may return bytes or a base64 string depending on Playwright version
+            if isinstance(screenshot_result, (bytes, bytearray)):
+                img_b64 = base64.b64encode(screenshot_result).decode('utf-8')
+            elif isinstance(screenshot_result, str):
+                img_b64 = screenshot_result
+            else:
+                return f"Error executing vision extraction: unexpected screenshot type {type(screenshot_result)}"
+
+            # Build the image data URL
+            image_url = f"data:image/png;base64,{img_b64}"
+            prompt = (
+                f"Analyze this screenshot and carefully extract the following information: {query}. "
+                "Return the extracted data in a clear, structured text format. "
+                "If the information is not clearly visible in the screenshot, say so explicitly."
+            )
+
+            # Use a direct httpx call to the OpenAI-compatible API — avoids LLM wrapper type issues
+            import httpx
+            api_key = (
+                os.environ.get("OPENROUTER_API_KEY")
+                or os.environ.get("OPENAI_API_KEY")
+                or getattr(config, "OPENROUTER_API_KEY", "")
+            )
+            base_url = (
+                os.environ.get("OPENAI_BASE_URL")
+                or os.environ.get("OPENAI_API_BASE")
+                or getattr(config, "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+            ).rstrip("/")
+            model = (
+                os.environ.get("LLM_EXTRACTION_MODEL")
+                or getattr(config, "LLM_EXTRACTION_MODEL", "openai/gpt-4o-mini")
+            )
+
+            if not api_key:
+                return "Error: No API key found for vision extraction."
+
+            payload = {
+                "model": model,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": image_url}},
+                        ],
+                    }
+                ],
+                "max_tokens": 2048,
+            }
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+            async with httpx.AsyncClient(timeout=60) as client:
+                resp = await client.post(f"{base_url}/chat/completions", json=payload, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                return data["choices"][0]["message"]["content"]
+
+        except Exception as e:
+            return f"Error executing vision extraction: {e}"
+
+
     _orig_execute = BrowserUseServer._execute_tool
     async def _patched_execute_tool(self, tool_name: str, arguments: dict):
         # Force initialization so self.llm is guaranteed to be set
         await self._init_browser_session()
         
         if tool_name == "browser_evaluate": return await _exec_evaluate(self, arguments)
+        if tool_name == "browser_extract_from_vision": return await _exec_extract_from_vision(self, arguments)
         res = await _orig_execute(self, tool_name, arguments)
         if isinstance(res, str) and "LLM not initialized" in res:
             raise ValueError(res)
@@ -475,7 +557,9 @@ async def stream_browser_frames(browser_session, user_id: str, backend_url: str)
                 if sleep_duration > 0.5:
                     # Rest Mode: skip taking screenshots to save CPU/memory resources.
                     # Periodically check with the backend if we should resume active streaming.
-                    url = f"{backend_url.rstrip('/')}/sciparser/v1/browser/frame/{user_id}"
+                    worker_id = os.environ.get("BROWSER_USE_WORKER_ID", "")
+                    url_suffix = f"/{worker_id}" if worker_id else ""
+                    url = f"{backend_url.rstrip('/')}/sciparser/v1/browser/frame/{user_id}{url_suffix}"
                     resp = await client.post(url, json={"check_only": True})
                     if resp.status_code == 200:
                         data = resp.json()
@@ -486,13 +570,25 @@ async def stream_browser_frames(browser_session, user_id: str, backend_url: str)
                             sleep_duration = 2.0   # Stay in Rest Mode (poll every 2.0s)
                 else:
                     # Active Mode: capture screenshot and POST it
-                    screenshot_bytes = await browser_session.take_screenshot(format='jpeg', quality=65)
-                    if screenshot_bytes:
-                        b64_frame = base64.b64encode(screenshot_bytes).decode('utf-8')
+                    page = await browser_session.get_current_page()
+                    if page:
+                        screenshot_bytes = await page.screenshot()
+                        if screenshot_bytes:
+                            if isinstance(screenshot_bytes, str):
+                                b64_frame = screenshot_bytes
+                            else:
+                                try:
+                                    b64_frame = base64.b64encode(screenshot_bytes).decode('utf-8')
+                                except TypeError as err:
+                                    with open("d:/Project/SciParser/bridge_debug.log", "a") as f: 
+                                        f.write(f"Type error encoding screenshot. Type: {type(screenshot_bytes)}, Value: {repr(screenshot_bytes)[:200]}\\n")
+                                    raise err
                         
                         if b64_frame != last_frame:
                             last_frame = b64_frame
-                            url = f"{backend_url.rstrip('/')}/sciparser/v1/browser/frame/{user_id}"
+                            worker_id = os.environ.get("BROWSER_USE_WORKER_ID", "")
+                            url_suffix = f"/{worker_id}" if worker_id else ""
+                            url = f"{backend_url.rstrip('/')}/sciparser/v1/browser/frame/{user_id}{url_suffix}"
                             resp = await client.post(url, json={"frame": b64_frame})
                             if resp.status_code == 200:
                                 data = resp.json()
@@ -500,8 +596,11 @@ async def stream_browser_frames(browser_session, user_id: str, backend_url: str)
                                     print("Bridge [stream]: Entering rest mode (no active task running).", file=sys.stderr)
                                     sleep_duration = 2.0  # Switch to Rest Mode
                             else:
+                                with open("d:/Project/SciParser/bridge_debug.log", "a") as f: f.write(f"Bridge [stream]: POST frame failed with status {resp.status_code}\n")
                                 print(f"Bridge [stream]: POST frame failed with status {resp.status_code}", file=sys.stderr)
             except Exception as e:
+                import traceback
+                with open("d:/Project/SciParser/bridge_debug.log", "a") as f: f.write(f"Bridge [stream] error:\n{traceback.format_exc()}\n")
                 print(f"Bridge [stream] error: {e}", file=sys.stderr)
             await asyncio.sleep(sleep_duration)
 
@@ -629,7 +728,7 @@ async def run_bridge():
     
     # Start live screenshot streaming task
     user_id = os.getenv("BROWSER_USE_USER_ID", "system")
-    backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8000")
+    backend_url = os.getenv("BACKEND_API_URL", "http://127.0.0.1:8000")
     # Store reference to prevent garbage collection
     _stream_task = asyncio.create_task(stream_browser_frames(browser_session, user_id, backend_url))
     

@@ -15,3 +15,12 @@ wheels/
 
 # Logs
 Backend/logs/sciparser-log
+bridge_debug.log
+planner_debug.txt
+screenshots/
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log

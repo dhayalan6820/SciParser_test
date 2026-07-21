@@ -292,7 +292,7 @@ class MemorySemantic(Base):
     access_count = Column(Integer, default=0)
     last_validated = Column(TIMESTAMP(timezone=True), nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
-    embedding = Column(Vector(384), nullable=True)
+    embedding = Column(Vector(3072), nullable=True)
 
     __table_args__ = (
         Index("ix_memory_semantic_user_confidence", "user_id", "confidence_score"),
@@ -314,7 +314,7 @@ class MemoryProcedural(Base):
     last_used = Column(TIMESTAMP(timezone=True), nullable=True)
     last_success = Column(TIMESTAMP(timezone=True), nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
-    embedding = Column(Vector(384), nullable=True)
+    embedding = Column(Vector(3072), nullable=True)
 
 
 class AppLog(Base):
@@ -477,3 +477,10 @@ class SystemErrorLog(Base):
     retry_count = Column(Integer, default=0)
     duration_ms = Column(Integer, default=0)
 
+class SystemSetting(Base):
+    __tablename__ = "system_settings"
+
+    key = Column(String(100), primary_key=True)
+    value = Column(String(255), nullable=False)
+    description = Column(String(255), nullable=True)
+    updated_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

@@ -114,8 +114,8 @@ export const WaterfallTimeline: React.FC<WaterfallTimelineProps> = ({ chatId }) 
                     {(stage.tokens > 0 || stage.cost > 0) && (
                       <div className="flex items-center gap-1.5 mt-0.5 pl-[38px] text-[10px] text-muted-foreground font-mono">
                         {stage.tokens > 0 && (
-                          <span className="text-blue-600 dark:text-blue-400">
-                            {stage.tokens.toLocaleString()} toks
+                          <span className="text-blue-600 dark:text-blue-400" title={`Prompt: ${stage.prompt_tokens || 0}, Completion: ${stage.completion_tokens || 0}`}>
+                            {stage.tokens.toLocaleString()} toks ({stage.prompt_tokens || 0} p / {stage.completion_tokens || 0} c)
                           </span>
                         )}
                         {stage.tokens > 0 && stage.cost > 0 && <span className="opacity-40">•</span>}
@@ -131,7 +131,14 @@ export const WaterfallTimeline: React.FC<WaterfallTimelineProps> = ({ chatId }) 
                     {isSuccess ? (
                       <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                     ) : (
-                      <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                      <div className="flex items-center gap-1.5">
+                        {stage.error_message && (
+                            <span className="text-[10px] text-red-500/80 max-w-[150px] truncate" title={stage.error_message}>
+                                {stage.error_message}
+                            </span>
+                        )}
+                        <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                      </div>
                     )}
                   </div>
                 </div>

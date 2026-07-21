@@ -29,6 +29,7 @@ import { BrowserSessionsTab } from "./admin/browser-sessions-tab";
 import { UsageTab } from "./admin/usage-tab";
 import { SecurityTab } from "./admin/security-tab";
 import { ObservabilityTab } from "./admin/observability-tab";
+import { LLMConfigTab } from "./admin/llm-config-tab";
 
 interface AdminDashboardProps {
   currentUser: { username: string; email: string } | null;
@@ -43,7 +44,8 @@ type Tab =
   | "automations"
   | "browser-sessions"
   | "usage"
-  | "security";
+  | "security"
+  | "llm-config";
 
 const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "overview", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" /> },
@@ -53,6 +55,7 @@ const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "browser-sessions", label: "Browser Sessions", icon: <Globe className="h-4 w-4" /> },
   { id: "usage", label: "Usage", icon: <Coins className="h-4 w-4" /> },
   { id: "security", label: "Security", icon: <ShieldAlert className="h-4 w-4" /> },
+  { id: "llm-config", label: "Model Settings", icon: <Bot className="h-4 w-4" /> },
 ];
 
 const TAB_LABELS: Record<Tab, string> = NAV_ITEMS.reduce(
@@ -81,6 +84,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onL
         return <UsageTab />;
       case "security":
         return <SecurityTab />;
+      case "llm-config":
+        return <LLMConfigTab />;
       default:
         return null;
     }

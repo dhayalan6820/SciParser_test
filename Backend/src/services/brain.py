@@ -317,6 +317,14 @@ class CodeProcessor:
 def get_model_pricing(model_name: str) -> tuple[float, float]:
     """Returns (input_cost_per_million, output_cost_per_million) for the given model."""
     name = model_name.lower()
+    
+    # Check Admin Config First
+    if "brain" in globals():
+        b = globals()["brain"]
+        if hasattr(b, "admin_llm_config") and b.admin_llm_config:
+            if name == b.admin_llm_config.get("model_name", "").lower():
+                return b.admin_llm_config.get("input_cost", 0.1), b.admin_llm_config.get("output_cost", 0.4)
+                
     if "gemini-3.5-flash" in name or "gemini-3-flash" in name or "gemini-3-flash-preview" in name:
         return 0.50, 3.50
     elif "gemini-1.5-pro" in name or "gemini-3-pro" in name:
@@ -347,11 +355,17 @@ current_agent_run_id = contextvars.ContextVar("current_agent_run_id", default=No
 from langchain_core.callbacks import AsyncCallbackHandler
 from langchain_core.outputs import LLMResult
 
+import time
+
 class TokenTrackingCallbackHandler(AsyncCallbackHandler):
     def __init__(self, llm_instance):
         self.llm_instance = llm_instance
+        self.start_times = {}
 
-    async def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
+    async def on_llm_start(self, serialized: dict[str, Any], prompts: list[str], *, run_id, **kwargs: Any) -> None:
+        self.start_times[run_id] = time.time()
+
+    async def on_llm_end(self, response: LLMResult, *, run_id, **kwargs: Any) -> None:
         try:
             for generations in response.generations:
                 for gen in generations:
@@ -396,6 +410,9 @@ class TokenTrackingCallbackHandler(AsyncCallbackHandler):
                         "history_tokens": int(prompt_tokens * 0.50),
                     }
                     
+                    start_time = self.start_times.pop(run_id, None)
+                    latency_ms = int((time.time() - start_time) * 1000) if start_time else 0
+
                     await record_llm_request(
                         user_id=user_id,
                         chat_id=chat_id,
@@ -404,7 +421,8 @@ class TokenTrackingCallbackHandler(AsyncCallbackHandler):
                         category_tokens=category_tokens,
                         input_tokens=prompt_tokens,
                         output_tokens=completion_tokens,
-                        cost_usd=cost
+                        cost_usd=cost,
+                        latency_ms=latency_ms
                     )
                     
                     # Output for subprocess parsing
@@ -578,9 +596,10 @@ class Brain:
         self.active_users: set = set()
         self._latest_thoughts: Dict[str, str] = {}
         self.live_tool_logs: Dict[str, List[Dict[str, Any]]] = {}
-        self.session_manager = SessionManager()
+        self.session_manager = SessionManager(is_active_callback=self.is_user_active)
         self.db_manager = DatabaseManager()
         self.stream_manager = None
+        self.admin_llm_config = None
         self.model_name = model_name
         self.llm = MemoryPruningLLM(
             model_name=self.model_name,
@@ -602,9 +621,50 @@ class Brain:
 
     def is_user_active(self, user_id: str) -> bool:
         return user_id in self.active_users
+        
+    async def update_llm_config(self, model_name: str, input_cost: float, output_cost: float, context_window: int):
+        self.admin_llm_config = {
+            "model_name": model_name,
+            "input_cost": input_cost,
+            "output_cost": output_cost,
+            "context_window": context_window
+        }
+        self.model_name = model_name
+        self.llm = MemoryPruningLLM(
+            model_name=self.model_name,
+            openrouter_api_key=config.OPENROUTER_API_KEY,
+            temperature=0.8,
+            max_retries=3,
+            max_tokens=16384,
+        )
+        self.tool_selector = ToolSelector(model_name=self.model_name)
+        self.semantic_compressor = SemanticCompressor(self.tool_selector)
+        logger.info(f"Dynamically updated main LLM to {model_name} (Input: ${input_cost}, Output: ${output_cost})")
+
 
     async def initialize(self):
         logger.info("Pre-initializing MCP tools and generating embeddings cache...")
+        self.session_manager.start_sweeper()
+        
+        # Load Admin LLM config
+        try:
+            from src.database.chat_db import SystemSetting, AsyncSessionLocal
+            from sqlalchemy import select
+            import json
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(select(SystemSetting).where(SystemSetting.key == "admin_main_llm_config"))
+                setting = result.scalars().first()
+                if setting and setting.value:
+                    data = json.loads(setting.value)
+                    await self.update_llm_config(
+                        data.get("model_name", config.MAIN_MODEL),
+                        data.get("input_cost", 0.1),
+                        data.get("output_cost", 0.4),
+                        data.get("context_window", 128000)
+                    )
+        except Exception as e:
+            logger.error(f"Failed to load admin LLM config: {e}")
+            
         try:
             from src.utils.session_manager import find_free_port
             
@@ -1107,6 +1167,17 @@ class Brain:
             # 1. Get tools from MCP
             all_tools = await mcp_manager.get_tools()
             all_tools = [t for t in all_tools if t.name != "retry_with_browser_use_agent"]
+            
+            # Inject parallel orchestrator tool
+            from src.services.parallel_orchestrator import create_spawn_parallel_browser_workers_tool
+            from src.utils.pdf_tools import create_read_pdf_from_url_tool
+            
+            all_tools.append(create_spawn_parallel_browser_workers_tool(user_id=user_id))
+            all_tools.append(create_read_pdf_from_url_tool())
+
+            # Inject memory retriever tool for raw tool logs
+            from src.services.tool_history_tool import create_fetch_past_tool_logs_tool
+            all_tools.append(create_fetch_past_tool_logs_tool(chat_id=chat_id))
 
             # Run Tool Selection system to choose the right tools
             tools = await self.tool_selector.select_tools(message, all_tools)
@@ -1114,10 +1185,15 @@ class Brain:
             # Force-include core browser utilities
             core_tool_names = {
                 "browser_get_state",
+                "browser_navigate",
+                "browser_click",
                 "browser_wait",
                 "browser_key_press",
                 "browser_extract_raw",
-                "browser_extract_vision"
+                "browser_extract_vision",
+                "browser_extract_from_vision",
+                "read_pdf_from_url",
+                "fetch_past_tool_logs"
             }
             selected_names = {t.name for t in tools}
             for t in all_tools:
@@ -1221,6 +1297,13 @@ class Brain:
             if self.stream_manager:
                 await self.stream_manager.broadcast_plan(chat_id, plan_tasks)
 
+            # Retrieve relevant memory context for the agent
+            from src.services.memory_retriever import memory_retriever
+            async with AsyncSessionLocal() as mem_db:
+                memory_context = await memory_retriever.retrieve_context(
+                    db=mem_db, user_id=user_id, query=message, domain="general"
+                )
+
             # System prompt for targeted ReAct agent runs
             system_prompt = (
                 "You are an autonomous browser agent. Your objective is to complete the target task assigned to you.\n"
@@ -1229,8 +1312,17 @@ class Brain:
                 "1. Always create a clear TODO list to plan and complete the task step-by-step.\n"
                 "2. Use the cursor/mouse carefully for every action.\n"
                 "3. Plan State Tracking: You MUST explicitly maintain and update your TODO list in your thoughts before every action. Clearly mark completed steps with '[x]' and current running steps with '[current]'.\n"
-                "4. Linear URL Processing: Focus purely on your current target URL. Extract the details, print them clearly, and finish. Do not navigate to other pages outside the target task."
+                "4. Linear URL Processing: Focus purely on your current target URL. Extract the details, print them clearly, and finish. Do not navigate to other pages outside the target task.\n"
+                "5. Context Persistence (IMPORTANT): If the user's request is a conversational follow-up question (e.g. \"What was the third item in that list?\", \"Can you format that as a CSV?\"), DO NOT invoke any tools or browser actions. Answer directly using your conversation memory and the data you've already extracted.\n"
+                "6. Multi-tab processing: If the user provides multiple URLs to process, you MUST open them in multiple tabs within the same browser session using the `new_tab: true` argument when navigating, rather than replacing the current page.\n"
+                "7. PDF FILES IN BROWSER (CRITICAL): If you navigate to a URL and the browser opens a PDF viewer (you will see a PDF document rendered directly, not a normal webpage), you MUST NOT continue trying to click or scroll inside the PDF viewer as it will get you stuck forever. Instead, immediately use the `read_pdf_from_url` tool passing the EXACT same URL you navigated to. This will download and extract all the text data from the PDF directly.\n"
+                "8. IMAGE-ONLY OR SCANNED CONTENT (CRITICAL): If the data you need is NOT present in the HTML text (e.g. prices are shown as images, inside a canvas element, or inside a PDF rendered as an image), you MUST immediately call `browser_extract_from_vision` with your exact query. This tool takes a screenshot and uses Vision AI to read data directly from the visual pixels, bypassing the DOM entirely. ALWAYS use this as your first fallback when text extraction fails.\n"
+                "9. NEVER GET STUCK: If any browser action (click, scroll, type) produces no visible change after 2 attempts, STOP and switch strategy: try `browser_extract_from_vision` to read what is currently on screen, or use `read_pdf_from_url` if a PDF URL is involved.\n"
             )
+            
+            if memory_context:
+                system_prompt += f"\n=========================================\nMEMORY CONTEXT\n=========================================\n{memory_context}\n=========================================\n"
+
 
             # Setup composite backend & fallback model
             projects_dir = config.PROJECTS_DIR
@@ -1367,6 +1459,7 @@ class Brain:
                                     "exceeds file length",
                                     "line offset",
                                     "file not found",
+                                    "not found",
                                     "no such file",
                                     "is not a file",
                                     "is a directory",
@@ -1599,6 +1692,18 @@ class Brain:
                 except Exception as ws_err:
                     logger.error(f"Failed to broadcast final response via WS: {ws_err}")
 
+            # Trigger Memory Extractor in background
+            try:
+                from src.services.memory_extractor import memory_extractor
+                conversation_history = f"User: {message}\nAI: {final_response}"
+                asyncio.create_task(
+                    memory_extractor.extract_and_store(
+                        user_id=user_id, domain="general", conversation_history=conversation_history
+                    )
+                )
+            except Exception as extract_err:
+                logger.error(f"Failed to trigger memory extractor: {extract_err}")
+
             return {
                 "success": True,
                 "message": {
@@ -1611,7 +1716,8 @@ class Brain:
                         "completion_tokens": total_completion_tokens,
                         "total_tokens": total_prompt_tokens + total_completion_tokens
                     },
-                    "cost": total_cost
+                    "cost": total_cost,
+                    "log_id": execution_id
                 }
             }
 

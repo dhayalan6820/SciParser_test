@@ -46,7 +46,7 @@ from src.schemas.schema import (
     AdminSecurityResponse, AdminAgentRunTimelineResponse, AdminAgentActionResponse,
     AdminAnalyticsResponse, OperationsLogListResponse, AdminUserAnalyticsResponse,
     AdminSetCreditsRequest, ConversationTokenUsage, AppLogListResponse,
-    LlmProviderRequest, LlmProviderResponse,
+    LlmProviderRequest, LlmProviderResponse, AdminLLMConfig,
     AdminCostAnalyticsResponse, AdminModelAnalyticsResponse, AdminToolAnalyticsResponse,
     AdminBrowserAnalyticsResponse, AdminContextAnalyticsResponse, AdminRetrievalAnalyticsResponse,
     AdminResourcesResponse, AdminSetBudgetRequest, AdminAlertsResponse, AdminGenerateInsightsResponse,
@@ -65,7 +65,8 @@ class PlanStreamManager:
         self.active_connections: Dict[str, List[WebSocket]] = {}
         self.browser_connections: Dict[str, List[WebSocket]] = {}
         self.schedule_connections: Dict[str, List[WebSocket]] = {}
-        self.last_frame: Dict[str, Any] = {}  # last browser frame per user_id
+        # Stores last browser frame per user_id and worker_id: {user_id: {worker_id: frame_data}}
+        self.last_frame: Dict[str, Dict[str, Any]] = {}
 
     async def connect(self, chat_id: str, websocket: WebSocket, is_browser: bool = False, is_schedule: bool = False):
         if is_schedule:
@@ -146,19 +147,27 @@ class PlanStreamManager:
             for conn in dead:
                 self.disconnect(user_id, conn, is_browser=True)
 
-    async def broadcast_frame(self, frame_data: Any, user_id: str, is_tool: bool = False):
+    async def broadcast_frame(self, frame_data: Any, user_id: str, is_tool: bool = False, worker_id: Optional[str] = None):
         """Broadcasts a base64 CDP frame or tool log to all connected browser stream clients for a user."""
+        wid = worker_id or "default"
         if not is_tool:
-            self.last_frame[user_id] = frame_data
-        conns = self.browser_connections.get(user_id, [])
-        if not is_tool:
-            logger.info(f"broadcast_frame: user={user_id[:8]} connections={len(conns)} frame_len={len(str(frame_data.get('frame','') if isinstance(frame_data, dict) else frame_data))}")
+            if user_id not in self.last_frame:
+                self.last_frame[user_id] = {}
+            self.last_frame[user_id][wid] = frame_data
+        
+        # Determine event type
+        event_type = "tool_log" if is_tool else "frame"
+
+        # IMPORTANT: Always wrap the raw frame payload in an 'event' object
+        # for frontend stream compatibility.
         if user_id in self.browser_connections:
-            event_type = "tool_log" if is_tool else "frame"
             dead: list = []
             for connection in list(self.browser_connections[user_id]):
                 try:
-                    await connection.send_json({"event": event_type, "data": frame_data})
+                    payload = {"event": event_type, "data": frame_data}
+                    if worker_id:
+                        payload["worker_id"] = worker_id
+                    await connection.send_json(payload)
                 except Exception as exc:
                     logger.warning(f"broadcast_frame: send FAILED for user={user_id[:8]}: {exc}")
                     dead.append(connection)
@@ -1041,11 +1050,11 @@ async def admin_delete_user(
 @app.get("/sciparser/v1/admin/users/{user_id}/analytics", response_model=AdminUserAnalyticsResponse)
 async def admin_user_analytics(
     user_id: str,
-    days: int = Query(30, ge=1, le=365),
+    time_range: str = Query("30d", description="Time range for analytics"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    return await ChatService.admin_get_user_analytics(db, user_id, days=days)
+    return await ChatService.admin_get_user_analytics(db, user_id, time_range=time_range)
 
 @app.patch("/sciparser/v1/admin/users/{user_id}/credits", response_model=UserResponse)
 async def admin_set_user_credits(
@@ -1065,19 +1074,19 @@ async def get_my_conversation_usage(
 
 @app.get("/sciparser/v1/user/analytics", response_model=AdminUserAnalyticsResponse)
 async def get_my_user_analytics(
-    days: int = Query(30, ge=1, le=365),
+    time_range: str = Query("30d", description="Time range for analytics"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(ChatService.get_current_user),
 ):
-    return await ChatService.admin_get_user_analytics(db, current_user.user_id, days=days)
+    return await ChatService.admin_get_user_analytics(db, current_user.user_id, time_range=time_range)
 
 @app.get("/sciparser/v1/admin/metrics/operations", response_model=OperationsMetricsResponse)
 async def admin_operations_metrics(
-    days: int = Query(30, ge=1, le=365),
+    time_range: str = Query("30d", description="Time range for analytics"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    return await ChatService.admin_get_operations_metrics(db, days=days)
+    return await ChatService.admin_get_operations_metrics(db, time_range=time_range)
 
 @app.get("/sciparser/v1/admin/logs", response_model=AppLogListResponse)
 async def admin_app_logs(
@@ -1191,11 +1200,11 @@ async def admin_operations_export(
 
 @app.get("/sciparser/v1/admin/metrics/overview", response_model=AdminOverviewResponse)
 async def admin_metrics_overview(
-    days: int = Query(30, ge=1, le=365),
+    time_range: str = Query("30d", description="Time range for analytics"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    return await ChatService.admin_get_overview_metrics(db, days=days)
+    return await ChatService.admin_get_overview_metrics(db, time_range=time_range)
 
 @app.get("/sciparser/v1/admin/activity", response_model=AdminActivityResponse)
 async def admin_activity(
@@ -1259,11 +1268,11 @@ async def admin_automations(
 
 @app.get("/sciparser/v1/admin/analytics", response_model=AdminAnalyticsResponse)
 async def admin_analytics(
-    days: int = Query(30, ge=1, le=365),
+    time_range: str = Query("30d", description="Time range for analytics"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    return await ChatService.admin_get_analytics(db, days=days)
+    return await ChatService.admin_get_analytics(db, time_range=time_range)
 
 @app.get("/sciparser/v1/admin/browser-sessions", response_model=AdminBrowserSessionsResponse)
 async def admin_browser_sessions(
@@ -1297,11 +1306,11 @@ async def admin_browser_sessions(
 
 @app.get("/sciparser/v1/admin/usage", response_model=AdminUsageResponse)
 async def admin_usage(
-    days: int = Query(30, ge=1, le=365),
+    time_range: str = Query("30d", description="Time range for analytics"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    return await ChatService.admin_get_usage_breakdown(db, days=days)
+    return await ChatService.admin_get_usage_breakdown(db, time_range=time_range)
 
 @app.get("/sciparser/v1/admin/security", response_model=AdminSecurityResponse)
 async def admin_security(
@@ -1315,6 +1324,46 @@ async def admin_security(
     return await ChatService.admin_get_security_overview(
         db, start_date=start_date, end_date=end_date, user=user, status=status,
     )
+
+from pydantic import BaseModel
+
+class SettingItem(BaseModel):
+    key: str
+    value: str
+    description: Optional[str] = None
+
+class SettingsListResponse(BaseModel):
+    settings: List[SettingItem]
+
+@app.get("/sciparser/v1/admin/settings", response_model=SettingsListResponse)
+async def admin_get_settings(db: AsyncSession = Depends(get_db), current_user: User = Depends(ChatService.get_current_admin_user)):
+    from src.database.chat_db import SystemSetting
+    result = await db.execute(select(SystemSetting))
+    settings = result.scalars().all()
+    # Default values if not present
+    settings_dict = {s.key: s for s in settings}
+    if "max_parallel_workers_per_task" not in settings_dict:
+        return SettingsListResponse(settings=[SettingItem(key="max_parallel_workers_per_task", value="4", description="Max parallel browser workers per task")])
+    return SettingsListResponse(settings=[SettingItem(key=s.key, value=s.value, description=s.description) for s in settings])
+
+@app.post("/sciparser/v1/admin/settings")
+async def admin_update_setting(
+    setting: SettingItem,
+    db: AsyncSession = Depends(get_db), 
+    current_user: User = Depends(ChatService.get_current_admin_user)
+):
+    from src.database.chat_db import SystemSetting
+    result = await db.execute(select(SystemSetting).where(SystemSetting.key == setting.key))
+    existing = result.scalar_one_or_none()
+    if existing:
+        existing.value = setting.value
+        if setting.description:
+            existing.description = setting.description
+    else:
+        new_setting = SystemSetting(key=setting.key, value=setting.value, description=setting.description)
+        db.add(new_setting)
+    await db.commit()
+    return {"status": "success"}
 # --- Upload Endpoints ---
 
 @app.post("/sciparser/v1/upload/metadata")
@@ -1439,12 +1488,12 @@ async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db), current_use
             "role": "ai",
             "content": ai_msg_data.get("content", ""),
             "timestamp": ai_msg_data.get("timestamp", datetime.now(timezone.utc).isoformat()),
-            "plan": result.get("plan", []),
-            "log_id": str(uuid.uuid4()), # FIX: Added missing log_id for validation
+            "plan": ai_msg_data.get("plan", []),
+            "log_id": ai_msg_data.get("log_id", str(uuid.uuid4())),
             "tool_calls": ai_msg_data.get("tool_calls", [])
         },
         "chat_id": chat_id,
-        "plan": result.get("plan", []),
+        "plan": ai_msg_data.get("plan", []),
         "title": session_title
     }
 
@@ -1486,7 +1535,7 @@ async def stop_chat_process(chat_id: str = Query(...), current_user: User = Depe
                 user_id=current_user.user_id,
                 role="ai",
                 content="⛔ Process stopped by user.",
-                plan_data=json.dumps([]),
+                plan_data=json.dumps(brain.active_plans.get(chat_id, [])),
                 created_at=datetime.now(timezone.utc)
             )
             db.add(ai_msg)
@@ -2094,13 +2143,17 @@ async def browser_stream(
     # Use user.user_id for browser session mapping instead of chat_id
     await plan_stream_manager.connect(user.user_id, websocket, is_browser=True)
 
-    # Immediately replay the last frame so reconnecting clients never see a blank panel
-    cached = plan_stream_manager.last_frame.get(user.user_id)
-    if cached:
-        try:
-            await websocket.send_json({"event": "frame", "data": cached})
-        except Exception:
-            pass
+    # Immediately replay the last frames so reconnecting clients never see a blank panel
+    cached_frames = plan_stream_manager.last_frame.get(user.user_id)
+    if cached_frames:
+        for wid, frame_data in cached_frames.items():
+            payload = {"event": "frame", "data": frame_data}
+            if wid != "default":
+                payload["worker_id"] = wid
+            try:
+                await websocket.send_json(payload)
+            except Exception:
+                pass
 
     suspension_watcher = asyncio.create_task(_watch_suspension(websocket, user.user_id))
     try:
@@ -2124,13 +2177,14 @@ async def toggle_browser_state(req: Dict[str, Any], current_user: User = Depends
     return {"status": "success", "is_active": req.get("is_active")}
 
 @app.post("/sciparser/v1/browser/frame/{user_id}")
-async def post_browser_frame(user_id: str, req: Dict[str, Any]):
+@app.post("/sciparser/v1/browser/frame/{user_id}/{worker_id}")
+async def post_browser_frame(user_id: str, req: Dict[str, Any], worker_id: Optional[str] = None):
     """Allow internal bridge subprocess to POST live browser frames for real-time preview."""
     is_active = brain.is_user_active(user_id)
     if is_active and not req.get("check_only"):
         frame_data = req.get("frame")
         if frame_data:
-            await plan_stream_manager.broadcast_frame(frame_data, user_id, is_tool=False)
+            await plan_stream_manager.broadcast_frame(frame_data, user_id, is_tool=False, worker_id=worker_id)
     return {"status": "success", "is_active": is_active}
 
 @app.post("/sciparser/v1/browser/connect-cdp")
@@ -2666,60 +2720,120 @@ async def test_llm_provider(
         raise HTTPException(status_code=502, detail=f"Provider test failed: {exc}")
 
 
+import json
+
+@app.get("/sciparser/v1/admin/settings/llm", response_model=AdminLLMConfig)
+async def admin_get_llm_config(
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    from src.database.chat_db import SystemSetting
+    from src import config
+    
+    result = await db.execute(select(SystemSetting).where(SystemSetting.key == "admin_main_llm_config"))
+    setting = result.scalars().first()
+    
+    if setting and setting.value:
+        try:
+            data = json.loads(setting.value)
+            return AdminLLMConfig(**data)
+        except Exception:
+            pass
+            
+    return AdminLLMConfig(
+        model_name=config.MAIN_MODEL,
+        input_cost=getattr(config, "LLM_INPUT_COST_PER_MILLION", 0.1),
+        output_cost=getattr(config, "LLM_OUTPUT_COST_PER_MILLION", 0.4),
+        context_window=128000
+    )
+
+@app.post("/sciparser/v1/admin/settings/llm")
+async def admin_set_llm_config(
+    payload: AdminLLMConfig,
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(ChatService.get_current_admin_user),
+):
+    from src.database.chat_db import SystemSetting
+    from src.services.brain import brain
+    
+    val_str = json.dumps(payload.model_dump())
+    result = await db.execute(select(SystemSetting).where(SystemSetting.key == "admin_main_llm_config"))
+    setting = result.scalars().first()
+    
+    if setting:
+        setting.value = val_str
+    else:
+        new_setting = SystemSetting(key="admin_main_llm_config", value=val_str, description="Admin defined LLM main model config")
+        db.add(new_setting)
+        
+    await db.commit()
+    
+    # Update brain singleton dynamically
+    if hasattr(brain, "update_llm_config"):
+        await brain.update_llm_config(
+            model_name=payload.model_name,
+            input_cost=payload.input_cost,
+            output_cost=payload.output_cost,
+            context_window=payload.context_window
+        )
+        
+    return {"status": "success"}
+
+
 # --- Cost Control, Resources & Alerts endpoints ---
 
 @app.get("/sciparser/v1/admin/analytics/costs", response_model=AdminCostAnalyticsResponse)
 async def admin_get_cost_analytics_endpoint(
-    days: int = Query(30, ge=1, le=365),
+    time_range: str = Query("30d", description="Time range for analytics"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    return await ChatService.admin_get_cost_analytics(db, days=days)
+    return await ChatService.admin_get_cost_analytics(db, time_range=time_range)
 
 
 @app.get("/sciparser/v1/admin/analytics/models", response_model=AdminModelAnalyticsResponse)
 async def admin_get_model_analytics_endpoint(
-    days: int = Query(30, ge=1, le=365),
+    time_range: str = Query("30d", description="Time range for analytics"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    return await ChatService.admin_get_model_analytics(db, days=days)
+    return await ChatService.admin_get_model_analytics(db, time_range=time_range)
 
 
 @app.get("/sciparser/v1/admin/analytics/tools", response_model=AdminToolAnalyticsResponse)
 async def admin_get_tool_analytics_endpoint(
-    days: int = Query(30, ge=1, le=365),
+    time_range: str = Query("30d", description="Time range for analytics"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    return await ChatService.admin_get_tool_analytics(db, days=days)
+    return await ChatService.admin_get_tool_analytics(db, time_range=time_range)
 
 
 @app.get("/sciparser/v1/admin/analytics/browser", response_model=AdminBrowserAnalyticsResponse)
 async def admin_get_browser_analytics_endpoint(
-    days: int = Query(30, ge=1, le=365),
+    time_range: str = Query("30d", description="Time range for analytics"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    return await ChatService.admin_get_browser_analytics(db, days=days)
+    return await ChatService.admin_get_browser_analytics(db, time_range=time_range)
 
 
 @app.get("/sciparser/v1/admin/analytics/context", response_model=AdminContextAnalyticsResponse)
 async def admin_get_context_analytics_endpoint(
-    days: int = Query(30, ge=1, le=365),
+    time_range: str = Query("30d", description="Time range for analytics"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    return await ChatService.admin_get_context_analytics(db, days=days)
+    return await ChatService.admin_get_context_analytics(db, time_range=time_range)
 
 
 @app.get("/sciparser/v1/admin/analytics/retrieval", response_model=AdminRetrievalAnalyticsResponse)
 async def admin_get_retrieval_analytics_endpoint(
-    days: int = Query(30, ge=1, le=365),
+    time_range: str = Query("30d", description="Time range for analytics"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    return await ChatService.admin_get_retrieval_analytics(db, days=days)
+    return await ChatService.admin_get_retrieval_analytics(db, time_range=time_range)
 
 
 @app.get("/sciparser/v1/admin/analytics/resources", response_model=AdminResourcesResponse)
@@ -2760,20 +2874,20 @@ async def admin_generate_insights_endpoint(
 @app.get("/sciparser/v1/admin/reports/download")
 async def admin_download_reports_endpoint(
     format: str = Query("csv", pattern="^(csv|json|md)$"),
-    days: int = Query(30, ge=1, le=365),
+    time_range: str = Query("30d"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    costs = await ChatService.admin_get_cost_analytics(db, days=days)
-    models = await ChatService.admin_get_model_analytics(db, days=days)
-    tools = await ChatService.admin_get_tool_analytics(db, days=days)
-    browser = await ChatService.admin_get_browser_analytics(db, days=days)
+    costs = await ChatService.admin_get_cost_analytics(db, time_range=time_range)
+    models = await ChatService.admin_get_model_analytics(db, time_range=time_range)
+    tools = await ChatService.admin_get_tool_analytics(db, time_range=time_range)
+    browser = await ChatService.admin_get_browser_analytics(db, time_range=time_range)
 
     import io
     import csv
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     report_data = {
-        "days": days,
+        "time_range": time_range,
         "total_cost": costs.get("total_cost", 0.0),
         "cost_breakdown": costs.get("breakdown", []),
         "models": models.get("models", []),
@@ -2789,7 +2903,7 @@ async def admin_download_reports_endpoint(
             headers={"Content-Disposition": f"attachment; filename=platform_report_{timestamp}.json"},
         )
     elif format == "md":
-        md = f"# Platform Performance & Analytics Report (Last {days} Days)\n\n"
+        md = f"# Platform Performance & Analytics Report ({time_range})\n\n"
         md += f"Generated At: {datetime.now(timezone.utc).isoformat()}\n\n"
         md += f"## 1. Summary\n- Total Cost: ${report_data['total_cost']:.4f}\n- Active Browser Sessions: {report_data['browser_sessions']}\n- Pages Visited: {report_data['pages_visited']}\n\n"
         md += "## 2. Cost Breakdown\n"
@@ -2808,7 +2922,7 @@ async def admin_download_reports_endpoint(
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow(["Report Metric", "Value"])
-    writer.writerow(["Date Range (Days)", days])
+    writer.writerow(["Date Range", time_range])
     writer.writerow(["Total Cost (USD)", report_data["total_cost"]])
     writer.writerow(["Browser Sessions", report_data["browser_sessions"]])
     writer.writerow(["Pages Visited", report_data["pages_visited"]])
@@ -2827,25 +2941,25 @@ async def admin_download_reports_endpoint(
 
 @app.get("/sciparser/v1/admin/observability/overview", response_model=ObservabilityOverviewResponse)
 async def admin_observability_overview(
-    days: int = Query(30, ge=1, le=365),
+    time_range: str = Query("30d", description="Time range for analytics"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    return await ChatService.admin_get_observability_overview(db, days=days)
+    return await ChatService.admin_get_observability_overview(db, time_range=time_range)
 
 
 @app.get("/sciparser/v1/admin/observability/users", response_model=ObservabilityUsersResponse)
 async def admin_observability_users(
-    days: int = Query(30, ge=1, le=365),
+    time_range: str = Query("30d", description="Time range for analytics"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    return await ChatService.admin_get_observability_users(db, days=days)
+    return await ChatService.admin_get_observability_users(db, time_range=time_range)
 
 
 @app.get("/sciparser/v1/admin/observability/conversations", response_model=ObservabilityConversationsResponse)
 async def admin_observability_conversations(
-    days: int = Query(30, ge=1, le=365),
+    time_range: str = Query("30d", description="Time range for analytics"),
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     search: str = Query("", description="Fuzzy search on conversation title"),
@@ -2855,44 +2969,44 @@ async def admin_observability_conversations(
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
     return await ChatService.admin_get_observability_conversations(
-        db, days=days, page=page, limit=limit, search=search, status=status, user_id=user_id
+        db, time_range=time_range, page=page, limit=limit, search=search, status=status, user_id=user_id
     )
 
 
 @app.get("/sciparser/v1/admin/observability/llm", response_model=ObservabilityLLMResponse)
 async def admin_observability_llm(
-    days: int = Query(30, ge=1, le=365),
+    time_range: str = Query("30d", description="Time range for analytics"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    return await ChatService.admin_get_observability_llm(db, days=days)
+    return await ChatService.admin_get_observability_llm(db, time_range=time_range)
 
 
 @app.get("/sciparser/v1/admin/observability/agents-tools", response_model=ObservabilityAgentsToolsResponse)
 async def admin_observability_agents_tools(
-    days: int = Query(30, ge=1, le=365),
+    time_range: str = Query("30d", description="Time range for analytics"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    return await ChatService.admin_get_observability_agents_tools(db, days=days)
+    return await ChatService.admin_get_observability_agents_tools(db, time_range=time_range)
 
 
 @app.get("/sciparser/v1/admin/observability/cache-memory", response_model=ObservabilityCacheMemoryResponse)
 async def admin_observability_cache_memory(
-    days: int = Query(30, ge=1, le=365),
+    time_range: str = Query("30d", description="Time range for analytics"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    return await ChatService.admin_get_observability_cache_memory(db, days=days)
+    return await ChatService.admin_get_observability_cache_memory(db, time_range=time_range)
 
 
 @app.get("/sciparser/v1/admin/observability/performance-errors", response_model=ObservabilityPerformanceErrorsResponse)
 async def admin_observability_performance_errors(
-    days: int = Query(30, ge=1, le=365),
+    time_range: str = Query("30d", description="Time range for analytics"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
-    return await ChatService.admin_get_observability_performance_errors(db, days=days)
+    return await ChatService.admin_get_observability_performance_errors(db, time_range=time_range)
 
 
 @app.get("/sciparser/v1/admin/observability/conversations/{chat_id}/waterfall", response_model=ObservabilityWaterfallResponse)
@@ -2906,7 +3020,7 @@ async def admin_observability_waterfall(
 
 @app.get("/sciparser/v1/admin/observability/errors", response_model=ObservabilityErrorsListResponse)
 async def admin_observability_errors(
-    days: int = Query(30, ge=1, le=365),
+    time_range: str = Query("30d", description="Time range for analytics"),
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     search: str = Query("", description="Search term for message, code or error id"),
@@ -2916,7 +3030,7 @@ async def admin_observability_errors(
     admin_user: User = Depends(ChatService.get_current_admin_user),
 ):
     return await ChatService.admin_get_observability_errors(
-        db, days=days, page=page, limit=limit, search=search, severity=severity, category=category
+        db, time_range=time_range, page=page, limit=limit, search=search, severity=severity, category=category
     )
 
 

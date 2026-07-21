@@ -2,22 +2,6 @@ Raw Planner Response:
 [
   {
     "id": 1,
-    "description": "Navigate to the Zillow homepage at https://www.zillow.com"
-  },
-  {
-    "id": 2,
-    "description": "Locate the search input field and enter the zipcode '636902'"
-  },
-  {
-    "id": 3,
-    "description": "Execute the search and wait for the property listings results page to load"
-  },
-  {
-    "id": 4,
-    "description": "Extract the list of property cards from the search results, capturing details for each including address, price, bedrooms, bathrooms, and square footage"
-  },
-  {
-    "id": 5,
-    "description": "Format the extracted property data into a structured table"
+    "description": "Navigate to https://www.google.com and confirm the page loads successfully."
   }
 ]

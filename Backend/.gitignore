@@ -1,6 +1,0 @@
-temp/
-logs/
-__pycache__/
-*.pyc
-*.pyo
-.env

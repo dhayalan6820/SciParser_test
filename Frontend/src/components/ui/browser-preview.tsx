@@ -79,7 +79,7 @@ function getToolTargetDetail(toolName?: string | null, toolInput?: unknown): str
 }
 
 interface BrowserPreviewProps {
-  frame: string | null;
+  frames?: Record<string, string> | null;
   isActive: boolean;
   onClose: () => void;
   toolLogs: any[];
@@ -97,7 +97,7 @@ interface BrowserPreviewProps {
 }
 
 export function BrowserPreview({ 
-  frame, 
+  frames, 
   isActive, 
   onClose,
   toolLogs,
@@ -316,8 +316,8 @@ export function BrowserPreview({
             <div className="hidden sm:block leading-none">
               <div className="text-[11px] font-black uppercase tracking-widest text-foreground">Live Browser</div>
               <div className="flex items-center gap-1 mt-0.5">
-                <div className={cn("h-1.5 w-1.5 rounded-full", frame ? "bg-emerald-400 animate-pulse" : "bg-amber-400")} />
-                <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{frame ? "Connected" : "Connecting"}</span>
+                <div className={cn("h-1.5 w-1.5 rounded-full", (frames && Object.keys(frames).length > 0) ? "bg-emerald-400 animate-pulse" : "bg-amber-400")} />
+                <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{(frames && Object.keys(frames).length > 0) ? "Connected" : "Connecting"}</span>
               </div>
             </div>
           </div>
@@ -345,7 +345,7 @@ export function BrowserPreview({
             <button
               onClick={() => setShowToolLog((v) => !v)}
               className={cn(
-                "flex items-center gap-2 rounded-lg px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider border transition-all",
+                "flex items-center justify-center gap-2 rounded-lg px-3 h-7 text-[10px] font-bold uppercase tracking-wider border transition-all",
                 showToolLog
                   ? "bg-sky-500/15 border-sky-500/40 text-sky-400"
                   : "bg-muted border-border text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -531,64 +531,65 @@ export function BrowserPreview({
           </div>
 
           {/* Control Buttons */}
-          <div className="flex items-center gap-1.5 shrink-0 border-l border-border pl-2 ml-1">
-            <Button
-              variant="ghost"
-              size="sm"
+          <div className="flex items-center gap-2 shrink-0 border-l border-border pl-3 ml-1">
+            <button
               onClick={() => setIsFullSize(!isFullSize)}
-              className="h-7 px-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent gap-1.5 shrink-0"
+              className="flex items-center justify-center h-7 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-transparent text-muted-foreground hover:text-foreground hover:bg-accent gap-1.5 transition-all"
             >
               {isFullSize ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-              <span className="text-[10px] font-bold uppercase tracking-wider">
-                {isFullSize ? 'Exit' : 'Full Size'}
-              </span>
-            </Button>
+              <span>{isFullSize ? 'Exit' : 'Full Size'}</span>
+            </button>
 
             {onCloseBrowser && (
-              <Button
-                variant="outline"
-                size="sm"
+              <button
                 onClick={onCloseBrowser}
-                className="h-7 px-2.5 rounded-lg gap-1.5 shrink-0 text-red-500 border-red-200 hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-900/10"
+                className="flex items-center justify-center h-7 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-red-200 text-red-500 hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-900/10 gap-1.5 transition-all"
               >
                 <PowerOff className="h-3.5 w-3.5" />
-                <span className="text-[10px] font-bold uppercase tracking-wider">Close Browser</span>
-              </Button>
+                <span>Close Browser</span>
+              </button>
             )}
-
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              className="h-7 w-7 rounded-lg text-destructive/70 hover:text-destructive hover:bg-destructive/10 shrink-0"
-            >
-              <X className="h-4 w-4" />
-            </Button>
           </div>
         </div>
 
         {/* ── Browser viewport — takes all remaining height ─────────────── */}
         <div className="flex-1 relative flex flex-col overflow-hidden bg-background">
 
-          {frame ? (
+          {(frames && Object.keys(frames).length > 0) ? (
             <div
               ref={viewportRef}
-              className="flex-1 flex items-center justify-center overflow-hidden relative"
-              style={{ cursor: 'default' }}
+              className={cn(
+                "flex-1 overflow-hidden relative p-1 gap-1",
+                Object.keys(frames).length > 1 ? "grid" : "flex items-center justify-center"
+              )}
+              style={{ 
+                cursor: 'default',
+                gridTemplateColumns: Object.keys(frames).length > 1 ? `repeat(${Math.ceil(Math.sqrt(Object.keys(frames).length))}, minmax(0, 1fr))` : undefined,
+                gridTemplateRows: Object.keys(frames).length > 2 ? `repeat(${Math.ceil(Object.keys(frames).length / Math.ceil(Math.sqrt(Object.keys(frames).length)))}, minmax(0, 1fr))` : undefined
+              }}
             >
               {showGrid && (
                 <div className="absolute inset-0 pointer-events-none opacity-[0.03] bg-[linear-gradient(rgba(255,255,255,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[size:40px_40px]" />
               )}
-              <motion.img
-                key="frame"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                src={frame.startsWith('data:') ? frame : `data:image/jpeg;base64,${frame}`}
-                alt="Live Browser"
-                style={{ transform: `scale(${zoom / 100})` }}
-                className="w-full h-full object-contain"
-                draggable={false}
-              />
+              
+              {Object.entries(frames).map(([workerId, frameData]) => (
+                <div key={workerId} className="relative w-full h-full flex items-center justify-center overflow-hidden bg-black/5 rounded-md border border-border/50">
+                  <motion.img
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    src={frameData.startsWith('data:') ? frameData : `data:image/jpeg;base64,${frameData}`}
+                    alt={`Live Browser - ${workerId}`}
+                    style={{ transform: `scale(${zoom / 100})` }}
+                    className="w-full h-full object-contain"
+                    draggable={false}
+                  />
+                  {Object.keys(frames).length > 1 && (
+                    <div className="absolute bottom-2 left-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded shadow-sm backdrop-blur-sm z-10 font-mono">
+                      {workerId}
+                    </div>
+                  )}
+                </div>
+              ))}
 
               {/* ── Agent cursor overlay ────────────────────────────────── */}
               {cursorPx && isAiTyping && (
@@ -707,7 +708,7 @@ export function BrowserPreview({
             </div>
           ) : null}
 
-          {!frame && (
+          {!(frames && Object.keys(frames).length > 0) && (
             <div className="flex-1 flex flex-col items-center justify-center gap-5 text-muted-foreground/30">
               <div className="relative">
                 <Loader2 className="h-10 w-10 text-sky-400 animate-spin" />
@@ -723,7 +724,7 @@ export function BrowserPreview({
           {/* Status bar */}
           <div className="shrink-0 h-9 border-t border-border bg-card/40 px-4 flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              {frame ? (
+              {(frames && Object.keys(frames).length > 0) ? (
                 <>
                   <CheckCircle2 className="h-3 w-3 text-emerald-500" />
                   <span className="text-[9px] font-bold text-emerald-500/80 uppercase tracking-wider">Page loaded</span>
@@ -736,7 +737,7 @@ export function BrowserPreview({
               )}
             </div>
             <div className="flex items-center gap-1.5">
-              {frame ? (
+              {(frames && Object.keys(frames).length > 0) ? (
                 <>
                   <Wifi className="h-3 w-3 text-emerald-500" />
                   <span className="text-[9px] font-black text-emerald-400/80">STABLE</span>

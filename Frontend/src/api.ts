@@ -4,6 +4,9 @@ import { API_BASE_URL } from "./config";
 const TOKEN_KEY = "access_token";
 const BASE_URL = API_BASE_URL;
 
+// Accept both numeric days (e.g. 30) and string ranges (e.g. "30d") for all time_range params.
+type TimeRange = number | string;
+
 // Intercept global fetch to catch errors and display toast notifications, and automatically bypass ngrok warning pages
 if (typeof window !== "undefined") {
   const originalFetch = window.fetch;
@@ -840,11 +843,11 @@ export const sciparserApi = {
     return res.json() as Promise<User>;
   },
 
-  adminGetUserAnalytics: async (userId: string, days: number = 30) => {
+  adminGetUserAnalytics: async (userId: string, timeRange: TimeRange = "30d") => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/users/${userId}/analytics?days=${days}`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/users/${userId}/analytics?time_range=${timeRange}`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
@@ -878,11 +881,11 @@ export const sciparserApi = {
     return res.json() as Promise<ConversationTokenUsage[]>;
   },
 
-  getMyUserAnalytics: async (days: number = 30) => {
+  getMyUserAnalytics: async (timeRange: TimeRange = "30d") => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/sciparser/v1/user/analytics?days=${days}`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/user/analytics?time_range=${timeRange}`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
@@ -905,11 +908,11 @@ export const sciparserApi = {
   },
 
   // Admin: Operations Metrics
-  adminGetOperationsMetrics: async (days: number = 30) => {
+  adminGetOperationsMetrics: async (timeRange: TimeRange = "30d") => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/metrics/operations?days=${days}`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/metrics/operations?time_range=${timeRange}`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
@@ -917,11 +920,11 @@ export const sciparserApi = {
   },
 
   // Admin: Overview KPIs
-  adminGetOverviewMetrics: async (days: number = 30) => {
+  adminGetOverviewMetrics: async (timeRange: TimeRange = "30d") => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/metrics/overview?days=${days}`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/metrics/overview?time_range=${timeRange}`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
@@ -1018,11 +1021,11 @@ export const sciparserApi = {
   },
 
   // Admin: Unified Analytics
-  adminGetAnalytics: async (days: number = 30) => {
+  adminGetAnalytics: async (timeRange: TimeRange = "30d") => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/analytics?days=${days}`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/analytics?time_range=${timeRange}`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
@@ -1042,11 +1045,11 @@ export const sciparserApi = {
   },
 
   // Admin: Usage Dashboard
-  adminGetUsage: async (days: number = 30) => {
+  adminGetUsage: async (timeRange: TimeRange = "30d") => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/usage?days=${days}`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/usage?time_range=${timeRange}`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
@@ -1071,66 +1074,93 @@ export const sciparserApi = {
     return res.json() as Promise<AdminSecurity>;
   },
 
-  adminGetCostAnalytics: async (days: number = 30) => {
+  adminGetLLMConfig: async (): Promise<AdminLLMConfig> => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/analytics/costs?days=${days}`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/settings/llm`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
 
-  adminGetModelAnalytics: async (days: number = 30) => {
+  adminSetLLMConfig: async (config: AdminLLMConfig): Promise<{ status: string }> => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/analytics/models?days=${days}`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/settings/llm`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: formattedToken,
+      },
+      body: JSON.stringify(config),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  adminGetCostAnalytics: async (timeRange: TimeRange = "30d") => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/analytics/costs?time_range=${timeRange}`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
 
-  adminGetToolAnalytics: async (days: number = 30) => {
+  adminGetModelAnalytics: async (timeRange: TimeRange = "30d") => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/analytics/tools?days=${days}`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/analytics/models?time_range=${timeRange}`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
 
-  adminGetBrowserAnalytics: async (days: number = 30) => {
+  adminGetToolAnalytics: async (timeRange: TimeRange = "30d") => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/analytics/browser?days=${days}`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/analytics/tools?time_range=${timeRange}`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
 
-  adminGetContextAnalytics: async (days: number = 30) => {
+  adminGetBrowserAnalytics: async (timeRange: TimeRange = "30d") => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/analytics/context?days=${days}`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/analytics/browser?time_range=${timeRange}`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
 
-  adminGetRetrievalAnalytics: async (days: number = 30) => {
+  adminGetContextAnalytics: async (timeRange: TimeRange = "30d") => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/analytics/retrieval?days=${days}`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/analytics/context?time_range=${timeRange}`, {
+      headers: { Authorization: formattedToken },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  adminGetRetrievalAnalytics: async (timeRange: TimeRange = "30d") => {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("No access token found");
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/analytics/retrieval?time_range=${timeRange}`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
@@ -1192,11 +1222,11 @@ export const sciparserApi = {
     return res.json();
   },
 
-  adminDownloadReport: async (format: "csv" | "json" | "md", days: number = 30) => {
+  adminDownloadReport: async (format: "csv" | "json" | "md", timeRange: TimeRange = "30d") => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/reports/download?format=${format}&days=${days}`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/reports/download?format=${format}&time_range=${timeRange}`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
@@ -1215,34 +1245,34 @@ export const sciparserApi = {
   },
 
   // Observability Platform API calls
-  observabilityGetOverview: async (days: number = 30) => {
+  observabilityGetOverview: async (timeRange: TimeRange = "30d") => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/observability/overview?days=${days}`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/observability/overview?time_range=${timeRange}`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
 
-  observabilityGetUsers: async (days: number = 30) => {
+  observabilityGetUsers: async (timeRange: TimeRange = "30d") => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/observability/users?days=${days}`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/observability/users?time_range=${timeRange}`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
 
-  observabilityGetConversations: async (days: number = 30, page: number = 1, limit: number = 10, search: string = "", status: string = "", userId: string = "") => {
+  observabilityGetConversations: async (timeRange: TimeRange = "30d", page: number = 1, limit: number = 10, search: string = "", status: string = "", userId: string = "") => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
     const params = new URLSearchParams({
-      days: days.toString(),
+      time_range: timeRange.toString(),
       page: page.toString(),
       limit: limit.toString(),
       search,
@@ -1256,44 +1286,44 @@ export const sciparserApi = {
     return res.json();
   },
 
-  observabilityGetLLM: async (days: number = 30) => {
+  observabilityGetLLM: async (timeRange: TimeRange = "30d") => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/observability/llm?days=${days}`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/observability/llm?time_range=${timeRange}`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
 
-  observabilityGetAgentsTools: async (days: number = 30) => {
+  observabilityGetAgentsTools: async (timeRange: TimeRange = "30d") => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/observability/agents-tools?days=${days}`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/observability/agents-tools?time_range=${timeRange}`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
 
-  observabilityGetCacheMemory: async (days: number = 30) => {
+  observabilityGetCacheMemory: async (timeRange: TimeRange = "30d") => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/observability/cache-memory?days=${days}`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/observability/cache-memory?time_range=${timeRange}`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
 
-  observabilityGetPerformanceErrors: async (days: number = 30) => {
+  observabilityGetPerformanceErrors: async (timeRange: TimeRange = "30d") => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/observability/performance-errors?days=${days}`, {
+    const res = await fetch(`${BASE_URL}/sciparser/v1/admin/observability/performance-errors?time_range=${timeRange}`, {
       headers: { Authorization: formattedToken },
     });
     if (!res.ok) throw new Error(await res.text());
@@ -1311,12 +1341,12 @@ export const sciparserApi = {
     return res.json();
   },
 
-  observabilityGetErrors: async (days: number = 30, page: number = 1, limit: number = 10, search: string = "", severity: string = "", category: string = "") => {
+  observabilityGetErrors: async (timeRange: TimeRange = "30d", page: number = 1, limit: number = 10, search: string = "", severity: string = "", category: string = "") => {
     const token = localStorage.getItem("access_token");
     if (!token) throw new Error("No access token found");
     const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
     const params = new URLSearchParams({
-      days: days.toString(),
+      time_range: timeRange.toString(),
       page: page.toString(),
       limit: limit.toString(),
       search,
@@ -1740,4 +1770,11 @@ export interface OperationsLogListResponse {
   total: number;
   page: number;
   page_size: number;
+}
+
+export interface AdminLLMConfig {
+  model_name: string;
+  input_cost: number;
+  output_cost: number;
+  context_window: number;
 }

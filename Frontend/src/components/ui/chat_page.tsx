@@ -347,7 +347,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     string | undefined
   >(undefined);
   const [browserActive, setBrowserActive] = React.useState(false);
-  const [browserFrame, setBrowserFrame] = React.useState<string | null>(null);
+  const [browserFrames, setBrowserFrames] = React.useState<Record<string, string>>({});
   const [activeBrowserEngine, setActiveBrowserEngine] = React.useState<"camoufox" | "chrome" | null>(null);
   const [mousePos, setMousePos] = React.useState<{ x: number; y: number; event: string; vpW: number; vpH: number } | null>(null);
   const [lastManualToggle, setLastManualToggle] = React.useState<number>(0);
@@ -385,6 +385,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
   const [userInterruptedBrowser, setUserInterruptedBrowser] =
     React.useState(false);
   const isFirstFrame = React.useRef<boolean>(true);
+  const hasAutoOpenedBrowserRef = React.useRef<boolean>(false);
 
   const [showBrowserPreview, setShowBrowserPreview] = React.useState(false);
   const [preferLiveBrowser, setPreferLiveBrowser] = React.useState(true);
@@ -553,7 +554,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     startX: number;
     startWidth: number;
   } | null>(null);
-  const lastBrowserFrameRef = React.useRef<string | null>(null);
+  const lastBrowserFramesRef = React.useRef<Record<string, string>>({});
 
   // File upload states
   const [isDraggingFile, setIsDraggingFile] = React.useState(false);
@@ -867,6 +868,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     if (!userProfile?.user_id) return;
     if (!activeThreadId) return;
     isFirstFrame.current = true;
+    hasAutoOpenedBrowserRef.current = false;
 
     const token = localStorage.getItem("access_token");
     const buildUrl = () =>
@@ -949,12 +951,12 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             );
 
             if (actualFrame) {
-              setBrowserFrame(actualFrame);
-              lastBrowserFrameRef.current = actualFrame;
+              const workerId = msg.worker_id || "default";
+              setBrowserFrames((prev) => ({ ...prev, [workerId]: actualFrame }));
+              lastBrowserFramesRef.current[workerId] = actualFrame;
               if (isFirstFrame.current && !userInterruptedBrowser) {
                 isFirstFrame.current = false;
                 setBrowserBlink("green");
-                setBrowserActive(true);
                 setTimeout(() => setBrowserBlink(null), 1500);
               }
             }
@@ -983,7 +985,8 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                 // Fallback: open the browser panel on first tool activity in case
                 // the proactive open in handleSendMessage was overridden by the
                 // userInterruptedBrowser guard or a reconnect cycle.
-                if (isFirstFrame.current && !userInterruptedBrowser) {
+                if (!hasAutoOpenedBrowserRef.current && !userInterruptedBrowser) {
+                  hasAutoOpenedBrowserRef.current = true;
                   setBrowserActive(true);
                 }
                 setToolLogs((prev) => {
@@ -1023,6 +1026,31 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                       : log,
                   ),
                 );
+
+                // Fallback: If the tool output contains a screenshot, use it to update the browser preview
+                // This ensures we always have a visual even if the dedicated live CDP stream drops frames
+                if (toolMsg.output && typeof toolMsg.output === "string" && toolMsg.output.includes("screenshot")) {
+                  try {
+                    // Try to match the screenshot base64 string using regex since the output is a python dict string
+                    const screenshotMatch = toolMsg.output.match(/'screenshot'\s*:\s*'([^']+)'/) || toolMsg.output.match(/"screenshot"\s*:\s*"([^"]+)"/);
+                    
+                    if (screenshotMatch && screenshotMatch[1] && screenshotMatch[1].length > 100) {
+                      const extractedFrame = screenshotMatch[1];
+                      const workerId = "default";
+                      
+                      setBrowserFrames((prev) => ({ ...prev, [workerId]: extractedFrame }));
+                      lastBrowserFramesRef.current[workerId] = extractedFrame;
+                      
+                      if (!browserActive) {
+                        setBrowserActive(true);
+                        setBrowserBlink("green");
+                        setTimeout(() => setBrowserBlink(null), 1500);
+                      }
+                    }
+                  } catch (e) {
+                    console.warn("Could not extract fallback frame from tool output", e);
+                  }
+                }
                 if (toolMsg.db_id && toolMsg.db_id !== toolMsg.tool_call_id) {
                   setSelectedToolIds((prev) =>
                     prev.includes(toolMsg.tool_call_id)
@@ -1522,6 +1550,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     setUserInterruptedHide(false); // Reset interruption flag
     setUserInterruptedBrowser(false); // Reset browser interruption flag
     isFirstFrame.current = true; // Reset for new message
+    hasAutoOpenedBrowserRef.current = false; // Reset for new process
     setToolLogs([]); // Clear tool logs for the new live process
     setCurrentPlan(null); // Clear old plan steps immediately
     // Proactively open the browser preview panel as soon as the user sends
@@ -1529,6 +1558,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     // after the first frame, but frames were never seen because the panel was
     // closed.  The user can still manually close it.
     if (!userInterruptedBrowser) {
+      hasAutoOpenedBrowserRef.current = true;
       setBrowserActive(true);
     }
     // Refresh the active engine badge so it reflects what the backend will actually use
@@ -1561,9 +1591,9 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
         const msgToAdd: ChatMessage = { ...aiMsg };
         if (
           (hasScreenshotTool || contentMentionsScreenshot) &&
-          lastBrowserFrameRef.current
+          Object.keys(lastBrowserFramesRef.current).length > 0
         ) {
-          msgToAdd.screenshots = [lastBrowserFrameRef.current];
+          msgToAdd.screenshots = Object.values(lastBrowserFramesRef.current);
           // Persist screenshots to DB so they survive page refresh
           if (msgToAdd.id) {
             sciparserApi.updateMessageScreenshots(msgToAdd.id, msgToAdd.screenshots).catch((e) =>
@@ -1571,13 +1601,21 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             );
           }
         }
-        setMessages((prev) => [...prev, msgToAdd]);
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === msgToAdd.id)) {
+            // Update the existing message in case the HTTP response has more info (like screenshots)
+            return prev.map(m => m.id === msgToAdd.id ? { ...m, ...msgToAdd } : m);
+          }
+          return [...prev, msgToAdd];
+        });
         setThreads((prev) =>
           prev.map((t) =>
             t.id === currentThreadId
               ? {
                   ...t,
-                  messages: [...t.messages, userMsg, msgToAdd],
+                  messages: t.messages.some((m) => m.id === msgToAdd.id)
+                    ? t.messages.map(m => m.id === msgToAdd.id ? { ...m, ...msgToAdd } : m)
+                    : [...t.messages, userMsg, msgToAdd],
                   title: response.title || t.title,
                 }
               : t,
@@ -1766,17 +1804,18 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
     }
   };
 
-  const renderMessage = (msg: ChatMessage) => {
+  const renderMessage = (msg: ChatMessage, index: number) => {
     const isSelected = selectedMessages.includes(msg.id || "");
     const planTasks = msg.plan || [];
     const isPlanComplete =
       planTasks.length > 0 &&
       planTasks.every((t: any) => t.status === "completed" || t.status === "failed");
-    // Once the run finishes (all tasks completed/failed), collapse the
-    // execution trace by default — the user can expand it with "Show Flow".
+    // Execution trace: visible while running, collapses automatically after completion.
+    // User can expand/collapse via the toggle button at any time.
     const isPlanVisible =
       visiblePlans[msg.id || ""] ?? !isPlanComplete;
     const isUser = msg.role === "user" || msg.role === "human";
+    const isFailed = !isUser && (msg.content?.startsWith("⚠️") || msg.content?.startsWith("⚠"));
 
     return (
       <div
@@ -1839,7 +1878,10 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
           </div>
         )}
 
-        <div
+        <motion.div
+          initial={!isUser && isPlanComplete ? { opacity: 0, y: 10 } : false}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
           className={cn(
             "group relative flex flex-col gap-2 max-w-[85%] transition-all duration-300",
             isUser ? "items-end" : "items-start",
@@ -1905,13 +1947,31 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
             {/* Action row (AI responses only) */}
             {!isUser && (
               <div className="flex items-center gap-1 px-1">
-                <button
-                  type="button"
-                  title="Regenerate"
-                  className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                </button>
+                {isFailed && (
+                  <button
+                    type="button"
+                    title="Rerun"
+                    onClick={() => {
+                      const prevMsg = index > 0 ? messages[index - 1] : null;
+                      if (prevMsg && (prevMsg.role === "user" || prevMsg.role === "human")) {
+                        handleSendMessage(prevMsg.content);
+                      }
+                    }}
+                    className="p-1.5 rounded-md text-amber-600 hover:text-amber-700 hover:bg-amber-100 dark:text-amber-500 dark:hover:text-amber-400 dark:hover:bg-amber-900/40 transition-colors flex items-center gap-1 text-xs font-semibold"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Rerun</span>
+                  </button>
+                )}
+                {!isFailed && (
+                  <button
+                    type="button"
+                    title="Regenerate"
+                    className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </button>
+                )}
                 <button
                   type="button"
                   title="Good response"
@@ -2039,7 +2099,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
               </span>
             </div>
           </div>
-        </div>
+        </motion.div>
       </div>
     );
   };
@@ -2280,6 +2340,24 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
 
   const renderFormattedContent = (content: string, isUser: boolean = false) => {
     if (!content) return null;
+
+    // Strip internal agent trace markers that may bleed into the final response.
+    // These are prefixes written by brain.py during execution and should never be
+    // shown to the user as raw text in the chat bubble.
+    if (!isUser) {
+      content = content
+        // Remove lines that are pure trace prefixes
+        .replace(/^\[TOOL_(CALL|RESULT|ERROR)\][^\n]*/gm, "")
+        .replace(/^\[STEP \d+\][^\n]*/gm, "")
+        .replace(/^\[THOUGHT\][^\n]*/gm, "")
+        .replace(/^Task \d+\/\d+:[^\n]*/gm, "")
+        .replace(/^(Observation|Action|Thought|Final Answer):\s*/gm, (m, kw) =>
+          kw === "Final Answer" ? "" : m,
+        )
+        // Collapse triple+ blank lines into a single blank
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+    }
 
     // Detect raw HTML pages (e.g. Replit proxy/hosting page served instead of data)
     if (
@@ -3937,7 +4015,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                     <>
                       <div className="flex-1" />
                       <div className={cn("p-3 sm:p-6 space-y-4 sm:space-y-6 chat-content-cap", browserActive && "browser-active")}>
-                        {messages.map(renderMessage)}
+                        {messages.map((msg, idx) => renderMessage(msg, idx))}
 
                         {/* Live Plan / Loading State */}
                         {isAiTyping && (
@@ -4076,7 +4154,7 @@ const ChatPage = ({ onLoginStateChange }: ChatPageProps) => {
                   className="h-full overflow-hidden bg-background flex flex-col shrink-0 transition-[width] duration-75 ease-out"
                 >
                   <BrowserPreview
-                    frame={browserFrame}
+                    frames={browserFrames}
                     isActive={browserActive}
                     onClose={() => setBrowserActive(false)}
                     onCloseBrowser={handleCloseBrowser}

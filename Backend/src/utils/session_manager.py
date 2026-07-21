@@ -15,8 +15,9 @@ class SessionManager:
     """
     Manages session-isolated browser states and ports for multi-user support.
     """
-    def __init__(self, stream_manager=None):
+    def __init__(self, stream_manager=None, is_active_callback=None):
         self.stream_manager = stream_manager
+        self.is_active_callback = is_active_callback
         self.sessions: Dict[str, Dict[str, Any]] = {}
         self._lock = asyncio.Lock()
         # Per-user locks serializing close_browser calls. Multiple callers can
@@ -29,6 +30,32 @@ class SessionManager:
         # that entered its AsyncExitStack, raising "Attempted to exit cancel
         # scope in a different task than it was entered in".
         self._close_locks: Dict[str, asyncio.Lock] = {}
+        self._sweeper_task = None
+
+    def start_sweeper(self):
+        if self._sweeper_task is None:
+            self._sweeper_task = asyncio.create_task(self._inactivity_sweeper())
+
+    async def _inactivity_sweeper(self):
+        import time
+        while True:
+            await asyncio.sleep(60)
+            now = time.time()
+            for user_id, session in list(self.sessions.items()):
+                mcp = session.get("mcp_manager")
+                if mcp:
+                    is_active = False
+                    if self.is_active_callback:
+                        is_active = self.is_active_callback(user_id)
+                    
+                    if is_active:
+                        session["last_active"] = now
+                    else:
+                        last_active = session.get("last_active", now)
+                        if now - last_active >= 300: # 5 minutes
+                            logger.info(f"[SessionManager] Auto-closing browser for user {user_id} due to 5 mins inactivity.")
+                            await self.close_browser(user_id)
+                            session["last_active"] = time.time()
 
     def _get_close_lock(self, user_id: str) -> asyncio.Lock:
         lock = self._close_locks.get(user_id)
@@ -46,7 +73,8 @@ class SessionManager:
                 "cdp_url": None,          # Can be set externally to connect to existing browser
                 "proxy_url": None,        # Residential/HTTP proxy URL (http://user:pass@host:port)
                 "browser_engine": None,   # "camoufox" or "chrome" (None = use default)
-                "active_chat_ids": set()  # Track active chat IDs for this user
+                "active_chat_ids": set(), # Track active chat IDs for this user
+                "last_active": __import__("time").time() # Track last active timestamp
             }
         return self.sessions[user_id]
 

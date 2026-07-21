@@ -99,6 +99,13 @@ class AdminAutomationSummary(BaseModel):
     total_cost: float = 0.0
     is_running: bool = False
 
+class AdminLLMConfig(BaseModel):
+    model_name: str
+    input_cost: float
+    output_cost: float
+    context_window: int
+
+
 
 class AdminUserListItem(UserResponse):
     """UserResponse plus lightweight per-user analytics for the admin Users table."""
